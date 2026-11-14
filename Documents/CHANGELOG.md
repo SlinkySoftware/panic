@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-11-15 — T-S6-08: panic-web foundation — Vue 3 + Quasar + TypeScript scaffold, auth, shell, nav
+- New `Application/Web` SPA: every AR-1.4 URL routed (login + shell built; everything else a
+  placeholder pending `T-S6-09`/`10`/`11`), a login page (local/LDAP form + OIDC button, driven by
+  `GET /api/v1/auth/providers`), a bootstrap-driven nav rail (dashboard pins/★ default/📌 locked),
+  top bar (zone badge, View As banner/switcher, density/theme toggles persisted to
+  `LocalStorage`). `src/api/http.ts`: CSRF header with exactly one retry, `401` →
+  `/login?next=...`. `src/api/generated/openapi.ts` generated from the committed OpenAPI document
+  (`npm run gen:api`, with a drift-check unit test) via `openapi-fetch`/`openapi-typescript`.
+  `dev-proxy.ts` + `proxy-paths.json` are the one allow-list (API.md §9, AR-6.4), with a unit test
+  checking the dev proxy actually honours it.
+- `panic` script: pins Node into `.tools/` (checksum-verified download), `start`/`stop`/`status`
+  now manage two components (`server` on 8121, `web` on 8120 — the dev port swap this task's scope
+  called for), `test` gained a `web` mode (lint/typecheck/vitest) wired into `all`.
+- **Deviations:** found and fixed real bugs surfaced while actually running this for the first
+  time (not just unit tests) — a block comment in `dev-proxy.ts` embedded a literal `*/` inside
+  the regex it was documenting, prematurely closing the comment and breaking the Quasar/Vite
+  build entirely; `refreshCsrfToken()` called the global `fetch` with a bare string URL instead of
+  a `Request`, inconsistent with every other call site and every test mock that assumes `.url` is
+  readable off the first argument; `test/unit/guard.spec.ts` lacked the Pinia + fetch-stub setup
+  its sibling test files already use, needed because a redirect to `/` always cascades through
+  `/`'s own `beforeEnter` (`toDefaultDashboard`), which uses the real session store regardless of
+  the fake one handed to `authGuard` directly; six `vi.fn(async ...)` test mocks never awaited
+  anything (`@typescript-eslint/require-await`). Also dropped the raw dashboard UUID
+  `PlaceholderPage.vue` showed under its title — UUIDs are an internal identifier and belong only
+  in the URL, never in user-facing text (owner feedback).
+- Verified live, not just via unit tests: `./panic start` serves the SPA at `:8120`, sign-in
+  (`GET /auth/csrf` → `POST /auth/login` → `GET /ui/bootstrap`) works end-to-end through the dev
+  proxy against the real running server.
+- `./panic test`: 222 Python + 64 web tests passed; ruff/mypy/import-linter and web
+  lint/typecheck both clean.
+- The npm-mirror environment blocker noted below (now resolved) is why this task's completion
+  came after, not alongside, the standalone migrate-command fix.
+
 ## 2026-11-15 — Fix: `./panic start` used a relational `migrate` command that no longer exists
 - `cmd_start` in the `panic` script still ran `manage.py migrate --noinput` before serving.
   `T-S6-04` removed `DATABASES` entirely (Mongo-only since then), so this has silently crashed
@@ -9,8 +42,8 @@
 - **Deviation note:** `Build/Containers/server/entrypoint.sh` has the identical stale
   `manage.py migrate` call — left untouched since it's owned by the not-yet-run `T-S6-12`, which
   must fix it too (see `Documents/SESSION_STATUS.md`).
-- Found while implementing `T-S6-08`, which is otherwise blocked on an unrelated environment
-  issue (see `Documents/SESSION_STATUS.md` §0a) and not committed with this fix.
+- Found while implementing `T-S6-08`, which was blocked at the time on an unrelated environment
+  issue (resolved; see `Documents/SESSION_STATUS.md`) and not committed with this fix.
 
 ## 2026-11-15 — T-S6-07: Scoped API part 2 — resources, mutations, concurrency, admin, diagnostics
 - Built the rest of the API.md §4.3–§4.7 surface: `/me`, catalog/lists/dashboards CRUD (`If-Match`

@@ -16,6 +16,9 @@ Build/Containers/secrets/
 .run/
 Build/Work/
 Build/Containers/images/
+node_modules/
+.quasar/
+test-results/
 
 # Python bytecode, packaging & test/linter caches
 __pycache__/

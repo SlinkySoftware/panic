@@ -1,0 +1,6 @@
+dist/
+.quasar/
+node_modules/
+src/api/generated/
+test-results/
+package-lock.json

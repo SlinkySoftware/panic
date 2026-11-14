@@ -1,0 +1,143 @@
+/*
+ * reference-ui design tokens (Documents/UI_DESIGN.md §1), ported as real CSS custom properties -- unlike a plain
+ * Quasar-defaults app, PANIC's own design doc specifies brand tokens, so the shell uses them directly rather
+ * than leaning on `$primary`/`$dark` alone. Dark is the default operations theme (`body.body--dark`, Quasar's
+ * `dark: 'auto'`); the light variant below is the explicit override for `body:not(.body--dark)`.
+ *
+ * Full component-level styling (dashboard grid, protocol pill components, two-card resource screens, etc.) is
+ * later tasks' job (T-S6-09/10/11); this file only establishes the token system plus the few structural
+ * utility classes the shell itself (MainLayout, LoginPage) needs.
+ */
+
+/* ---------------------------------------------------------------------------------------- Dark (default) theme */
+body.body--dark {
+  --page-bg: #1c1c1e;
+  --surface: #242426;
+  --surface-raised: #2c2c2e;
+  --surface-sunken: #1a1a1c;
+  --rail-bg: #212123;
+  --header-bg: rgba(36, 36, 38, 0.86);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  --brand-400: #3ccfbd;
+  --brand-500: #2ebfae;
+  --brand-600: #23a294;
+
+  --status-ok: #30d158;
+  --status-degraded: #ffb340;
+  --status-blocked: #ff6961;
+  --status-offline: #a1a1a6;
+
+  /* Protocol pills (UI_DESIGN.md §1): WEB / SSH (--brand-500) / RDP / LOCAL_APP. */
+  --cache-hit: #0a84ff;
+  --cache-stale: #bf5af2;
+  --cache-miss: #ff9f0a;
+}
+
+/* ----------------------------------------------------------------------------------------- Light theme override */
+body:not(.body--dark) {
+  --page-bg: #f4f5f6;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-sunken: #eceef0;
+  --rail-bg: #ffffff;
+  --header-bg: rgba(255, 255, 255, 0.86);
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.16);
+
+  --brand-400: #14958a;
+  --brand-500: #0f766e;
+  --brand-600: #0b5f58;
+
+  --status-ok: #15803d;
+  --status-degraded: #a85a00;
+  --status-blocked: #c62828;
+  --status-offline: #5b6472;
+
+  --cache-hit: #1d4ed8;
+  --cache-stale: #7c3aed;
+  --cache-miss: #b45309;
+}
+
+/* -------------------------------------------------------------------------------------------------- Typography */
+body {
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  background: var(--page-bg);
+}
+
+/* Hostnames, URLs, commands, CIDRs, site codes, interpolated CLI commands (UI_DESIGN.md §1). */
+.mono {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.85em;
+}
+
+/* Ports, metrics and counters (UI_DESIGN.md §1). */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------------------------------------- Shell layout */
+.panic-header {
+  background: var(--header-bg);
+  backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--border);
+  color: inherit;
+}
+
+.panic-rail {
+  background: var(--rail-bg);
+  border-right: 1px solid var(--border);
+}
+
+.panic-rail--mini {
+  width: 64px;
+}
+
+.panic-rail--full {
+  width: 232px;
+}
+
+.panic-zone-badge {
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.panic-zone-badge--default {
+  color: var(--status-degraded);
+  border-color: var(--status-degraded);
+}
+
+.panic-view-as-banner {
+  background: color-mix(in srgb, var(--status-degraded) 18%, transparent);
+  border-bottom: 1px solid var(--status-degraded);
+}
+
+.panic-nav-heading {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  opacity: 0.6;
+  min-height: 0;
+  padding-top: 12px;
+}
+
+.panic-login-card {
+  width: 380px;
+  max-width: 90vw;
+  background: var(--surface-raised);
+}

@@ -1,31 +1,44 @@
 #!/usr/bin/env bash
 # PANIC dev control script (aligned with reference-app control script conventions).
 #
-#   ./panic setup                         idempotent venv + editable package setup + .env
-#   ./panic start|stop|restart [--prod]
+#   ./panic setup                         idempotent venv + editable package setup + pinned Node + npm ci + .env
+#   ./panic start|stop|restart [server|web|all] [--prod]
 #   ./panic status
-#   ./panic test [python|lint|all] [pytest args...]
-#   ./panic logs
+#   ./panic test [python|web|lint|all] [pytest args...]
+#   ./panic logs [server|web]
 #   ./panic manage <django manage.py args...>
 #   ./panic contracts [--check]           regenerate (or, with --check, verify) the committed
 #                                          OpenAPI contract, Documents/Architecture/openapi/server.yaml
+#
+# Overrides:
+#   PANIC_WEB_PORT      web dev server port (default 8120; T-S6-08 moved Server off this port)
+#   PANIC_SERVER_BIND   Server bind address (default 0.0.0.0:8121)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 cd "$ROOT"
 
+# ---------------------------------------------------------------- pinned toolchain
+NODE_VERSION="v26.13.1"
+
 VENV="$ROOT/.venv"
+TOOLS="$ROOT/.tools"
 RUN="$ROOT/.run"
 PIDS="$RUN/pids"
 LOGS="$RUN/logs"
 SERVER_DIR="$ROOT/Application/Server"
+WEB_DIR="$ROOT/Application/Web"
+NODE_HOME="$TOOLS/node"
+COMPONENTS=(server web)
 
 if [[ -t 1 ]]; then C_OK=$'\e[32m'; C_WARN=$'\e[33m'; C_ERR=$'\e[31m'; C_DIM=$'\e[2m'; C_RST=$'\e[0m'
 else C_OK=""; C_WARN=""; C_ERR=""; C_DIM=""; C_RST=""; fi
 report() { printf '  %-34s %s%s%s\n' "$1" "$3" "$2" "$C_RST"; }
 ok()      { report "$1" "${2:-already OK}" "$C_OK"; }
 changed() { report "$1" "$2" "$C_WARN"; }
+fail()    { report "$1" "FAILED: $2" "$C_ERR"; }
 die()     { echo "${C_ERR}error:${C_RST} $*" >&2; exit 1; }
+info()    { echo "${C_DIM}$*${C_RST}"; }
 
 load_env() {
     if [[ -f "$ROOT/.env" ]]; then
@@ -34,7 +47,21 @@ load_env() {
         source "$ROOT/.env"
         set +a
     fi
-    SERVER_BIND="${PANIC_SERVER_BIND:-0.0.0.0:8120}"
+    SERVER_BIND="${PANIC_SERVER_BIND:-0.0.0.0:8121}"
+    SERVER_PORT="${SERVER_BIND##*:}"
+    WEB_PORT="${PANIC_WEB_PORT:-8120}"
+    # AR-1.6: only quasar.config.ts (the dev proxy) reads this; the SPA itself never sees it.
+    export PANIC_SERVER_URL="${PANIC_SERVER_URL:-http://127.0.0.1:$SERVER_PORT}"
+}
+
+with_node() { PATH="$NODE_HOME/bin:$PATH" "$@"; }
+
+arch_triplet() {
+    case "$(uname -m)" in
+        x86_64) NODE_ARCH="linux-x64" ;;
+        aarch64|arm64) NODE_ARCH="linux-arm64" ;;
+        *) die "unsupported architecture $(uname -m)" ;;
+    esac
 }
 
 ensure_venv() {
@@ -50,6 +77,69 @@ ensure_venv() {
         cp "$ROOT/.env.example" "$ROOT/.env"
         changed ".env" "created from .env.example"
     fi
+}
+
+#: pytest/ruff/mypy/import-linter (pyproject.toml [dependency-groups].dev) -- not needed to just
+#: start/manage the server, so kept out of ensure_venv's fast path; `./panic test`/`setup` want it.
+#: Hash-gated on uv.lock + pyproject.toml so repeat runs are a no-op.
+ensure_dev_tools() {
+    ensure_venv
+    local step="dev tools (uv sync --group dev)"
+    local marker="$VENV/.panic-dev-lock-hash"
+    local now; now="$(sha256sum uv.lock pyproject.toml Application/*/pyproject.toml | sha256sum | awk '{print $1}')"
+    if [[ -f "$marker" && "$(cat "$marker")" == "$now" ]]; then ok "$step"; return; fi
+    uv sync --group dev >"$RUN/setup-uv-dev.log" 2>&1 || { cat "$RUN/setup-uv-dev.log" >&2; die "uv sync --group dev failed"; }
+    echo "$now" > "$marker"
+    changed "$step" "synced"
+}
+
+setup_node() {
+    local step="Node $NODE_VERSION (.tools/node)"
+    if [[ -x "$NODE_HOME/bin/node" ]] && [[ "$("$NODE_HOME/bin/node" --version)" == "$NODE_VERSION" ]]; then
+        ok "$step"; return
+    fi
+    arch_triplet
+    local state="installed"; [[ -x "$NODE_HOME/bin/node" ]] && state="updated"
+    local tmp; tmp="$(mktemp -d)"
+    local file="node-$NODE_VERSION-$NODE_ARCH.tar.gz"
+    curl -fsSL "https://nodejs.org/dist/$NODE_VERSION/$file" -o "$tmp/$file"
+    curl -fsSL "https://nodejs.org/dist/$NODE_VERSION/SHASUMS256.txt" -o "$tmp/SHASUMS256.txt"
+    (cd "$tmp" && grep " $file\$" SHASUMS256.txt | sha256sum -c --quiet) || die "node checksum mismatch"
+    rm -rf "$NODE_HOME"; mkdir -p "$NODE_HOME"
+    tar -xzf "$tmp/$file" -C "$NODE_HOME" --strip-components=1
+    rm -rf "$tmp"
+    changed "$step" "$state"
+}
+
+setup_npm() {
+    local step="npm ci (Application/Web)"
+    [[ -f "$WEB_DIR/package.json" ]] || { ok "$step" "skipped (no package.json)"; return; }
+    local marker="$WEB_DIR/node_modules/.panic-lock-hash"
+    local now=""; [[ -f "$WEB_DIR/package-lock.json" ]] && now="$(sha256sum "$WEB_DIR/package-lock.json" | awk '{print $1}')"
+    if [[ -n "$now" && -f "$marker" && "$(cat "$marker")" == "$now" ]]; then ok "$step"; return; fi
+    local state="installed"; [[ -d "$WEB_DIR/node_modules" ]] && state="updated"
+    mkdir -p "$RUN"
+    if [[ -f "$WEB_DIR/package-lock.json" ]]; then
+        (cd "$WEB_DIR" && with_node npm ci --no-audit --no-fund) >"$RUN/setup-npm.log" 2>&1 \
+            || { tail -30 "$RUN/setup-npm.log" >&2; die "npm ci failed"; }
+    else
+        (cd "$WEB_DIR" && with_node npm install --no-audit --no-fund) >"$RUN/setup-npm.log" 2>&1 \
+            || { tail -30 "$RUN/setup-npm.log" >&2; die "npm install failed"; }
+        now="$(sha256sum "$WEB_DIR/package-lock.json" | awk '{print $1}')"
+        state="installed (package-lock.json created)"
+    fi
+    echo "$now" > "$marker"
+    changed "$step" "$state"
+}
+
+cmd_setup() {
+    echo "Setting up PANIC workspace..."
+    ensure_venv
+    uv pip install --python "$VENV/bin/python" --no-deps -e "$ROOT/Application/Common" -e "$ROOT/Application/Server" >/dev/null 2>&1
+    ok "editable packages" "panic-common, panic-server"
+    ensure_dev_tools
+    setup_node
+    setup_npm
 }
 
 #: One dev-only MongoDB container, shared by ``start``/``test``/``load`` (T-S6-02). Never stopped
@@ -76,90 +166,156 @@ ensure_dev_mongo() {
     done
 }
 
-cmd_setup() {
-    echo "Setting up PANIC workspace..."
-    ensure_venv
-    uv pip install --python "$VENV/bin/python" --no-deps -e "$ROOT/Application/Common" -e "$ROOT/Application/Server" >/dev/null 2>&1
-    ok "editable packages" "panic-common, panic-server"
+# ---------------------------------------------------------------- process management
+pidfile() { echo "$PIDS/$1.pid"; }
+is_running() {
+    local f; f="$(pidfile "$1")"
+    [[ -f "$f" ]] && kill -0 "$(cat "$f")" 2>/dev/null
+}
+
+expand_components() {
+    local t="${1:-all}"
+    if [[ "$t" == all ]]; then echo "${COMPONENTS[@]}"
+    elif [[ " ${COMPONENTS[*]} " == *" $t "* ]]; then echo "$t"
+    else die "unknown component '$t' (server|web|all)"; fi
+}
+
+start_one() {
+    local c="$1" prod="$2"
+    if is_running "$c"; then info "$c already running (pid $(cat "$(pidfile "$c")"))"; return; fi
+    mkdir -p "$PIDS" "$LOGS"
+    local log="$LOGS/$c.log"
+    case "$c" in
+        server)
+            ensure_venv
+            ensure_dev_mongo
+            # T-S6-04 removed the relational DATABASES entirely (Mongo-backed store/sessions): no
+            # `manage.py migrate` step here (there is no relational schema left to migrate) --
+            # instead ensure Mongo indexes and run data migrations (idempotent, T-S6-02+).
+            (cd "$SERVER_DIR" && "$VENV/bin/python" manage.py panic_ensure_indexes >"$log" 2>&1 \
+                && "$VENV/bin/python" manage.py panic_migrate >>"$log" 2>&1) \
+                || { tail -20 "$log" >&2; die "panic-server Mongo setup failed"; }
+            if [[ "$prod" == 1 ]]; then
+                (cd "$SERVER_DIR" && exec setsid "$VENV/bin/gunicorn" panic_server.wsgi:application \
+                    --bind "$SERVER_BIND" --workers "${PANIC_SERVER_WORKERS:-4}" >>"$log" 2>&1) &
+            else
+                (cd "$SERVER_DIR" && exec setsid "$VENV/bin/python" manage.py runserver "$SERVER_BIND" --noreload >>"$log" 2>&1) &
+            fi ;;
+        web)
+            [[ -x "$NODE_HOME/bin/node" ]] || die "node missing; run ./panic setup"
+            [[ -d "$WEB_DIR/node_modules" ]] || die "web deps missing; run ./panic setup"
+            (cd "$WEB_DIR" && PANIC_WEB_PORT="$WEB_PORT" PANIC_SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
+                exec setsid env PATH="$NODE_HOME/bin:$PATH" \
+                "$WEB_DIR/node_modules/.bin/quasar" dev --port "$WEB_PORT" >>"$log" 2>&1) & ;;
+        *) die "unknown component $c" ;;
+    esac
+    echo $! > "$(pidfile "$c")"
+    case "$c" in server) echo "$SERVER_PORT" > "$PIDS/$c.port" ;; web) echo "$WEB_PORT" > "$PIDS/$c.port" ;; esac
+    sleep 1
+    if is_running "$c"; then echo "started $c (pid $(cat "$(pidfile "$c")"), log $log)"
+    else rm -f "$(pidfile "$c")"; tail -20 "$log" >&2; die "$c failed to start"; fi
+}
+
+stop_one() {
+    local c="$1" f; f="$(pidfile "$c")"
+    if ! is_running "$c"; then rm -f "$f"; info "$c not running"; return; fi
+    local pid; pid="$(cat "$f")"
+    # setsid made the component a process-group leader: signal the whole group (quasar dev forks a vite child).
+    kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+    for _ in $(seq 1 100); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
+    if kill -0 "$pid" 2>/dev/null; then
+        kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+        echo "stopped $c (SIGKILL after 10s)"
+    else
+        echo "stopped $c"
+    fi
+    rm -f "$f" "$PIDS/$c.port"
+}
+
+http_status() { curl -s -o /dev/null -m 3 -w '%{http_code}' "$1" 2>/dev/null || true; }
+
+status_one() {
+    local c="$1" port="$2" state="stopped" pid="-" p="-" health="-"
+    p="$port"
+    if is_running "$c"; then
+        state="running"; pid="$(cat "$(pidfile "$c")")"
+        [[ -f "$PIDS/$c.port" ]] && p="$(cat "$PIDS/$c.port")"
+        case "$c" in
+            server) health="GET /api/v1/health -> $(http_status "http://127.0.0.1:$p/api/v1/health")" ;;
+            web) health="GET / -> $(http_status "http://127.0.0.1:$p/")" ;;
+        esac
+    fi
+    printf '%-8s %-8s %-8s %-6s %s\n' "$c" "$state" "$pid" "$p" "$health"
 }
 
 cmd_start() {
+    local target="all" prod=0
+    for a in "$@"; do case "$a" in --prod) prod=1 ;; *) target="$a" ;; esac; done
     load_env
-    ensure_venv
-    ensure_dev_mongo
-    if [[ -f "$PIDS/server.pid" ]] && kill -0 "$(cat "$PIDS/server.pid")" 2>/dev/null; then
-        ok "panic-server" "already running (pid $(cat "$PIDS/server.pid"), http://$SERVER_BIND)"
-        return
-    fi
-    # T-S6-02+: ensure Mongo indexes and run data migrations before serving (idempotent).
-    # Stage 1-4's relational `manage.py migrate` is gone: T-S6-04 removed DATABASES entirely.
-    (cd "$SERVER_DIR" && "$VENV/bin/python" manage.py panic_ensure_indexes >"$LOGS/migrate.log" 2>&1 \
-        && "$VENV/bin/python" manage.py panic_migrate >>"$LOGS/migrate.log" 2>&1) \
-        || { cat "$LOGS/migrate.log" >&2; die "panic-server Mongo setup failed"; }
-    (
-        cd "$SERVER_DIR"
-        nohup "$VENV/bin/python" manage.py runserver "$SERVER_BIND" --noreload >"$LOGS/server.log" 2>&1 &
-        echo $! >"$PIDS/server.pid"
-    )
-    sleep 1
-    if [[ -f "$PIDS/server.pid" ]] && kill -0 "$(cat "$PIDS/server.pid")" 2>/dev/null; then
-        changed "panic-server" "started (pid $(cat "$PIDS/server.pid"), http://$SERVER_BIND)"
-    else
-        cat "$LOGS/server.log" >&2 || true
-        die "panic-server failed to start"
-    fi
+    for c in $(expand_components "$target"); do start_one "$c" "$prod"; done
 }
 
 cmd_stop() {
-    if [[ -f "$PIDS/server.pid" ]]; then
-        local pid
-        pid="$(cat "$PIDS/server.pid")"
-        if kill -0 "$pid" 2>/dev/null; then
-            kill "$pid" 2>/dev/null || true
-            sleep 0.5
-            kill -9 "$pid" 2>/dev/null || true
-            changed "panic-server" "stopped (pid $pid)"
-        else
-            ok "panic-server" "not running"
-        fi
-        rm -f "$PIDS/server.pid"
-    else
-        ok "panic-server" "not running"
-    fi
+    load_env
+    local cs; cs="$(expand_components "${1:-all}")"
+    for c in $(echo "$cs" | tr ' ' '\n' | tac); do stop_one "$c"; done
 }
+
+cmd_restart() { cmd_stop "${1:-all}"; cmd_start "$@"; }
 
 cmd_status() {
     load_env
-    if [[ -f "$PIDS/server.pid" ]] && kill -0 "$(cat "$PIDS/server.pid")" 2>/dev/null; then
-        ok "panic-server" "running (pid $(cat "$PIDS/server.pid"), http://$SERVER_BIND)"
-    else
-        report "panic-server" "stopped" "$C_DIM"
-    fi
+    printf '%-8s %-8s %-8s %-6s %s\n' COMPONENT STATE PID PORT HEALTH
+    status_one server "$SERVER_PORT"
+    status_one web "$WEB_PORT"
 }
 
+# ---------------------------------------------------------------- test / logs / misc
 cmd_test() {
     load_env
-    ensure_venv
     local mode="${1:-all}"
     shift || true
     export PYTHONPATH="$ROOT/Application/Common:$ROOT/Application/Server"
+    local rc=0
+    if [[ "$mode" == "python" || "$mode" == "lint" || "$mode" == "all" ]]; then
+        ensure_dev_tools
+    fi
     if [[ "$mode" == "python" || "$mode" == "all" ]]; then
         ensure_dev_mongo
         export PANIC_TEST_MONGO_URI="${PANIC_TEST_MONGO_URI:-mongodb://127.0.0.1:${DEV_MONGO_PORT}/}"
-        "$VENV/bin/pytest" "$ROOT/Application/Common/tests" "$ROOT/Application/Server/tests" "$@"
+        "$VENV/bin/pytest" "$ROOT/Application/Common/tests" "$ROOT/Application/Server/tests" "$@" || rc=1
     fi
     if [[ "$mode" == "lint" || "$mode" == "all" ]]; then
-        "$VENV/bin/ruff" check "$ROOT/Application/Common" "$ROOT/Application/Server"
-        "$VENV/bin/mypy" "$ROOT/Application/Common/panic_common" "$ROOT/Application/Server/panic_server"
-        "$VENV/bin/lint-imports"
+        "$VENV/bin/ruff" check "$ROOT/Application/Common" "$ROOT/Application/Server" || rc=1
+        "$VENV/bin/mypy" "$ROOT/Application/Common/panic_common" "$ROOT/Application/Server/panic_server" || rc=1
+        "$VENV/bin/lint-imports" || rc=1
     fi
+    if [[ "$mode" == "web" || "$mode" == "all" ]]; then
+        echo "== web"
+        if [[ -d "$WEB_DIR/node_modules" ]]; then
+            (cd "$WEB_DIR" && with_node npm run lint && with_node npm run typecheck && with_node npm test) || rc=1
+        else
+            echo "web deps missing (./panic setup)"
+            rc=1
+        fi
+    fi
+    return $rc
+}
+
+cmd_logs() {
+    local c="${1:-server}"
+    expand_components "$c" >/dev/null
+    [[ -f "$LOGS/$c.log" ]] || die "no log yet for $c"
+    tail -n 100 -f "$LOGS/$c.log"
 }
 
 #: ./panic contracts [--check]: regenerate (default) or, with --check, verify that
 #: Documents/Architecture/openapi/server.yaml (drf-spectacular's AutoSchema walking
 #: panic_server.api.urls) is up to date. Mirrors reference-app's cmd_contracts (same spectacular.args
-#: file shape); PANIC has no JSON-Schema-export or web-API-type-gen steps yet (no
-#: panic_common.schema_export, no Application/Web), so this is the OpenAPI step only.
+#: file shape); PANIC has no JSON-Schema-export step (no panic_common.schema_export). The web
+#: API types (`src/api/generated/openapi.ts`) are regenerated separately with
+#: `(cd Application/Web && npm run gen:api)` -- `npm run gen:api:check` is its own staleness check,
+#: also enforced by test/unit/apiGenerated.spec.ts.
 cmd_contracts() {
     load_env
     ensure_venv
@@ -186,13 +342,13 @@ cmd_contracts() {
 
 case "${1:-help}" in
     setup)   cmd_setup ;;
-    start)   cmd_start ;;
-    stop)    cmd_stop ;;
-    restart) cmd_stop; cmd_start ;;
+    start)   shift; cmd_start "$@" ;;
+    stop)    shift; cmd_stop "$@" ;;
+    restart) shift; cmd_restart "$@" ;;
     status)  cmd_status ;;
     test)    shift; cmd_test "$@" ;;
     lint)    cmd_test lint ;;
-    logs)    tail -n 100 -f "$LOGS/server.log" ;;
+    logs)    shift; cmd_logs "$@" ;;
     manage)  shift; ensure_venv; (cd "$SERVER_DIR" && "$VENV/bin/python" manage.py "$@") ;;
     contracts) shift; cmd_contracts "$@" ;;
     *)       echo "Usage: ./panic {setup|start|stop|restart|status|test|lint|logs|manage|contracts}" ;;
