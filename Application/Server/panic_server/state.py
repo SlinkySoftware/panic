@@ -12,7 +12,10 @@ from __future__ import annotations
 import threading
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from panic_server.store_db import DatabasePortalStore
 
 from panic_common.hygiene import normalize_target, preview_catalog_submission
 from panic_common.launchers import interpolate_local_app_command, interpolate_ssh_command
@@ -1135,7 +1138,7 @@ class MockPortalStore:
             return res.model_dump()
 
 
-def _build_store() -> MockPortalStore:
+def _build_store() -> DatabasePortalStore:
     """Stage 2+: the process-wide store is relational (``DatabasePortalStore``)."""
     from panic_server.store_db import DatabasePortalStore
 

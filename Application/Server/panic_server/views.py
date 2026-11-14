@@ -43,6 +43,7 @@ from panic_common.rbac import (
 )
 from panic_common.zones import check_item_reachability, resolve_ip_zone, validate_cidr_list
 from panic_server import __version__
+from panic_server.portability import export_state
 from panic_server.state import STORE
 
 
@@ -91,11 +92,38 @@ def portal_app_view(
 
 
 def health_view(request: HttpRequest) -> JsonResponse:
-    return JsonResponse({"status": "ok", "component": "panic-server", "stage": "stage-1-mock"})
+    db_ok = STORE.database_ok()
+    return JsonResponse(
+        {
+            "status": "ok" if db_ok else "degraded",
+            "component": "panic-server",
+            "stage": "stage-2-relational",
+            "database": {"engine": settings.DATABASES["default"]["ENGINE"].rsplit(".", 1)[-1], "ok": db_ok},
+        },
+        status=200 if db_ok else 503,
+    )
 
 
 def version_view(request: HttpRequest) -> JsonResponse:
-    return JsonResponse({"name": "panic-server", "version": __version__, "stage": 1})
+    return JsonResponse({"name": "panic-server", "version": __version__, "stage": 2})
+
+
+def export_api_view(request: HttpRequest) -> JsonResponse:
+    """Portable JSON export of portal state (``GLOBAL_ADMIN`` only)."""
+    if not has_permission(STORE.auth_user, PermissionFlag.GLOBAL_ADMIN):
+        return JsonResponse(
+            {"error_code": ErrorCode.PERMISSION_DENIED, "detail": "Export requires Global Admin"}, status=403
+        )
+    shared_only = request.GET.get("shared_only", "").lower() in {"1", "true", "yes"}
+    STORE.record_audit(
+        action="system.export",
+        target_type="system",
+        target_id="portal",
+        summary=f"Exported portal state (shared_only={shared_only})",
+    )
+    response = JsonResponse(export_state(STORE, shared_only=shared_only))
+    response["Content-Disposition"] = 'attachment; filename="panic-export.json"'
+    return response
 
 
 def metrics_view(request: HttpRequest) -> HttpResponse:

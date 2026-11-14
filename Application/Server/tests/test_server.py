@@ -586,3 +586,63 @@ def test_system_default_global_dashboard_rbac_and_protection() -> None:
     assert denied.status_code == 403
     assert denied.json()["error_code"] == "PERMISSION_DENIED"
 
+
+
+def test_health_reports_database_and_version_stage() -> None:
+    client = Client()
+    body = client.get("/api/v1/health").json()
+    assert body["database"]["ok"] is True
+    assert body["stage"] == "stage-2-relational"
+    assert client.get("/api/v1/version").json()["stage"] == 2
+
+
+def test_export_api_requires_global_admin() -> None:
+    client = Client()
+    resp = client.get("/api/v1/export")
+    assert resp.status_code == 200
+    doc = resp.json()
+    assert doc["format"] == "panic-export"
+    assert doc["sites"] and doc["dashboards"]
+    assert all("password_hash" not in u for u in doc["users"])
+    shared = client.get("/api/v1/export?shared_only=true").json()
+    assert shared["users"] == []
+    assert all(d["scope"] != "PERSONAL" for d in shared["dashboards"])
+
+    non_admin = next(u for u in STORE.users if "GLOBAL_ADMIN" not in u.permissions)
+    client.post(
+        "/api/v1/simulator", data=json.dumps({"active_user_id": non_admin.id}), content_type="application/json"
+    )
+    assert client.get("/api/v1/export").status_code == 403
+
+
+def test_export_then_import_on_clean_database_reproduces_state(tmp_path: object) -> None:
+    from pathlib import Path
+
+    from django.core.management import call_command
+
+    from panic_server.portability import export_state
+
+    STORE.refresh()
+    before = export_state(STORE)
+    out = Path(str(tmp_path)) / "export.json"
+    call_command("panic_export", "--output", str(out))
+    STORE.wipe()
+    STORE.refresh()
+    assert STORE.sites == []
+    call_command("panic_import", str(out))
+    STORE.refresh()
+    after = export_state(STORE)
+    for section in ("sites", "teams", "zones", "users", "catalog", "lists", "dashboards", "system_settings"):
+        if section == "system_settings":
+            assert before[section] == after[section]
+        else:
+            assert sorted(before[section], key=lambda o: o["id"]) == sorted(
+                after[section], key=lambda o: o["id"]
+            ), section
+
+
+def test_import_rejects_foreign_documents() -> None:
+    from panic_server.portability import ImportValidationError, import_state
+
+    with pytest.raises(ImportValidationError):
+        import_state(STORE, {"format": "something-else"})

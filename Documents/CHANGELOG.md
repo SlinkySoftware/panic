@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-14 — T-S2-03: API Cutover & Portable Export/Import
+- `STORE` is a `DatabasePortalStore`; `PortalStoreMiddleware` refreshes relational state per request and persists changed entities afterwards (auto-seeds an empty database when `PANIC_AUTO_SEED=true`).
+- `/api/v1/health` reports database connectivity (`503` when degraded); `/api/v1/version` reports stage 2.
+- `manage.py panic_export [--output FILE] [--shared-only]`, `manage.py panic_import FILE [--replace]`, and `GET /api/v1/export` (`GLOBAL_ADMIN`). Versioned JSON (`format: panic-export`, `schema_version: 1`), secrets excluded.
+
 ## 2026-11-14 — Wave 1: Persistence Core & Trusted Proxy (T-S2-01, T-S2-02, T-S3-03)
 - `PANIC_DB_ENGINE` (`sqlite` default at `.run/panic.sqlite3`, `postgresql` via `PANIC_DB_HOST/PORT/NAME/USER/PASSWORD[_FILE]/CONN_MAX_AGE`).
 - Django ORM records (`panic_server.models`) with `to_domain()` / `from_domain()` round-trips to `panic_common.models`, indexes on `normalized_key`, `scope`, `created_at`, `dashboard_id`; initial migration `0001_initial`.
