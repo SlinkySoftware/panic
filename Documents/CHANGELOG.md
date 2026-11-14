@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-14 — T-S5-01: Live JIT Entitlement Providers
+- `panic_common.entitlements` (pure): `EntitlementProvider` protocol, thread-safe `TTLCache`, `EntitlementChecker` (concurrent checks bounded by `PANIC_ENTITLEMENT_TIMEOUT_S`, only definitive answers cached for `PANIC_ENTITLEMENT_CACHE_TTL_S`), `parse_rules`, and `WARN` / `BLOCK` `evaluate_gate`. Timeouts and provider errors yield `UNAVAILABLE` ("Entitlement Check Unavailable") instead of raising.
+- `panic_server.entitlements_service`: `static`, `ldap` (group membership) and `rest` (HTTP policy decision point) providers; per-item rules from `PANIC_ENTITLEMENT_RULES[_FILE]`; `PANIC_ENTITLEMENT_FAIL_CLOSED` for `BLOCK` gates during outages.
+- `GET /api/v1/entitlements[?refresh=1]` and `POST {"action":"refresh"}`; `.rdp` launches enforce `BLOCK` gates (`403 ENTITLEMENT_DENIED`, audited) and carry `X-PANIC-Entitlement-Warning` for soft gates / outages. Disabled by default (`PANIC_JIT_ENTITLEMENTS_ENABLED=false`).
+
 ## 2026-11-14 — T-S4-01: Production Container & Compose Stack
 - `Containerfile`: unprivileged `panic:panic` (uid/gid 10001), `collectstatic` at build, `/data` volume (`PANIC_SQLITE_PATH=/data/panic.sqlite3`), `HEALTHCHECK` on `/api/v1/health`, installs the `postgres` extra (`psycopg[binary]`).
 - `entrypoint.sh`: `migrate --noinput` (`PANIC_MIGRATE_ON_START`), `panic_seed --if-empty` (`PANIC_SEED_ON_START=if-empty|never`), Gunicorn tuned by `PANIC_GUNICORN_WORKERS/THREADS/TIMEOUT`.
