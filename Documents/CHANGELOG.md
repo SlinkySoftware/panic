@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-11-14 — T-S6-01: pure domain rules for scoped access
+- `panic_common.visibility` (new): `VisibilitySpec`/`visibility_spec`, `matches` (mirrors the Mongo
+  `$or`), `can_create`/`can_edit` returning a `Decision` with an `ErrorCode`, `is_orphan`,
+  `assign_orphan_to_user`, and the `zone-default` constants.
+- `panic_common.search_keys` (new): the lower-cased, non-alphanumeric-split tokeniser (DATA_MODEL §4.10).
+- New `ErrorCode`s (`VERSION_CONFLICT`, `PRECONDITION_REQUIRED`, `PROTECTED_RESOURCE`,
+  `VIEW_AS_READ_ONLY`, `ORPHANED_RESOURCE`, `UNTRUSTED_PEER`, `PAYLOAD_TOO_LARGE`, `DATABASE_UNAVAILABLE`).
+- Models: `version`/`updated_at`(/`updated_by`) on sites, teams, zones, catalog items, lists,
+  dashboards, settings; `auth_source`/`disabled` on users; `orphaned` on catalog items, lists,
+  dashboards; `builtin` on zones; `search_keys` on catalog items, lists, dashboards, users.
+- import-linter: AR-1.1 extended (pymongo, bson, httpx, ldap3, requests, socket, ssl); new AR-4.1
+  (`panic_server` forbidden from `pymongo`/`bson`) — **T-S6-02 must add the `ignore_imports` for
+  `panic_server.store.**` once that package exists** (an unmatched `ignore_imports` pattern fails
+  import-linter today, so it can't be pre-added).
+- **Deviation:** `SimulationState` and `TeamDefinition.members` are *not* removed yet — both are
+  still read by `panic_server/state.py`, `store_db.py`, `auth/backends.py`, `models.py`, `views.py`
+  and `panic.js`, none of which T-S6-01 owns. Removing them now would break `./panic test` and the
+  running dev server ahead of schedule. Deferred to `T-S6-04`, which owns and deletes those files.
+
 ## 2026-11-14 — Stage 6 design: identity, sessions and branching (docs only)
 - External identity (OIDC, LDAP) is used for authentication only:
   - `panic_common.claim_mapping`, all `PANIC_RBAC_*` group mappings and `idp_permissions` are dropped from the plan.

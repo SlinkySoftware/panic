@@ -27,6 +27,12 @@ class PermissionFlag(StrEnum):
     CAN_ADD_TEAM = "CAN_ADD_TEAM"
 
 
+class AuthSource(StrEnum):
+    LOCAL = "LOCAL"
+    OIDC = "OIDC"
+    LDAP = "LDAP"
+
+
 class WidgetType(StrEnum):
     HOST = "HOST"
     LIST = "LIST"
@@ -53,7 +59,10 @@ class SecurityZone(BaseModel):
     description: str
     priority: int = 100
     cidrs: list[str] = Field(default_factory=list)
+    builtin: bool = False
     created_at: str = "2026-11-01T00:00:00Z"
+    updated_at: str = "2026-11-01T00:00:00Z"
+    version: int = 1
 
 
 class SiteDefinition(BaseModel):
@@ -62,6 +71,8 @@ class SiteDefinition(BaseModel):
     name: str
     description: str = ""
     created_at: str = "2026-11-01T00:00:00Z"
+    updated_at: str = "2026-11-01T00:00:00Z"
+    version: int = 1
 
 
 class TeamDefinition(BaseModel):
@@ -71,6 +82,8 @@ class TeamDefinition(BaseModel):
     description: str = ""
     members: list[str] = Field(default_factory=list)
     created_at: str = "2026-11-01T00:00:00Z"
+    updated_at: str = "2026-11-01T00:00:00Z"
+    version: int = 1
 
 
 class CatalogItem(BaseModel):
@@ -90,8 +103,13 @@ class CatalogItem(BaseModel):
     team_ids: list[str] = Field(default_factory=list)
     owner_usernames: list[str] = Field(default_factory=list)
     zone_ids: list[str] = Field(default_factory=list)
+    search_keys: list[str] = Field(default_factory=list)
+    orphaned: bool = False
     created_by: str = "joperator"
     created_at: str = "2026-11-01T09:00:00Z"
+    updated_by: str = "joperator"
+    updated_at: str = "2026-11-01T09:00:00Z"
+    version: int = 1
 
 
 class EndpointList(BaseModel):
@@ -102,8 +120,13 @@ class EndpointList(BaseModel):
     team_ids: list[str] = Field(default_factory=list)
     owner_usernames: list[str] = Field(default_factory=list)
     item_ids: list[str] = Field(default_factory=list)
+    search_keys: list[str] = Field(default_factory=list)
+    orphaned: bool = False
     created_by: str = "joperator"
     created_at: str = "2026-11-01T09:00:00Z"
+    updated_by: str = "joperator"
+    updated_at: str = "2026-11-01T09:00:00Z"
+    version: int = 1
 
 
 class DashboardWidget(BaseModel):
@@ -129,7 +152,12 @@ class Dashboard(BaseModel):
     always_display: bool = False
     sort_order: int = 0
     widgets: list[DashboardWidget] = Field(default_factory=list)
+    search_keys: list[str] = Field(default_factory=list)
+    orphaned: bool = False
     created_by: str = "joperator"
+    updated_by: str = "joperator"
+    updated_at: str = "2026-11-01T09:00:00Z"
+    version: int = 1
 
 
 class UserAccount(BaseModel):
@@ -138,6 +166,8 @@ class UserAccount(BaseModel):
     display_name: str
     default_remote_user: str
     ssh_template: str = "ssh {user}@{host} -p {port} {flags}"
+    auth_source: AuthSource = AuthSource.LOCAL
+    disabled: bool = False
     permissions: list[PermissionFlag] = Field(default_factory=list)
     team_ids: list[str] = Field(default_factory=list)
     pinned_dashboard_ids: list[str] = Field(default_factory=list)
@@ -145,12 +175,16 @@ class UserAccount(BaseModel):
     density: DensityMode = DensityMode.COMFORT
     theme: ThemeMode = ThemeMode.DARK
     unreachable_policy: UnreachablePolicy = UnreachablePolicy.DIM
+    search_keys: list[str] = Field(default_factory=list)
+    updated_at: str = "2026-11-01T00:00:00Z"
+    version: int = 1
 
 
 class SystemSettings(BaseModel):
     default_global_dashboard_id: str
     updated_by: str = "joperator"
     updated_at: str = "2026-11-01T00:00:00Z"
+    version: int = 1
 
 
 class SimulationState(BaseModel):
