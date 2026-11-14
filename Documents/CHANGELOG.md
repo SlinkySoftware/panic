@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-11-14 — Stage 6 Phase A: design for the web/server split, MongoDB and scoped API (docs only)
+- `Documents/Architecture/adr/0001-web-server-mongo-split.md`: the owner's decisions 1–9, the rejected alternatives, authorization findings F1–F6 in the current API, and open questions.
+- `ARCHITECTURE.md` is rewritten for the Stage 6 target:
+  - components panic-web, panic-server and Common
+  - new rules AR-4.x (Mongo repository, statelessness, `version`/`If-Match`), AR-5.x (multi-tier `X-Forwarded-For` trust model, fail-closed) and AR-6.x (no full-state loading, payload budgets, committed OpenAPI, single proxy allow-list, layering)
+  - import-linter contracts, including "only `panic_server.store` imports pymongo"
+- `DATA_MODEL.md` describes:
+  - MongoDB collections and document shapes, with indexes
+  - `search_keys` prefix search
+  - Mongo-backed sessions and rate limits
+  - a 365-day audit TTL
+  - the visibility filter spec and edit-rights table
+- New `API.md`: the per-screen endpoint contract (bootstrap, dashboard view, search, paged catalog and lists, admin), error codes, ETag/If-Match semantics, client-IP diagnostics, payload budgets, and the panic-web proxy allow-list.
+- `SPEC.md` gains Stage 6 and the deployment topology. It also records that the simulator is removed, the Command Palette search moves to the server, and list reordering happens only in the modal.
+- `TASKS.md` gains Stage 6 (`T-S6-00` … `T-S6-14`) with owned files, dependencies, acceptance criteria and load-test p95 targets.
+
 ## 2026-11-14 — Gitea CI & image publishing
 - `.gitea/workflows/ci.yaml`: `./panic test` + `makemigrations --check` on pushes / PRs to `main`; builds `Build/Containers/server/Containerfile`, smoke-tests it in prod mode (non-root, healthy, `/login`, static, `401` API), and publishes `panic-server` to the Gitea container registry for `main` (`:main`, `:sha-<short>`) and `vX.Y.Z` tags (`:X.Y.Z`, `:X.Y`, `:latest`) using `REGISTRY_USER` / `REGISTRY_TOKEN`.
 - Container entrypoint no longer seeds demo fixtures when `PANIC_ENV=prod` (`PANIC_SEED_ON_START` defaults to `never` there); e2e test covers first sign-in on an empty database.
