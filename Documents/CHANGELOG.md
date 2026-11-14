@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-14 — T-S4-02: Operations Documentation & End-to-End Suite
+- `Documents/Operations/DEPLOYMENT.md` (single-node SQLite, HA PostgreSQL, Docker Compose, reverse proxy / `X-Forwarded-For`, authentication rollout, `panic_export` / `panic_import` backup & restore, Prometheus, upgrades) and `Documents/Operations/CONFIGURATION.md` (every `PANIC_*` / `*_FILE` variable).
+- `test_e2e_workflows.py`: session + CSRF + persistence + audit + export, proxy-resolved zone reachability and spoofing, multi-user RBAC with OIDC-provisioned users, Admin "View As", Default Dashboard precedence, list/widget persistence across reload, `.rdp` / SSH launchers, and a CONFIGURATION.md coverage guard.
+- Container image sets `DJANGO_SETTINGS_MODULE` so `docker compose exec server python -m django …` works.
+
 ## 2026-11-14 — T-S5-01: Live JIT Entitlement Providers
 - `panic_common.entitlements` (pure): `EntitlementProvider` protocol, thread-safe `TTLCache`, `EntitlementChecker` (concurrent checks bounded by `PANIC_ENTITLEMENT_TIMEOUT_S`, only definitive answers cached for `PANIC_ENTITLEMENT_CACHE_TTL_S`), `parse_rules`, and `WARN` / `BLOCK` `evaluate_gate`. Timeouts and provider errors yield `UNAVAILABLE` ("Entitlement Check Unavailable") instead of raising.
 - `panic_server.entitlements_service`: `static`, `ldap` (group membership) and `rest` (HTTP policy decision point) providers; per-item rules from `PANIC_ENTITLEMENT_RULES[_FILE]`; `PANIC_ENTITLEMENT_FAIL_CLOSED` for `BLOCK` gates during outages.

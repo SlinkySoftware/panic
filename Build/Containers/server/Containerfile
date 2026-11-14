@@ -9,7 +9,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PANIC_SERVER_BIND=0.0.0.0:8210 \
     PANIC_SQLITE_PATH=/data/panic.sqlite3 \
-    PANIC_STATIC_ROOT=/app/staticfiles
+    PANIC_STATIC_ROOT=/app/staticfiles \
+    DJANGO_SETTINGS_MODULE=panic_server.settings
 
 RUN groupadd --system --gid 10001 panic \
  && useradd --system --uid 10001 --gid panic --home-dir /app --shell /usr/sbin/nologin panic
