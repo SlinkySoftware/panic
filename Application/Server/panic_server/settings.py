@@ -100,11 +100,15 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "panic_server.middleware.RequestIdMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "panic_server.security.SecurityHeadersMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
     # Loads relational state per request and persists mutations (Stage 2).
     "panic_server.middleware.PortalStoreMiddleware",
     "panic_server.middleware.ClientIpZoneMiddleware",
+    # Per-client-IP limits on /login and state-changing /api/* (T-S3-04).
+    "panic_server.security.RateLimitMiddleware",
     # Binds the authenticated session user to the store (Stage 3, T-S3-01).
     "panic_server.auth.middleware.PanicAuthMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -169,6 +173,28 @@ USE_I18N = False
 PANIC_TZ = env_str("PANIC_TZ", "UTC")
 
 SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_SSL_REDIRECT = env_bool("PANIC_SECURE_SSL_REDIRECT", False)
+SECURE_HSTS_SECONDS = env_int("PANIC_HSTS_SECONDS", 0)
+if env_bool("PANIC_SECURE_PROXY_SSL_HEADER", False):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# ---------------------------------------------------------------- CSRF, CSP, rate limiting (T-S3-04)
+CSRF_COOKIE_NAME = "panic_csrftoken"
+CSRF_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SECURE = SESSION_COOKIE_SECURE
+CSRF_FAILURE_VIEW = "panic_server.security.csrf_failure"
+PANIC_CSP = env_str("PANIC_CSP", "")
+PANIC_RATE_LIMIT_ENABLED = env_bool("PANIC_RATE_LIMIT_ENABLED", True)
+PANIC_RATE_LIMIT_LOGIN = env_str("PANIC_RATE_LIMIT_LOGIN", "10/60")
+PANIC_RATE_LIMIT_API = env_str("PANIC_RATE_LIMIT_API", "300/60")
+_CACHE_URL = env_str("PANIC_CACHE_URL", "")
+CACHES: dict[str, dict[str, Any]] = {
+    "default": (
+        {"BACKEND": "django.core.cache.backends.redis.RedisCache", "LOCATION": _CACHE_URL}
+        if _CACHE_URL
+        else {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "panic"}
+    )
+}
 X_FRAME_OPTIONS = "DENY"
 
 REST_FRAMEWORK: dict[str, Any] = {

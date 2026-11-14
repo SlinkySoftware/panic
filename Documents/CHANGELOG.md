@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-14 — T-S3-04: CSRF, Security Headers, Rate Limiting & Audit Filtering
+- `CsrfViewMiddleware` enforced on every state-changing request (all `@csrf_exempt` removed); `panic.js` `apiRequest` sends `X-CSRFToken` from the `panic_csrftoken` cookie / `<meta name="csrf-token">` and redirects to `/login` on `401`. API CSRF failures return `403 CSRF_FAILED` JSON.
+- `SecurityHeadersMiddleware`: `Content-Security-Policy` (override with `PANIC_CSP`), `X-Content-Type-Options`, `Referrer-Policy: same-origin`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`. Optional `PANIC_SECURE_SSL_REDIRECT`, `PANIC_HSTS_SECONDS`, `PANIC_SECURE_PROXY_SSL_HEADER`.
+- `RateLimitMiddleware`: per-client-IP fixed windows (`PANIC_RATE_LIMIT_LOGIN=10/60`, `PANIC_RATE_LIMIT_API=300/60`, `429 RATE_LIMITED` + `Retry-After`); counters in the Django cache (`PANIC_CACHE_URL` for shared Redis).
+- `GET /api/v1/audit?actor=&action=&target_type=&q=&limit=` and a filter bar on `/audit` (filters reflected in the URL query string).
+
 ## 2026-11-14 — T-S3-01 / T-S3-02: Session Authentication, OIDC & LDAP
 - `PANIC_AUTH_MODE=session`: `PanicAuthMiddleware` redirects to `/login` (HTML) or returns `401 UNAUTHENTICATED` (`/api/*`); session user bound to the store, Admin "View As" kept in the session. Simulator user switching / reset return `403` when `PANIC_DEV_SIMULATOR_ENABLED=false`.
 - Local bootstrap admin (`PANIC_BOOTSTRAP_ADMIN_USER` / `_PASSWORD[_FILE]`, Django password hashing), reference-ui-styled `/login`, CSRF-protected `POST /logout`, open-redirect-safe `next`, `auth.login` / `auth.login_failed` / `auth.logout` audit events.

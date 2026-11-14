@@ -57,6 +57,13 @@
       .replace(/'/g, "&#39;");
   }
 
+  function csrfToken() {
+    const cookie = document.cookie.split("; ").find((c) => c.startsWith("panic_csrftoken="));
+    if (cookie) return decodeURIComponent(cookie.split("=")[1]);
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute("content") || "" : "";
+  }
+
   async function apiRequest(path, method = "GET", body = null) {
     const opts = {
       method,
@@ -68,7 +75,14 @@
       opts.headers["Content-Type"] = "application/json";
       opts.body = JSON.stringify(body);
     }
+    if (!["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase())) {
+      opts.headers["X-CSRFToken"] = csrfToken();
+    }
+    opts.credentials = "same-origin";
     const resp = await fetch(path, opts);
+    if (resp.status === 401) {
+      window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+    }
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) {
       const msg =
@@ -4356,9 +4370,13 @@
     }
   }
 
-  function renderAuditView(container) {
-    const entries = appState.snapshot.audit_logs || [];
-    const rows = entries
+  const AUDIT_FILTER_KEYS = ["actor", "action", "target_type", "q", "limit"];
+
+  function auditRowsHtml(entries) {
+    if (!entries.length) {
+      return `<tr><td colspan="5" class="text-muted">No audit entries match the current filters.</td></tr>`;
+    }
+    return entries
       .map(
         (e) => `
         <tr>
@@ -4371,6 +4389,35 @@
       `
       )
       .join("");
+  }
+
+  async function applyAuditFilters(form) {
+    const params = new URLSearchParams();
+    for (const key of AUDIT_FILTER_KEYS) {
+      const val = (form.elements[key] && form.elements[key].value.trim()) || "";
+      if (val) params.set(key, val);
+    }
+    const qs = params.toString();
+    window.history.replaceState(window.history.state, "", `/audit${qs ? `?${qs}` : ""}`);
+    const tbody = document.getElementById("audit-tbody");
+    try {
+      const data = await apiRequest(`/api/v1/audit${qs ? `?${qs}` : ""}`);
+      if (tbody) tbody.innerHTML = auditRowsHtml(data.entries || []);
+      const count = document.getElementById("audit-count");
+      if (count) count.textContent = `${data.count} entries`;
+    } catch (err) {
+      showToast("Audit filter failed", err.message, "error");
+    }
+  }
+
+  function renderAuditView(container) {
+    const entries = appState.snapshot.audit_logs || [];
+    const current = new URLSearchParams(window.location.search);
+    const field = (key, label, placeholder) => `
+      <label class="audit-filter">
+        <span class="field-label">${label}</span>
+        <input class="input" name="${key}" id="audit-filter-${key}" placeholder="${placeholder}" value="${esc(current.get(key) || "")}" />
+      </label>`;
 
     container.innerHTML = `
       <header class="page-header">
@@ -4390,6 +4437,18 @@
         </div>
       </header>
       <section class="page-card">
+        <form class="audit-filters" id="audit-filter-form">
+          ${field("actor", "User", "username")}
+          ${field("action", "Action", "e.g. auth. or catalog.")}
+          ${field("target_type", "Target type", "e.g. dashboard")}
+          ${field("q", "Search", "summary or target id")}
+          ${field("limit", "Limit", "100")}
+          <div class="audit-filters__actions">
+            <button type="submit" class="btn btn--primary btn--sm" id="audit-filter-apply">Apply</button>
+            <button type="button" class="btn btn--sm" id="audit-filter-clear">Clear</button>
+            <span class="text-muted" id="audit-count">${entries.length} entries</span>
+          </div>
+        </form>
         <div class="page-card__body page-card__body--flush" style="overflow-x:auto;">
           <table class="ws-table">
             <thead>
@@ -4401,11 +4460,23 @@
                 <th>Summary</th>
               </tr>
             </thead>
-            <tbody>${rows}</tbody>
+            <tbody id="audit-tbody">${auditRowsHtml(entries)}</tbody>
           </table>
         </div>
       </section>
     `;
+
+    const form = document.getElementById("audit-filter-form");
+    form.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      applyAuditFilters(form);
+    });
+    document.getElementById("audit-filter-clear").addEventListener("click", () => {
+      form.reset();
+      for (const key of AUDIT_FILTER_KEYS) form.elements[key].value = "";
+      applyAuditFilters(form);
+    });
+    if (AUDIT_FILTER_KEYS.some((k) => current.get(k))) applyAuditFilters(form);
   }
 
   /* ------------------------------------------------------------------ Modal & Command Palette */

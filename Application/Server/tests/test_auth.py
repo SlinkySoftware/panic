@@ -105,7 +105,7 @@ def test_logout_requires_post_and_csrf() -> None:
     assert client.get("/logout").status_code == 405
     assert client.post("/logout").status_code == 403
     login_page = client.get("/login")
-    token = login_page.cookies["csrftoken"].value
+    token = login_page.cookies["panic_csrftoken"].value
     resp = client.post(
         "/login",
         {"username": "bootadmin", "password": "correct-horse-battery-staple", "csrfmiddlewaretoken": token},

@@ -11,7 +11,6 @@ from typing import Any
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render
-from django.views.decorators.csrf import csrf_exempt
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from panic_common.errors import ErrorCode
@@ -109,6 +108,24 @@ def version_view(request: HttpRequest) -> JsonResponse:
     return JsonResponse({"name": "panic-server", "version": __version__, "stage": 2})
 
 
+def audit_api_view(request: HttpRequest) -> JsonResponse:
+    """Filtered audit log (``actor``, ``action`` prefix, ``target_type``, free-text ``q``, ``limit``)."""
+    try:
+        limit = int(request.GET.get("limit", "100"))
+    except ValueError:
+        return JsonResponse(
+            {"error_code": ErrorCode.VALIDATION_ERROR, "detail": "limit must be an integer"}, status=400
+        )
+    entries = STORE.query_audit(
+        actor=request.GET.get("actor", "").strip()[:150],
+        action=request.GET.get("action", "").strip()[:100],
+        target_type=request.GET.get("target_type", "").strip()[:64],
+        q=request.GET.get("q", "").strip()[:200],
+        limit=limit,
+    )
+    return JsonResponse({"entries": [e.model_dump(mode="json") for e in entries], "count": len(entries)})
+
+
 def export_api_view(request: HttpRequest) -> JsonResponse:
     """Portable JSON export of portal state (``GLOBAL_ADMIN`` only)."""
     if not has_permission(STORE.auth_user, PermissionFlag.GLOBAL_ADMIN):
@@ -164,7 +181,6 @@ def rdp_download_view(request: HttpRequest, target_id: str) -> HttpResponse:
     return response
 
 
-@csrf_exempt
 def state_api_view(request: HttpRequest) -> JsonResponse:
     if request.method == "POST":
         body = _json_body(request)
@@ -184,7 +200,6 @@ def state_api_view(request: HttpRequest) -> JsonResponse:
     return JsonResponse(STORE.build_snapshot())
 
 
-@csrf_exempt
 def simulator_api_view(request: HttpRequest) -> JsonResponse:
     """Update the Stage 1 Source IP / Zone and Active User (RBAC) Simulator."""
     if request.method != "POST":
@@ -262,7 +277,6 @@ def simulator_api_view(request: HttpRequest) -> JsonResponse:
     return JsonResponse(STORE.build_snapshot())
 
 
-@csrf_exempt
 def profile_api_view(request: HttpRequest) -> JsonResponse:
     """Update User Profile settings (SSH template, default user, default dashboard, density, theme)."""
     if request.method != "POST":
@@ -348,7 +362,6 @@ def profile_api_view(request: HttpRequest) -> JsonResponse:
     return JsonResponse(STORE.build_snapshot())
 
 
-@csrf_exempt
 def settings_api_view(request: HttpRequest) -> JsonResponse:
     """View or update App-wide System Settings (e.g., Default Global Dashboard)."""
     if request.method == "GET":
@@ -406,7 +419,6 @@ def settings_api_view(request: HttpRequest) -> JsonResponse:
     return JsonResponse(STORE.build_snapshot())
 
 
-@csrf_exempt
 def dashboards_api_view(request: HttpRequest) -> JsonResponse:
     """Create, update, set default, or delete a Dashboard."""
     if request.method != "POST":
@@ -767,7 +779,6 @@ def dashboards_api_view(request: HttpRequest) -> JsonResponse:
     return JsonResponse({"state": STORE.build_snapshot()})
 
 
-@csrf_exempt
 def dashboard_layout_api_view(request: HttpRequest, dashboard_id: str) -> JsonResponse:
     """Persist Zabbix-style grid layout (only HOST and LIST widgets, with x, y, w, h) on Save."""
     if request.method not in {"PUT", "POST"}:
@@ -835,7 +846,6 @@ def dashboard_layout_api_view(request: HttpRequest, dashboard_id: str) -> JsonRe
     return JsonResponse(STORE.build_snapshot())
 
 
-@csrf_exempt
 def catalog_preview_share_api_view(request: HttpRequest) -> JsonResponse:
     """Run live Normalization & Deduplication + Credential Hygiene check."""
     if request.method != "POST":
@@ -845,7 +855,6 @@ def catalog_preview_share_api_view(request: HttpRequest) -> JsonResponse:
     return JsonResponse(preview)
 
 
-@csrf_exempt
 def catalog_api_view(request: HttpRequest) -> JsonResponse:
     """Create, update, or delete Catalog items with RBAC, Scope (Global/Team/Personal), Site, and Zone restrictions."""
     if request.method != "POST":
@@ -993,7 +1002,6 @@ def catalog_api_view(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"created_item_id": new_id, "state": STORE.build_snapshot()})
 
 
-@csrf_exempt
 def lists_api_view(request: HttpRequest) -> JsonResponse:
     """CRUD for Endpoint Lists with Scope (Global, Team, Personal) and strict same-scope item validation."""
     if request.method != "POST":
@@ -1115,7 +1123,6 @@ def lists_api_view(request: HttpRequest) -> JsonResponse:
         return JsonResponse(STORE.build_snapshot())
 
 
-@csrf_exempt
 def sites_api_view(request: HttpRequest) -> JsonResponse:
     """CRUD for pre-defined Sites (requires Global Admin for mutations)."""
     if request.method != "POST":
@@ -1200,7 +1207,6 @@ def sites_api_view(request: HttpRequest) -> JsonResponse:
         return JsonResponse(STORE.build_snapshot())
 
 
-@csrf_exempt
 def teams_api_view(request: HttpRequest) -> JsonResponse:
     """CRUD for Teams (requires Global Admin for mutations)."""
     if request.method != "POST":
@@ -1258,7 +1264,6 @@ def teams_api_view(request: HttpRequest) -> JsonResponse:
         return JsonResponse(STORE.build_snapshot())
 
 
-@csrf_exempt
 def zones_api_view(request: HttpRequest) -> JsonResponse:
     """CRUD for Security Zones & linked IP CIDRs, plus interactive IP diagnostic."""
     if request.method != "POST":
@@ -1344,7 +1349,6 @@ def zones_api_view(request: HttpRequest) -> JsonResponse:
     return JsonResponse(STORE.build_snapshot())
 
 
-@csrf_exempt
 def rbac_api_view(request: HttpRequest) -> JsonResponse:
     """Manage in-app RBAC permissions (Global Admin, Can Add to Global Scope Items, Can Add Team Scope Items)."""
     if request.method != "POST":

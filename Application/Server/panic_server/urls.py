@@ -78,6 +78,7 @@ urlpatterns = [
     path("api/v1/sites", views.sites_api_view, name="api_sites"),
     path("api/v1/teams", views.teams_api_view, name="api_teams"),
     path("api/v1/zones", views.zones_api_view, name="api_zones"),
+    path("api/v1/audit", views.audit_api_view, name="api_audit"),
     path("api/v1/export", views.export_api_view, name="api_export"),
     path("api/v1/rbac", views.rbac_api_view, name="api_rbac"),
 ]
