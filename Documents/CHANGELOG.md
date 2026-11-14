@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-11-14 — T-S6-05: hardened X-Forwarded-For / Forwarded chain resolution
+- `panic_common.proxy.resolve_client_chain` (pure, additive — the Stage 3 `resolve_client_ip`
+  stays for now since `middleware.py` still calls it until `T-S6-04`): walks the hop chain right
+  to left per AR-5.3, returning a `ChainResolution` (hops, `ignored_left_hops`, `truncated`,
+  `decision`, `client_ip`, `location_known`) matching the API.md §6 `client-ip` diagnostics shape.
+- Parses RFC 7239 `Forwarded` (`for=`, quoted/bracketed IPv6, ports, obfuscated identifiers) as
+  well as `X-Forwarded-For`; normalises IPv4-mapped IPv6; honours `max_hops`/`max_bytes` with a
+  `truncated` flag.
+- Every unknown-location decision (`UNTRUSTED_PEER`, `NO_HEADER`, `ALL_HOPS_TRUSTED`,
+  `MALFORMED_HOP`) is flagged `location_known=False`. `untrusted_peer_policy` is carried on
+  `ProxyChainConfig` for the caller; this pure function never raises or rejects.
+- 43 table-driven cases in `test_proxy.py` (AR-5.5): four-tier chains, left-hand client spoofing,
+  an untrusted-peer spoof attempt, a jump host inside an overly broad trusted CIDR (documented
+  pitfall), repeated/joined header lines, IPv4-mapped IPv6, bracketed/ported IPv6, `Forwarded`
+  parsing, `unknown`/junk/obfuscated tokens, and `max_hops`/`max_bytes` truncation.
+
 ## 2026-11-14 — T-S6-01: pure domain rules for scoped access
 - `panic_common.visibility` (new): `VisibilitySpec`/`visibility_spec`, `matches` (mirrors the Mongo
   `$or`), `can_create`/`can_edit` returning a `Decision` with an `ErrorCode`, `is_orphan`,
