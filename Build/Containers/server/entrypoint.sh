@@ -1,7 +1,7 @@
 #!/bin/sh
 # PANIC Server container entrypoint: apply migrations, optionally seed, then exec the command.
 #   PANIC_MIGRATE_ON_START=true|false  (default true)
-#   PANIC_SEED_ON_START=if-empty|never (default if-empty)
+#   PANIC_SEED_ON_START=if-empty|never (default never in prod, if-empty otherwise: demo fixtures)
 #   PANIC_GUNICORN_WORKERS / PANIC_GUNICORN_THREADS / PANIC_GUNICORN_TIMEOUT
 set -eu
 export DJANGO_SETTINGS_MODULE=panic_server.settings
@@ -9,7 +9,8 @@ export DJANGO_SETTINGS_MODULE=panic_server.settings
 if [ "${PANIC_MIGRATE_ON_START:-true}" = "true" ]; then
     python -m django migrate --noinput
 fi
-case "${PANIC_SEED_ON_START:-if-empty}" in
+if [ "${PANIC_ENV:-dev}" = "prod" ]; then default_seed=never; else default_seed=if-empty; fi
+case "${PANIC_SEED_ON_START:-$default_seed}" in
     if-empty) python -m django panic_seed --if-empty ;;
     never) ;;
     *) echo "PANIC_SEED_ON_START must be if-empty|never" >&2; exit 64 ;;

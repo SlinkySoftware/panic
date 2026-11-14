@@ -37,7 +37,7 @@ All examples use reserved documentation names and addresses (`example.com`, RFC 
 | `PANIC_DB_CONN_MAX_AGE` | `60` | Persistent connection lifetime in seconds. |
 | `PANIC_AUTO_SEED` | `true` unless prod | Seed canonical demo fixtures on the first request when the database is empty. |
 | `PANIC_MIGRATE_ON_START` | `true` | Container entrypoint runs `migrate --noinput`. |
-| `PANIC_SEED_ON_START` | `if-empty` | Container entrypoint seeding: `if-empty` or `never`. |
+| `PANIC_SEED_ON_START` | `never` in prod, else `if-empty` | Container entrypoint seeding of the demo fixtures: `if-empty` or `never`. |
 
 ## Static assets & Gunicorn (container)
 

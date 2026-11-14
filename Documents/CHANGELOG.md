@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-14 — Gitea CI & image publishing
+- `.gitea/workflows/ci.yaml`: `./panic test` + `makemigrations --check` on pushes / PRs to `main`; builds `Build/Containers/server/Containerfile`, smoke-tests it in prod mode (non-root, healthy, `/login`, static, `401` API), and publishes `panic-server` to the Gitea container registry for `main` (`:main`, `:sha-<short>`) and `vX.Y.Z` tags (`:X.Y.Z`, `:X.Y`, `:latest`) using `REGISTRY_USER` / `REGISTRY_TOKEN`.
+- Container entrypoint no longer seeds demo fixtures when `PANIC_ENV=prod` (`PANIC_SEED_ON_START` defaults to `never` there); e2e test covers first sign-in on an empty database.
+
 ## 2026-11-14 — List reordering only in the Edit List modal
 - Removed drag-to-reorder rows from Endpoint List cards on dashboards (LIST widgets) and on `/lists`; item order now changes only in the Edit List modal (saved with `action: "save"`).
 - Removed the `/api/v1/lists` `action: "reorder"` endpoint. Static asset version bumped to `v=7`.

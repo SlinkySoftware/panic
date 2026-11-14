@@ -1,0 +1,176 @@
+# PANIC CI: tests on every push / PR to main; the server image is built and smoke-tested on the
+# same events and published to this Gitea instance's container registry for main and v* tags.
+#   push to main  -> <registry>/<owner>/panic-server:main and :sha-<short>
+#   tag vX.Y.Z    -> <registry>/<owner>/panic-server:X.Y.Z, :X.Y and :latest
+# Registry host and owner are derived from the server URL and repository, so nothing
+# instance-specific lives in this file. Publishing needs Actions secrets REGISTRY_USER /
+# REGISTRY_TOKEN (write:package; repository or organisation level) because the built-in job
+# token cannot push packages.
+name: ci
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+env:
+  UV_NO_PROGRESS: "1"
+  NO_COLOR: "1"
+
+jobs:
+  test:
+    name: pytest, ruff, mypy, import-linter
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Create venv (Python 3.13, workspace + dev group)
+        run: uv sync --python 3.13 --group dev
+
+      - name: ./panic test
+        run: ./panic test
+
+      - name: Migrations are complete
+        working-directory: Application/Server
+        env:
+          PYTHONPATH: ../Common:.
+          PANIC_SQLITE_PATH: ":memory:"
+        run: ../../.venv/bin/python manage.py makemigrations --check --dry-run
+
+  image:
+    name: build, smoke-test, publish image
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve registry, image and tags
+        id: meta
+        shell: bash
+        run: |
+          registry="${{ gitea.server_url }}"
+          registry="${registry#http://}"
+          registry="${registry#https://}"
+          registry="${registry%%/*}"
+          owner="$(echo "${{ gitea.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
+          image="${registry}/${owner}/panic-server"
+          ref="${{ gitea.ref }}"
+          short_sha="$(echo "${{ gitea.sha }}" | cut -c1-7)"
+          if [[ "$ref" == refs/tags/v* ]]; then
+            version="${ref#refs/tags/v}"
+            if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Tag must look like v1.2.3 (got ${ref#refs/tags/})" >&2
+              exit 1
+            fi
+            tags="${image}:${version},${image}:${version%.*},${image}:latest"
+          else
+            version="main-${short_sha}"
+            tags="${image}:main,${image}:sha-${short_sha}"
+          fi
+          publish=false
+          if [[ "${{ gitea.event_name }}" == "push" || "${{ gitea.event_name }}" == "workflow_dispatch" ]] \
+             && [[ "$ref" == refs/heads/main || "$ref" == refs/tags/v* ]]; then
+            publish=true
+          fi
+          {
+            echo "registry=${registry}"
+            echo "image=${image}"
+            echo "version=${version}"
+            echo "tags=${tags}"
+            echo "publish=${publish}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Image: ${image}  Version: ${version}  Tags: ${tags}  Publish: ${publish}"
+
+      - name: Build image (local, for testing)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Build/Containers/server/Containerfile
+          load: true
+          push: false
+          tags: panic-server:ci
+
+      - name: Smoke test (prod mode, non-root, healthcheck, login, static)
+        shell: bash
+        run: |
+          cid=$(docker run -d \
+            -e PANIC_ENV=prod \
+            -e PANIC_DJANGO_SECRET_KEY="ci-$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')" \
+            -e PANIC_ALLOWED_HOSTS=127.0.0.1,localhost \
+            panic-server:ci)
+          trap 'docker logs "$cid" | tail -50; docker rm -f "$cid" >/dev/null' EXIT
+          test "$(docker inspect -f '{{.Config.User}}' "$cid")" = "panic:panic"
+          for i in $(seq 1 60); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' "$cid")
+            [ "$status" = "healthy" ] && break
+            [ "$(docker inspect -f '{{.State.Running}}' "$cid")" = "true" ] || { echo "container exited" >&2; exit 1; }
+            sleep 2
+          done
+          [ "$status" = "healthy" ] || { echo "container not healthy: $status" >&2; exit 1; }
+          docker exec "$cid" python - <<'PY'
+          import urllib.request as u
+          from urllib.error import HTTPError
+
+          def get(path):
+              req = u.Request("http://127.0.0.1:8210" + path, headers={"Host": "localhost"})
+              class NoRedirect(u.HTTPRedirectHandler):
+                  def redirect_request(self, *a, **k):
+                      return None
+              try:
+                  return u.build_opener(NoRedirect).open(req, timeout=5)
+              except HTTPError as e:
+                  return e
+
+          assert get("/api/v1/health").status == 200
+          root = get("/")
+          assert root.status == 302 and root.headers["Location"].startswith("/login"), root.status
+          assert get("/login").status == 200
+          assert get("/static/panic/css/app.css").status == 200
+          assert get("/api/v1/state").status == 401
+          print("smoke ok")
+          PY
+
+      # The built-in job token cannot push packages (see header).
+      - name: Check registry credentials
+        if: steps.meta.outputs.publish == 'true'
+        shell: bash
+        env:
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$REGISTRY_USER" ] || [ -z "$REGISTRY_TOKEN" ]; then
+            echo "::error::Set Actions secrets REGISTRY_USER and REGISTRY_TOKEN (a token with write:package) to publish the image."
+            exit 1
+          fi
+
+      - name: Login to registry
+        if: steps.meta.outputs.publish == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ steps.meta.outputs.registry }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Publish image
+        if: steps.meta.outputs.publish == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Build/Containers/server/Containerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.title=panic-server
+            org.opencontainers.image.source=${{ gitea.server_url }}/${{ gitea.repository }}
+            org.opencontainers.image.revision=${{ gitea.sha }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}

@@ -269,3 +269,15 @@ def test_configuration_doc_covers_every_setting() -> None:
     assert not missing, f"undocumented settings: {missing}"
     deploy = (ROOT / "Documents/Operations/DEPLOYMENT.md").read_text()
     assert "CONFIGURATION.md" in deploy and "panic_export" in deploy
+
+
+def test_empty_production_database_first_sign_in() -> None:
+    """Prod containers no longer seed demo data: an empty database must still be usable."""
+    STORE.wipe()
+    STORE.refresh()
+    with override_settings(PANIC_AUTO_SEED=False):
+        b = Browser()
+        assert b.login().status_code == 302
+        for path in ("/", "/dashboard", "/catalog", "/lists", "/settings", "/api/v1/state"):
+            assert b.client.get(path, follow=True).status_code == 200, path
+        assert b.state()["user"]["username"] == "e2e-admin"

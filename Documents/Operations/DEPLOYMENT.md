@@ -37,7 +37,7 @@ docker compose --env-file /srv/panic/panic.env -f Build/Containers/compose.yaml 
 ```
 
 The image runs as the unprivileged `panic` user (uid 10001) on a read-only root filesystem. On
-start the entrypoint runs `migrate --noinput` and `panic_seed --if-empty`, then Gunicorn. The
+start the entrypoint runs `migrate --noinput` (and, outside prod, `panic_seed --if-empty` demo data), then Gunicorn. The
 container `HEALTHCHECK` polls `GET /api/v1/health`, which returns `503` when the database is
 unreachable. Mount secrets (e.g. compose `secrets:`) and refer to them via `*_FILE` variables.
 
