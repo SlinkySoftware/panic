@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 from collections.abc import Callable
 
 from django.conf import settings
@@ -42,10 +43,18 @@ def parse_rate(rate: str) -> tuple[int, int]:
     return max(1, int(count)), max(1, int(window or "60"))
 
 
+#: The old ``/login`` (T-S6-06 deletes it) and its real replacement, ``/api/v1/auth/login``
+#: (API.md §4.1), bucket identically. ``/auth/oidc/login`` is GET-only in practice, so it never
+#: actually reaches here (``_STATE_CHANGING`` already filtered to POST/PUT/PATCH/DELETE above);
+#: it is kept for the same reason the old entry was: harmless, future-proof against a GET-only
+#: assumption changing.
+_LOGIN_PATHS = frozenset({"/login", "/auth/oidc/login", "/api/v1/auth/login"})
+
+
 def _bucket(request: HttpRequest) -> str | None:
     if request.method not in _STATE_CHANGING:
         return None
-    if request.path in {"/login", "/auth/oidc/login"}:
+    if request.path in _LOGIN_PATHS:
         return "login"
     if request.path.startswith("/api/"):
         return "api"
@@ -57,9 +66,30 @@ def _client_ip(request: HttpRequest) -> str:
 
 
 def _login_username(request: HttpRequest) -> str | None:
-    """Best-effort submitted username, for the ``login:user`` bucket (DATA_MODEL.md §4.12)."""
+    """Best-effort submitted username, for the ``login:user`` bucket (DATA_MODEL.md §4.12).
+
+    ``/login``'s form POST populates ``request.POST`` directly; ``/api/v1/auth/login`` is a DRF
+    view that only ever receives a JSON body (no form-encoded fallback), so ``request.POST`` is
+    always empty there -- fall back to parsing ``request.body`` as JSON. ``request.body`` is read
+    *first* and only then ``request.POST`` -- the other way round, Django's own multipart/form
+    parser (triggered by ``.POST``) consumes the raw stream, and a later ``.body`` access raises
+    ``RawPostDataException``. Reading ``.body`` first caches the raw bytes, so both this and DRF's
+    own later parsing of the same request still work.
+    """
+    body = request.body
     username = request.POST.get("username", "").strip()
-    return username or None
+    if username:
+        return username
+    if body:
+        try:
+            data = json.loads(body)
+        except ValueError:
+            return None
+        if isinstance(data, dict):
+            value = data.get("username")
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return None
 
 
 def _retry_after(window_s: int) -> int:

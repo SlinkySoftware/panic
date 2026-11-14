@@ -130,6 +130,15 @@ that opens a connection.
 | `PANIC_AUDIT_RETENTION_DAYS` | `365` | `audit_log` TTL, in days. `0` disables expiry (no TTL index). |
 | `PANIC_TEST_MONGO_URI` | *(empty)* | Test-only override so `pytest` never touches a dev/prod database; falls back to `PANIC_MONGO_URI`, then the local dev-mongo container. |
 
+## UI read views (Stage 6, T-S6-06)
+
+See [`API.md`](../Architecture/API.md) §4.2 and [`DATA_MODEL.md`](../Architecture/DATA_MODEL.md) §4.7.
+
+| Variable | Default | Description |
+|---|---|---|
+| `PANIC_NAV_MAX_DASHBOARDS` | `100` | Cap on `GET /api/v1/ui/bootstrap`'s `nav.dashboards`. |
+| `PANIC_LIST_WIDGET_MAX_ITEMS` | `200` | Cap on a LIST widget's `item_ids` on `GET /api/v1/ui/dashboards/{id}`; `truncated: true` past this. |
+
 ## Reserved
 
 `PANIC_CATALOG_MODERATION_MODE` appears in `.env.example` but is not

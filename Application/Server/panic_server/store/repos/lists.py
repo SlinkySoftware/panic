@@ -64,6 +64,17 @@ def get_list(db: Database[dict[str, Any]], list_id: str) -> EndpointList:
     return _to_model(get_or_404(db[COLLECTION], list_id))
 
 
+def get_lists_by_ids(db: Database[dict[str, Any]], list_ids: list[str]) -> list[EndpointList]:
+    """Every list in ``list_ids`` that still exists, in one round trip (T-S6-06).
+
+    Sibling of ``catalog.get_catalog_items_by_ids``; same rationale (API.md §8 round-trip budgets
+    for the dashboard read view, which may reference up to a dozen lists).
+    """
+    if not list_ids:
+        return []
+    return [_to_model(d) for d in db[COLLECTION].find({"_id": {"$in": list_ids}})]
+
+
 def list_visible_lists(
     db: Database[dict[str, Any]],
     spec: VisibilitySpec,

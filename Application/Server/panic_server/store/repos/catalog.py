@@ -88,6 +88,18 @@ def find_by_normalized_key(db: Database[dict[str, Any]], normalized_key: str, sc
     return _to_model(doc) if doc else None
 
 
+def get_catalog_items_by_ids(db: Database[dict[str, Any]], item_ids: list[str]) -> list[CatalogItem]:
+    """Every catalog item in ``item_ids`` that still exists, in one round trip (T-S6-06).
+
+    Used by the dashboard/search read views to resolve many widget/list-referenced items without
+    an N+1 ``get_catalog_item`` per id (API.md §8's Mongo round-trip budgets). Visibility is the
+    caller's job (``panic_common.visibility.matches``), same as :func:`get_catalog_item`.
+    """
+    if not item_ids:
+        return []
+    return [_to_model(d) for d in db[COLLECTION].find({"_id": {"$in": item_ids}})]
+
+
 def list_visible_catalog_items(
     db: Database[dict[str, Any]],
     spec: VisibilitySpec,

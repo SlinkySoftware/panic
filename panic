@@ -7,6 +7,8 @@
 #   ./panic test [python|lint|all] [pytest args...]
 #   ./panic logs
 #   ./panic manage <django manage.py args...>
+#   ./panic contracts [--check]           regenerate (or, with --check, verify) the committed
+#                                          OpenAPI contract, Documents/Architecture/openapi/server.yaml
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
@@ -151,6 +153,35 @@ cmd_test() {
     fi
 }
 
+#: ./panic contracts [--check]: regenerate (default) or, with --check, verify that
+#: Documents/Architecture/openapi/server.yaml (drf-spectacular's AutoSchema walking
+#: panic_server.api.urls) is up to date. Mirrors reference-app's cmd_contracts (same spectacular.args
+#: file shape); PANIC has no JSON-Schema-export or web-API-type-gen steps yet (no
+#: panic_common.schema_export, no Application/Web), so this is the OpenAPI step only.
+cmd_contracts() {
+    load_env
+    ensure_venv
+    local spec="$ROOT/Documents/Architecture/openapi/server.yaml" args
+    read -r -a args <"$ROOT/Documents/Architecture/openapi/spectacular.args"
+    if [[ "${1:-}" == "--check" ]]; then
+        local tmp
+        tmp="$(mktemp)"
+        (cd "$SERVER_DIR" && "$VENV/bin/python" manage.py spectacular "${args[@]}" --file "$tmp")
+        if diff -q "$tmp" "$spec" >/dev/null 2>&1; then
+            echo "contracts: $spec is up to date"
+            rm -f "$tmp"
+        else
+            echo "contracts: $spec is STALE -- run './panic contracts' to regenerate" >&2
+            diff -u "$spec" "$tmp" >&2 || true
+            rm -f "$tmp"
+            exit 1
+        fi
+        return
+    fi
+    (cd "$SERVER_DIR" && "$VENV/bin/python" manage.py spectacular "${args[@]}" --file "$spec")
+    echo "wrote $spec"
+}
+
 case "${1:-help}" in
     setup)   cmd_setup ;;
     start)   cmd_start ;;
@@ -161,5 +192,6 @@ case "${1:-help}" in
     lint)    cmd_test lint ;;
     logs)    tail -n 100 -f "$LOGS/server.log" ;;
     manage)  shift; ensure_venv; (cd "$SERVER_DIR" && "$VENV/bin/python" manage.py "$@") ;;
-    *)       echo "Usage: ./panic {setup|start|stop|restart|status|test|lint|logs|manage}" ;;
+    contracts) shift; cmd_contracts "$@" ;;
+    *)       echo "Usage: ./panic {setup|start|stop|restart|status|test|lint|logs|manage|contracts}" ;;
 esac

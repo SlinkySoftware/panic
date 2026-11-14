@@ -192,12 +192,18 @@ LDAP = {
 }
 
 
+def _login(client: Client, username: str, password: str) -> Any:
+    return client.post(
+        "/api/v1/auth/login", {"username": username, "password": password}, content_type="application/json"
+    )
+
+
 def test_ldap_login_provisions_user_with_no_permissions(mongo_db: Database) -> None:
     with override_settings(**LDAP), mock.patch.object(ldap_auth, "Connection", _FakeConn):
         client = Client()
-        assert client.post("/login", {"username": "riley", "password": "nope"}).status_code == 401
-        resp = client.post("/login", {"username": "riley", "password": "pw"})
-        assert resp.status_code == 302
+        assert _login(client, "riley", "nope").status_code == 401
+        resp = _login(client, "riley", "pw")
+        assert resp.status_code == 200
         user = users_repo.get_user_by_username(mongo_db, "riley")
         assert user is not None
         assert user.permissions == []

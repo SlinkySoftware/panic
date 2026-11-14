@@ -1,8 +1,11 @@
-"""Login/logout, rate limiting, disabled-user rejection, and request-context isolation (T-S6-04).
+"""Login/logout, rate limiting, disabled-user rejection, and request-context isolation (T-S6-04,
+T-S6-06).
 
 Replaces the Stage 1-5 STORE-backed ``test_auth.py``/``test_security.py``: same behaviours
 (sign-in, sign-out, per-IP/per-username rate limiting, disabled accounts), now against the
-Mongo-backed store and the lock-free, per-request ``RequestContext``.
+Mongo-backed store and the lock-free, per-request ``RequestContext``. T-S6-06 moves the actual
+login/logout surface from the old ``/login``/``/logout`` (now deleted) to the real JSON contract,
+``/api/v1/auth/login``/``/api/v1/auth/logout`` -- these tests move with it.
 """
 
 from __future__ import annotations
@@ -40,11 +43,21 @@ def _bootstrap_admin() -> Iterator[None]:
         yield
 
 
+def _login(client: Client, username: str, password: str, **extra: str) -> object:
+    return client.post(
+        "/api/v1/auth/login",
+        {"username": username, "password": password},
+        content_type="application/json",
+        **extra,
+    )
+
+
 @pytest.mark.usefixtures("_bootstrap_admin")
 def test_login_success_sets_session_and_audits(mongo_db: Database) -> None:
     client = Client()
-    resp = client.post("/login", {"username": ADMIN_USER, "password": ADMIN_PASSWORD})
-    assert resp.status_code == 302
+    resp = _login(client, ADMIN_USER, ADMIN_PASSWORD)
+    assert resp.status_code == 200
+    assert resp.json()["me"]["username"] == ADMIN_USER
     assert client.session[SESSION_USER_KEY]
 
     user = users_repo.get_user_by_username(mongo_db, ADMIN_USER)
@@ -58,37 +71,50 @@ def test_login_success_sets_session_and_audits(mongo_db: Database) -> None:
 @pytest.mark.usefixtures("_bootstrap_admin")
 def test_login_failure_wrong_password_returns_401_and_audits(mongo_db: Database) -> None:
     client = Client()
-    resp = client.post("/login", {"username": ADMIN_USER, "password": "wrong"})
+    resp = _login(client, ADMIN_USER, "wrong")
     assert resp.status_code == 401
-    assert "error" in resp.json()
+    assert resp.json()["error_code"] == "UNAUTHENTICATED"
     actions = [a.action for a in audit_repo.list_audit(mongo_db, action="auth.login_failed", limit=10)]
     assert "auth.login_failed" in actions
 
 
-@pytest.mark.usefixtures("_bootstrap_admin")
-def test_login_get_returns_json_method_descriptor(mongo_db: Database) -> None:
+def test_auth_providers_is_public() -> None:
     client = Client()
-    resp = client.get("/login")
+    resp = client.get("/api/v1/auth/providers")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["password_enabled"] is True
-    assert "oidc_enabled" in body
+    assert body["local_enabled"] is True
+    assert "oidc" in body and "enabled" in body["oidc"]
+
+
+def test_auth_csrf_sets_cookie() -> None:
+    client = Client()
+    resp = client.get("/api/v1/auth/csrf")
+    assert resp.status_code == 204
+    assert "panic_csrftoken" in resp.cookies
 
 
 @pytest.mark.usefixtures("_bootstrap_admin")
 def test_logout_clears_session(mongo_db: Database) -> None:
     client = Client()
-    client.post("/login", {"username": ADMIN_USER, "password": ADMIN_PASSWORD})
+    _login(client, ADMIN_USER, ADMIN_PASSWORD)
     assert client.session.get(SESSION_USER_KEY)
-    resp = client.post("/logout")
-    assert resp.status_code == 302
+    resp = client.post("/api/v1/auth/logout")
+    assert resp.status_code == 204
     assert not client.session.get(SESSION_USER_KEY)
+
+
+def test_logout_requires_a_session() -> None:
+    client = Client()
+    resp = client.post("/api/v1/auth/logout")
+    assert resp.status_code == 401
+    assert resp.json()["error_code"] == "UNAUTHENTICATED"
 
 
 @pytest.mark.usefixtures("_bootstrap_admin")
 def test_disabled_user_cannot_sign_in(mongo_db: Database) -> None:
     client = Client()
-    client.post("/login", {"username": ADMIN_USER, "password": ADMIN_PASSWORD})
+    _login(client, ADMIN_USER, ADMIN_PASSWORD)
     assert client.session.get(SESSION_USER_KEY)
 
     user = users_repo.get_user_by_username(mongo_db, ADMIN_USER)
@@ -97,7 +123,7 @@ def test_disabled_user_cannot_sign_in(mongo_db: Database) -> None:
 
     # A fresh login attempt is refused.
     fresh = Client()
-    resp = fresh.post("/login", {"username": ADMIN_USER, "password": ADMIN_PASSWORD})
+    resp = _login(fresh, ADMIN_USER, ADMIN_PASSWORD)
     assert resp.status_code == 401
 
     # The already-authenticated session is rejected on the next request (AR-2.11) and flushed.
@@ -111,11 +137,9 @@ def test_rate_limit_login_by_ip(mongo_db: Database) -> None:
     with override_settings(PANIC_RATE_LIMIT_LOGIN="2/60"):
         client = Client()
         for _ in range(2):
-            resp = client.post(
-                "/login", {"username": "nope", "password": "nope"}, REMOTE_ADDR="203.0.113.55"
-            )
+            resp = _login(client, "nope", "nope", REMOTE_ADDR="203.0.113.55")
             assert resp.status_code == 401
-        blocked = client.post("/login", {"username": "nope", "password": "nope"}, REMOTE_ADDR="203.0.113.55")
+        blocked = _login(client, "nope", "nope", REMOTE_ADDR="203.0.113.55")
         assert blocked.status_code == 429
         assert blocked.json()["error_code"] == "RATE_LIMITED"
         assert "Retry-After" in blocked
@@ -126,11 +150,9 @@ def test_rate_limit_login_by_username_spans_different_ips(mongo_db: Database) ->
     with override_settings(PANIC_RATE_LIMIT_LOGIN="2/60"):
         client = Client()
         for ip in ("203.0.113.61", "203.0.113.62"):
-            resp = client.post("/login", {"username": "shared-victim", "password": "nope"}, REMOTE_ADDR=ip)
+            resp = _login(client, "shared-victim", "nope", REMOTE_ADDR=ip)
             assert resp.status_code == 401
-        blocked = client.post(
-            "/login", {"username": "shared-victim", "password": "nope"}, REMOTE_ADDR="203.0.113.63"
-        )
+        blocked = _login(client, "shared-victim", "nope", REMOTE_ADDR="203.0.113.63")
         assert blocked.status_code == 429
 
 

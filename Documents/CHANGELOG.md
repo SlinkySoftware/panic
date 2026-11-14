@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-11-15 — T-S6-06: Scoped API part 1 — DRF scaffold, auth, UI read endpoints, OpenAPI
+- New `panic_server.api` package: error envelope (`api/errors.py`, every DRF/domain exception ->
+  API.md §3 shape), `RequestContextAuthentication` (bridges T-S6-04's `request.context` into
+  DRF's `request.user`/CSRF enforcement), three closed permission tiers
+  (`IsPublic`/`IsAuthenticated`/`IsGlobalAdmin`, deny-by-default, AR-2.8), weak-ETag/304 helper,
+  and page/keyset pagination infra (built now, wired up by `T-S6-07`).
+- 8 new endpoints: `GET/POST /api/v1/auth/{providers,csrf,login,logout}`,
+  `GET /api/v1/ui/{bootstrap,dashboards/{id},search}`, `GET /api/v1/launch/rdp/{id}.rdp` — backed
+  by new `services/{bootstrap,dashboards_read,search,launch}.py` composition layers over
+  `panic_server.store`. `ItemView`/launch-command interpolation reuses
+  `panic_common.{launchers,zones.check_item_reachability}`.
+- `drf-spectacular` wired in (`SPECTACULAR_SETTINGS`, `--validate --fail-on-warn`); new
+  `./panic contracts [--check]` regenerates/diffs `Documents/Architecture/openapi/server.yaml`.
+- **Deviations:** cut the old `/login`/`/logout` JSON stopgap over to the real
+  `/api/v1/auth/login`/`logout` per API.md §4.1/§5 (T-S6-04's own report flagged this as deferred
+  here) — OIDC routes untouched. Small follow-up fixes to already-merged files: `security.py`'s
+  rate-limit bucket now matches `/api/v1/auth/login` (and fixed a real bug: `_login_username` read
+  `request.POST` before `.body`, 500ing on non-form POSTs); `health_view` now actually honors
+  `?ready=1` instead of always pinging Mongo; added narrow `get_catalog_items_by_ids`/
+  `get_lists_by_ids` batch-fetch repo functions (needed to meet the dashboard-view Mongo
+  round-trip budget, API.md §8); `panic_common.visibility.Scoped`'s attributes became read-only
+  `@property` declarations (a real mypy covariance gap the first production caller surfaced — no
+  runtime behaviour change).
+- `./panic test`: 190 passed; ruff, mypy, import-linter (AR-1.1/4.1/4.2) clean.
+  `./panic contracts --check`: clean.
+
 ## 2026-11-14 — T-S6-04: Stateless request context, removal of simulator / SQL / snapshot store
 - New `panic_server.context.RequestContext` (frozen dataclass; `build_request_context(request)`):
   real user, effective user, View As flag, client IP, `ChainResolution` and resolved zone —

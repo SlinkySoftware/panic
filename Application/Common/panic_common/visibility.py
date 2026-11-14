@@ -26,12 +26,24 @@ class VisibilitySpec:
 
 @runtime_checkable
 class Scoped(Protocol):
-    """Structural shape shared by catalog items, lists and dashboards."""
+    """Structural shape shared by catalog items, lists and dashboards.
 
-    scope: ScopeType
-    team_ids: Sequence[str]
-    owner_usernames: Sequence[str]
-    orphaned: bool
+    Declared as read-only properties (not plain attributes): a protocol's plain attributes are
+    implicitly read-write, which mypy checks *invariantly* -- a concrete model's ``list[str]``
+    field would then fail to satisfy this protocol's ``Sequence[str]``. A read-only property is
+    checked covariantly instead, which is all ``matches``/``can_edit`` actually need (they only
+    ever read these fields) and what every caller's pydantic model (``CatalogItem``,
+    ``EndpointList``, ``Dashboard``) already structurally provides.
+    """
+
+    @property
+    def scope(self) -> ScopeType: ...
+    @property
+    def team_ids(self) -> Sequence[str]: ...
+    @property
+    def owner_usernames(self) -> Sequence[str]: ...
+    @property
+    def orphaned(self) -> bool: ...
 
 
 @dataclass(frozen=True)

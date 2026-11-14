@@ -16,7 +16,21 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect, JsonRes
 from panic_common.errors import ErrorCode
 from panic_server.context import SESSION_USER_KEY, SESSION_VIEW_AS_KEY
 
-PUBLIC_PREFIXES = ("/login", "/logout", "/auth/", "/metrics", "/api/v1/health", "/api/v1/version")
+#: "/login"/"/logout" are kept here even though T-S6-06 deletes those routes: without the
+#: carve-out, an anonymous request to either (e.g. a stale bookmark or old frontend build) would
+#: redirect to itself below (an infinite loop) instead of falling through to Django's URL
+#: resolver and getting a clean 404 (``panic_server.api.errors.not_found_view``). "/api/v1/auth/"
+#: is the real replacement contract (providers/csrf/login/logout; API.md §4.1) -- its own DRF
+#: permission classes (public/authenticated) gate it correctly without this middleware's help.
+PUBLIC_PREFIXES = (
+    "/login",
+    "/logout",
+    "/auth/",
+    "/api/v1/auth/",
+    "/metrics",
+    "/api/v1/health",
+    "/api/v1/version",
+)
 
 
 class PanicAuthMiddleware:
