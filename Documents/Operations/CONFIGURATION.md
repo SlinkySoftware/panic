@@ -134,21 +134,6 @@ Permissions and team memberships are re-synchronised on every external sign-in.
 | `PANIC_RATE_LIMIT_API` | `300/60` | `count/seconds` for state-changing `/api/*` requests. |
 | `PANIC_CACHE_URL` | *(local memory)* | `redis://…` shared cache for rate limits across workers/nodes (install the `redis` extra). |
 
-## Live JIT entitlements (Stage 5)
-
-| Variable | Default | Description |
-|---|---|---|
-| `PANIC_JIT_ENTITLEMENTS_ENABLED` | `false` | Enable per-item entitlement gates. |
-| `PANIC_ENTITLEMENT_PROVIDER` | `static` | `static`, `ldap` or `rest`. |
-| `PANIC_ENTITLEMENT_RULES` | `{}` | JSON `{"<catalog item id>": {"entitlement": "<name>", "gate": "WARN"\|"BLOCK"}}`. |
-| `PANIC_ENTITLEMENT_CACHE_TTL_S` | `30` | Cache lifetime for granted/denied answers. |
-| `PANIC_ENTITLEMENT_TIMEOUT_S` | `3` | Hard deadline; slower checks report "Entitlement Check Unavailable". |
-| `PANIC_ENTITLEMENT_FAIL_CLOSED` | `false` | Refuse `BLOCK`-gated launches while the provider is unavailable. |
-| `PANIC_ENTITLEMENT_STATIC_GRANTS` | `{}` | `static` provider: JSON `{"username": ["entitlement", …]}`. |
-| `PANIC_ENTITLEMENT_REST_URL` | *(empty)* | `rest` provider: `GET <url>?username=&entitlement=` → `{"granted": true}`. |
-| `PANIC_ENTITLEMENT_REST_TOKEN` | *(empty)* | Bearer token for the REST provider (use `_FILE`). |
-| `PANIC_ENTITLEMENT_LDAP_GROUP_BASE_DN` | *(empty)* | `ldap` provider: base DN of entitlement groups (connection from `PANIC_LDAP_*`). |
-
 ## Reserved
 
 `PANIC_CATALOG_MODERATION_MODE` appears in `.env.example` but is not

@@ -1,4 +1,4 @@
-"""PANIC common pure library: Pydantic v2 models, normalization/hygiene, zones, entitlements, launchers."""
+"""PANIC common pure library: Pydantic v2 models, normalization/hygiene, zones, launchers."""
 
 from __future__ import annotations
 

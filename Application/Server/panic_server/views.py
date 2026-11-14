@@ -42,7 +42,7 @@ from panic_common.rbac import (
     validate_list_item_scopes,
 )
 from panic_common.zones import check_item_reachability, resolve_ip_zone, validate_cidr_list
-from panic_server import __version__, entitlements_service
+from panic_server import __version__
 from panic_server.portability import export_state
 from panic_server.state import STORE
 
@@ -109,26 +109,6 @@ def version_view(request: HttpRequest) -> JsonResponse:
     return JsonResponse({"name": "panic-server", "version": __version__, "stage": 2})
 
 
-def entitlements_api_view(request: HttpRequest) -> JsonResponse:
-    """Live JIT entitlement decisions for the active user's visible catalog items.
-
-    ``GET`` (``?refresh=1`` bypasses the cache) or ``POST {"action": "refresh"}`` (drops the user's cache).
-    Provider failures surface as ``UNAVAILABLE`` within the configured timeout, never as errors.
-    """
-    if not entitlements_service.enabled():
-        return JsonResponse({"enabled": False, "items": {}})
-    user = STORE.active_user
-    refresh = request.GET.get("refresh", "") in {"1", "true"}
-    if request.method == "POST":
-        if _json_body(request).get("action") != "refresh":
-            return JsonResponse({"error_code": ErrorCode.VALIDATION_ERROR, "detail": "unknown action"}, status=400)
-        entitlements_service.get_checker().cache.invalidate(user.username)
-        refresh = True
-    item_ids = [str(c["id"]) for c in STORE.build_snapshot().get("catalog", [])]
-    items = entitlements_service.evaluate_items(user.username, item_ids, refresh=refresh)
-    return JsonResponse({"enabled": True, "username": user.username, "items": items})
-
-
 def audit_api_view(request: HttpRequest) -> JsonResponse:
     """Filtered audit log (``actor``, ``action`` prefix, ``target_type``, free-text ``q``, ``limit``)."""
     try:
@@ -185,16 +165,6 @@ def rdp_download_view(request: HttpRequest, target_id: str) -> HttpResponse:
             status=404,
         )
     host, port, username, title = target
-    gate = entitlements_service.check_launch(STORE.active_user.username, target_id)
-    if gate is not None and not gate.allowed:
-        STORE.record_audit(
-            action="launch.entitlement.denied",
-            target_type="endpoint",
-            target_id=target_id,
-            summary=f"Launch blocked: {gate.message}",
-            details={"status": str(gate.status), "gate": str(gate.gate)},
-        )
-        return JsonResponse({"error_code": ErrorCode.ENTITLEMENT_DENIED, "detail": gate.message}, status=403)
     override_user = request.GET.get("user", "").strip()
     if override_user:
         username = sanitize_launch_param(override_user)
@@ -209,8 +179,6 @@ def rdp_download_view(request: HttpRequest, target_id: str) -> HttpResponse:
     response = HttpResponse(rdp_content, content_type="application/x-rdp; charset=utf-8")
     response["Content-Disposition"] = f'attachment; filename="{safe_slug}.rdp"'
     response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    if gate is not None and gate.message:
-        response["X-PANIC-Entitlement-Warning"] = gate.message
     STORE.record_audit(
         action="launch.rdp.download",
         target_type="endpoint",

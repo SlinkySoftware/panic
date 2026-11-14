@@ -9,7 +9,7 @@
 
 | Component | Path | Runtime | May talk to | Must never |
 |---|---|---|---|---|
-| **Server** | `Application/Server` | Django + Gunicorn (serves server-rendered HTML UI + `/api/v1/*` JSON + dynamic `.rdp` stream) | Relational DB (Stage 2+), Entitlement Providers (Stage 3) | Proxy interactive SSH/RDP terminal streams; store user passwords or private keys |
+| **Server** | `Application/Server` | Django + Gunicorn (serves server-rendered HTML UI + `/api/v1/*` JSON + dynamic `.rdp` stream) | Relational DB (Stage 2+), OIDC / LDAP identity providers (Stage 3) | Proxy interactive SSH/RDP terminal streams; store user passwords or private keys |
 | **Common** | `Application/Common` | Python library `panic_common` (Pydantic v2 models, normalization, hygiene, CIDR resolution, RBAC & scope validation, `.rdp` & CLI template interpolation) | — (pure library, no I/O) | Import Django, database drivers, or network transport libraries |
 
 - **AR-1.1** `panic_common` is a pure library with zero Django or I/O dependencies. Enforced via `import-linter`.

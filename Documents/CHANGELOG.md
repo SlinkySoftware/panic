@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-11-14 — JIT entitlements removed from scope
+- Removed live JIT entitlement providers (former Stage 5 / `T-S5-01`): `panic_common.entitlements`, `panic_server.entitlements_service`, `/api/v1/entitlements`, `.rdp` entitlement gating, `ENTITLEMENT_DENIED`, and all `PANIC_JIT_*` / `PANIC_ENTITLEMENT_*` settings. Stage 5 dropped from `SPEC.md` and `TASKS.md`.
+
 ## 2026-11-14 — T-S4-02: Operations Documentation & End-to-End Suite
 - `Documents/Operations/DEPLOYMENT.md` (single-node SQLite, HA PostgreSQL, Docker Compose, reverse proxy / `X-Forwarded-For`, authentication rollout, `panic_export` / `panic_import` backup & restore, Prometheus, upgrades) and `Documents/Operations/CONFIGURATION.md` (every `PANIC_*` / `*_FILE` variable).
 - `test_e2e_workflows.py`: session + CSRF + persistence + audit + export, proxy-resolved zone reachability and spoofing, multi-user RBAC with OIDC-provisioned users, Admin "View As", Default Dashboard precedence, list/widget persistence across reload, `.rdp` / SSH launchers, and a CONFIGURATION.md coverage guard.

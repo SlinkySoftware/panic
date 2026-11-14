@@ -92,11 +92,6 @@ services:
       PANIC_RATE_LIMIT_LOGIN:
       PANIC_RATE_LIMIT_API:
       PANIC_CACHE_URL:
-      # JIT entitlements (Stage 5)
-      PANIC_JIT_ENTITLEMENTS_ENABLED:
-      PANIC_ENTITLEMENT_PROVIDER:
-      PANIC_ENTITLEMENT_CACHE_TTL_S:
-      PANIC_ENTITLEMENT_TIMEOUT_S:
     volumes:
       - panic-data:/data
     ports:

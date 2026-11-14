@@ -42,9 +42,6 @@ Development proceeds in structured stages so UI ergonomics, layout density, and 
 ### Stage 4: Containerization, Production Readiness & Operations Documentation
 * **Deliverable:** Hardened multi-stage `Containerfile` (non-root user, static asset collection, Gunicorn workers), production `compose.yaml` with PostgreSQL, end-to-end smoke test suite, and operations documentation covering deployment, reverse proxies, configuration, and backup/restore.
 
-### Stage 5: Pluggable Live Just-In-Time (JIT) Entitlement Providers (Future / Optional)
-* **Deliverable:** Live external `EntitlementProvider` adapters (LDAP/AD recursive group lookup, RADIUS/AAA, OIDC/REST introspection) with short-TTL caching (default 30s), strict timeout fallback (default 3s), and soft/hard (`WARN` / `BLOCK`) launch gates.
-
 ---
 
 ## 4. Functional Requirements

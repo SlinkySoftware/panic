@@ -33,18 +33,6 @@ PANIC_TRUST_PROXY_HEADERS = env_bool("PANIC_TRUST_PROXY_HEADERS", True)
 PANIC_PROXY_IP_HEADER = env_str("PANIC_PROXY_IP_HEADER", "X-Forwarded-For")
 PANIC_TRUSTED_PROXY_CIDRS = env_list("PANIC_TRUSTED_PROXY_CIDRS", "127.0.0.1/32,::1/128")
 
-# ---------------------------------------------------------------- Live JIT entitlements (Stage 5, T-S5-01)
-PANIC_JIT_ENTITLEMENTS_ENABLED = env_bool("PANIC_JIT_ENTITLEMENTS_ENABLED", False)
-PANIC_ENTITLEMENT_PROVIDER = env_str("PANIC_ENTITLEMENT_PROVIDER", "static").lower()
-PANIC_ENTITLEMENT_CACHE_TTL_S = env_int("PANIC_ENTITLEMENT_CACHE_TTL_S", 30)
-PANIC_ENTITLEMENT_TIMEOUT_S = env_int("PANIC_ENTITLEMENT_TIMEOUT_S", 3)
-PANIC_ENTITLEMENT_FAIL_CLOSED = env_bool("PANIC_ENTITLEMENT_FAIL_CLOSED", False)
-# JSON: {"<catalog item id>": {"entitlement": "<name>", "gate": "WARN|BLOCK"}} (or PANIC_ENTITLEMENT_RULES_FILE)
-PANIC_ENTITLEMENT_RULES = env_str("PANIC_ENTITLEMENT_RULES", "{}")
-PANIC_ENTITLEMENT_STATIC_GRANTS = env_str("PANIC_ENTITLEMENT_STATIC_GRANTS", "{}")
-PANIC_ENTITLEMENT_REST_URL = env_str("PANIC_ENTITLEMENT_REST_URL", "")
-PANIC_ENTITLEMENT_REST_TOKEN = env_str("PANIC_ENTITLEMENT_REST_TOKEN", "")
-PANIC_ENTITLEMENT_LDAP_GROUP_BASE_DN = env_str("PANIC_ENTITLEMENT_LDAP_GROUP_BASE_DN", "")
 
 # ---------------------------------------------------------------- Authentication (Stage 3)
 # simulator: dev/test RBAC simulator (no login). session: real login (local bootstrap admin, OIDC, LDAP).
