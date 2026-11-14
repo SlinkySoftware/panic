@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-14 — Process change: no long-lived Stage 6 branch
+- Owner decision: every task now works in its own fresh, short-lived worktree and pushes straight
+  to `main` on both `origin` and `gitea` (fast-forward), instead of accumulating on a `stage6`
+  branch merged only at milestones. This keeps a new session's fresh worktree always clean off
+  `main`, with no stale branch or worktree to track.
+- `T-S6-01` and `T-S6-05` (developed on the now-deleted `stage6` branch) are merged into `main` as
+  part of this change.
+- `PHASE_B_KICKOFF.md` and `TASKS.md`'s coordination rules are updated accordingly. `./panic test`
+  must still stay green on every commit to `main`; a fully working interactive app between tasks
+  is not guaranteed pre-release (e.g. the old UI stops working on `main` after `T-S6-04` until the
+  web rewrite lands).
+
 ## 2026-11-14 — T-S6-05: hardened X-Forwarded-For / Forwarded chain resolution
 - `panic_common.proxy.resolve_client_chain` (pure, additive — the Stage 3 `resolve_client_ip`
   stays for now since `middleware.py` still calls it until `T-S6-04`): walks the hop chain right
