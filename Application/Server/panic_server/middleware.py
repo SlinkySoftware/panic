@@ -76,6 +76,36 @@ class RequestIdMiddleware:
             request_id_var.reset(token)
 
 
+_STORE_EXEMPT_PREFIXES = ("/static/", "/metrics", "/api/v1/health", "/api/v1/version")
+
+
+class PortalStoreMiddleware:
+    """Load relational portal state before each request and persist mutations afterwards.
+
+    The process-wide store lock is held for the whole request, so the in-memory working set is
+    never shared between concurrent requests of the same worker. Across workers, every request
+    starts from a fresh ``refresh()`` and ``persist()`` writes only entities it changed.
+    """
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        if request.path.startswith(_STORE_EXEMPT_PREFIXES):
+            return self.get_response(request)
+        refresh = getattr(STORE, "refresh", None)
+        persist = getattr(STORE, "persist", None)
+        with STORE._lock:
+            if getattr(settings, "PANIC_AUTO_SEED", False) and hasattr(STORE, "ensure_seeded"):
+                STORE.ensure_seeded()
+            if refresh is not None:
+                refresh()
+            response = self.get_response(request)
+            if persist is not None and response.status_code < 500:
+                persist()
+            return response
+
+
 class ClientIpZoneMiddleware:
     """Resolve effective client IP (trusted reverse-proxy aware) and Security Zone on every request."""
 
@@ -96,6 +126,11 @@ class ClientIpZoneMiddleware:
             proxy_ip_header=proxy_ip_header,
         )
         zone_res = resolve_ip_zone(ip_res.client_ip, STORE.zones)
+
+        if not getattr(settings, "PANIC_DEV_SIMULATOR_ENABLED", True):
+            # Live mode: the portal snapshot reflects the real (proxy-resolved) jump-host IP.
+            STORE.simulation.simulated_ip = ip_res.client_ip
+            STORE.simulation.override_zone_id = None
 
         request.client_ip = ip_res.client_ip
         request.client_ip_resolution = ip_res

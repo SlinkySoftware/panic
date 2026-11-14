@@ -47,6 +47,7 @@ def store() -> DatabasePortalStore:
 
 
 def test_model_round_trip_preserves_domain_contract() -> None:
+    DatabasePortalStore().wipe()
     fx = MockPortalStore()
     for item in fx.catalog:
         rec = CatalogItemRecord.from_domain(item)
@@ -65,6 +66,7 @@ def test_model_round_trip_preserves_domain_contract() -> None:
 def test_site_code_is_unique() -> None:
     from django.db import IntegrityError, transaction
 
+    DatabasePortalStore().wipe()
     SiteRecord.from_domain(SiteDefinition(id="s1", code="9TST", name="Test")).save()
     with pytest.raises(IntegrityError), transaction.atomic():
         SiteRecord.from_domain(SiteDefinition(id="s2", code="9TST", name="Dup")).save()

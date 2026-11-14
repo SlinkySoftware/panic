@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from django.urls import path
+from django.urls import include, path
 
 from panic_server import views
 
 urlpatterns = [
+    # Authentication (/login, /logout, OIDC callback) — panic_server.auth
+    path("", include("panic_server.auth.urls")),
     # Server-rendered UI routes (explicit, visible URLs — no hidden URLs)
     path("", views.portal_app_view, {"initial_view": "dashboard"}, name="home"),
     path("dashboard", views.portal_app_view, {"initial_view": "dashboard"}, name="dashboard_default"),

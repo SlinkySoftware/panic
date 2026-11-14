@@ -1,4 +1,7 @@
-"""In-memory mock state store & enterprise operations fixtures for Stage 1.
+"""Canonical enterprise operations fixtures (``MockPortalStore``) and the process-wide ``STORE``.
+
+Stage 1 served ``MockPortalStore`` directly; from Stage 2 ``STORE`` is a ``DatabasePortalStore``
+(``panic_server.store_db``) which reuses this module's fixtures for seeding.
 
 All hostnames, IPv4/IPv6 blocks, and labels are strictly vendor-agnostic and use
 reserved documentation/private ranges (example.com / example.net / RFC 5737 / RFC 1918 / RFC 3849).
@@ -1132,4 +1135,11 @@ class MockPortalStore:
             return res.model_dump()
 
 
-STORE = MockPortalStore()
+def _build_store() -> MockPortalStore:
+    """Stage 2+: the process-wide store is relational (``DatabasePortalStore``)."""
+    from panic_server.store_db import DatabasePortalStore
+
+    return DatabasePortalStore()
+
+
+STORE = _build_store()
