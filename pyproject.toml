@@ -68,6 +68,7 @@ warn_return_any = false
 # ---------------------------------------------------------------- pytest
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"
+filterwarnings = ["ignore::DeprecationWarning:ldap3.*"]
 DJANGO_SETTINGS_MODULE = "panic_server.settings"
 django_find_project = false
 

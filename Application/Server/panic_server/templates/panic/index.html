@@ -57,6 +57,12 @@
         <button type="button" class="btn btn--sm" id="btn-theme-toggle" title="Toggle Dark / Light theme">
           <span id="label-theme">{{ snapshot.user.theme }}</span>
         </button>
+        {% if auth_session %}
+        <form method="post" action="/logout" class="topbar__logout" id="form-logout">
+          {% csrf_token %}
+          <button type="submit" class="btn btn--sm" id="btn-logout" title="Sign out">Sign out</button>
+        </form>
+        {% endif %}
 
         <a href="/profile" class="btn btn--sm" id="btn-profile-nav" title="User Profile, Default Dashboard &amp; SSH Command Template" style="text-decoration:none;">
           &#128100; <span class="mono" id="topbar-username">{{ snapshot.user.username }}</span>

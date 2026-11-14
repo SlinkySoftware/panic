@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-14 — T-S3-01 / T-S3-02: Session Authentication, OIDC & LDAP
+- `PANIC_AUTH_MODE=session`: `PanicAuthMiddleware` redirects to `/login` (HTML) or returns `401 UNAUTHENTICATED` (`/api/*`); session user bound to the store, Admin "View As" kept in the session. Simulator user switching / reset return `403` when `PANIC_DEV_SIMULATOR_ENABLED=false`.
+- Local bootstrap admin (`PANIC_BOOTSTRAP_ADMIN_USER` / `_PASSWORD[_FILE]`, Django password hashing), reference-ui-styled `/login`, CSRF-protected `POST /logout`, open-redirect-safe `next`, `auth.login` / `auth.login_failed` / `auth.logout` audit events.
+- `panic_common.claim_mapping` (pure): IdP groups (names or LDAP DNs) -> `PermissionFlag`s and Teams via `PANIC_RBAC_*_GROUPS`, `PANIC_RBAC_TEAM_GROUP_MAP`, `PANIC_RBAC_TEAM_GROUP_PREFIX`.
+- OIDC Authorization Code + PKCE (`/auth/oidc/login`, `/auth/oidc/callback`; state, nonce, iss, aud, exp checks; issuer discovery; userinfo merge) and LDAP/LDAPS/StartTLS bind + group search (RFC 4515 filter escaping). External logins auto-provision users and sync permissions/teams. New dependencies: `httpx`, `ldap3`.
+
 ## 2026-11-14 — T-S2-03: API Cutover & Portable Export/Import
 - `STORE` is a `DatabasePortalStore`; `PortalStoreMiddleware` refreshes relational state per request and persists changed entities afterwards (auto-seeds an empty database when `PANIC_AUTO_SEED=true`).
 - `/api/v1/health` reports database connectivity (`503` when degraded); `/api/v1/version` reports stage 2.

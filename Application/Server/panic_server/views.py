@@ -85,6 +85,7 @@ def portal_app_view(
         "initial_view": initial_view,
         "initial_dashboard_id": resolved_dash_id,
         "initial_edit": initial_edit,
+        "auth_session": settings.PANIC_AUTH_MODE == "session",
         "initial_state_json": json.dumps(snapshot),
         "snapshot": snapshot,
     }
@@ -168,6 +169,11 @@ def state_api_view(request: HttpRequest) -> JsonResponse:
     if request.method == "POST":
         body = _json_body(request)
         if body.get("action") == "reset":
+            if not settings.PANIC_DEV_SIMULATOR_ENABLED:
+                return JsonResponse(
+                    {"error_code": ErrorCode.PERMISSION_DENIED, "detail": "Reset is only available in simulator mode"},
+                    status=403,
+                )
             STORE.reset()
             STORE.record_audit(
                 action="simulator.reset",
@@ -185,6 +191,18 @@ def simulator_api_view(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"error_code": ErrorCode.VALIDATION_ERROR, "detail": "POST required"}, status=405)
 
     body = _json_body(request)
+    if not settings.PANIC_DEV_SIMULATOR_ENABLED:
+        # Live mode: source IP / zone come from the request and identity from the session.
+        if "active_user_id" in body:
+            return JsonResponse(
+                {
+                    "error_code": ErrorCode.PERMISSION_DENIED,
+                    "detail": "User switching is disabled outside simulator mode",
+                },
+                status=403,
+            )
+        body.pop("simulated_ip", None)
+        body.pop("override_zone_id", None)
     with STORE._lock:
         if "simulated_ip" in body:
             ip_val = str(body["simulated_ip"]).strip()
