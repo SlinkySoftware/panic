@@ -60,11 +60,32 @@ internal load balancer.
    - `PANIC_MIGRATE_ON_START=true` on exactly one replica (or a one-off job) and `false` on the rest.
    - **Sessions** use a small `SessionStore` (subclass of
      `django.contrib.sessions.backends.base.SessionBase`) inside `panic_server.store`, writing to
-     a `sessions` collection with a TTL index. Any replica can serve any user.
+     a `sessions` collection with a TTL index.
+   - **Session continuity** (owner requirement, 2026-11-14): when a load balancer moves a user to
+     another panic-web or panic-server instance or container, the session must keep working
+     without interruption.
+     - There are no sticky sessions and no per-process session state. Every replica reads the
+       one shared `sessions` collection.
+     - The session store always reads from the primary and writes with `w=majority`, whatever
+       read preference the URI sets. A session created on one replica is therefore visible
+       immediately on every other replica.
+     - Retryable reads and writes (pymongo defaults) carry sessions across a replica-set
+       election.
+     - `PANIC_DJANGO_SECRET_KEY` must be identical on every replica. The startup check logs a
+       fingerprint, never the key, so that a mismatch can be spotted.
+     - OIDC state, nonce and PKCE verifier live in the session, so the callback may land on any
+       replica.
+     - CSRF uses the cookie (`CSRF_USE_SESSIONS=False`) and is valid on any replica.
+     - The session cookie belongs to the public hostname. panic-web instances that a load
+       balancer can move a user between must share one public hostname, or set
+       `PANIC_SESSION_COOKIE_DOMAIN` to a common parent domain.
+     - Gunicorn's graceful shutdown lets in-flight requests finish during rolling restarts.
+     - Tests and the CI smoke run two server replicas behind panic-web. They create a session
+       on one replica and use it on the other, before and after restarting a replica.
      - *Alternative:* `django-mongodb-backend` with `sessions.backends.db`, as reference-app does. It
-       was not chosen because it is an ORM-on-Mongo backend just for one table. It needs a
-       Django `DATABASES` entry and migrations, pins the Django minor version, and would be a
-       second Mongo client and connection pool. (Assumed; the owner has not answered yet.)
+       meets the same requirement, but was not chosen because it is an ORM-on-Mongo backend
+       just for one table. It needs a Django `DATABASES` entry and migrations, pins the Django
+       minor version, and would be a second Mongo client and connection pool.
 
 4. **No full-state loading, ever.**
    - Each API call fetches only what the current screen shows:
@@ -162,12 +183,20 @@ internal load balancer.
     - `/rbac` redirects to `/settings/users`.
     - Users are disabled, never deleted, so that the audit trail stays intact. A disabled user
       cannot sign in.
-    - *Assumed (owner to confirm):* the IdP group → team mapping (`PANIC_RBAC_TEAM_GROUP_MAP`,
-      `PANIC_RBAC_TEAM_GROUP_PREFIX`) is removed, so sign-in never changes a user's teams.
-      IdP group → permission mapping stays. Permissions granted by IdP groups (`idp_permissions`,
-      refreshed at each external sign-in and shown locked on the user page) are stored
-      separately from manual grants (`permissions`), so manual edits survive sign-in. The
-      effective permissions are the union of the two.
+    - **External identity is for authentication only** (owner, 2026-11-14). OIDC and LDAP
+      prove who the user is, and nothing else.
+      - Permissions and team membership come only from the users pages.
+      - IdP groups and claims are never mapped to permissions or teams.
+      - Removed:
+        - `panic_common.claim_mapping`
+        - `PANIC_RBAC_ADMIN_GROUPS`, `PANIC_RBAC_GLOBAL_CONTRIB_GROUPS`,
+          `PANIC_RBAC_TEAM_CONTRIB_GROUPS`, `PANIC_RBAC_TEAM_GROUP_MAP`,
+          `PANIC_RBAC_TEAM_GROUP_PREFIX`
+        - the OIDC groups claim and the LDAP group search settings
+      - On first external sign-in, a user is auto-provisioned with no permissions and no teams,
+        so they can only use `GLOBAL` and their own `PERSONAL` resources until an admin grants
+        more. Later sign-ins update only `display_name` and `last_login_at`.
+      - The local bootstrap admin keeps `GLOBAL_ADMIN`, so there is always a way in.
 
 12. **Default Security Zone** (owner, 2026-11-14).
     - A built-in zone named **Default** (`_id: "zone-default"`) always exists. It has no CIDRs,
@@ -237,13 +266,13 @@ Stage 6 replaces it.
 |---|---|---|
 | 1 | Hotfix F1–F3 on current `main`? | **Yes.** Done in `0d55160`. |
 | 2 | Visibility of orphaned `TEAM` / `PERSONAL` resources | **Admins only, read-only; only "assign to user" or delete** (decision 10). |
-| 3 | Sessions: pymongo `SessionStore`, or `django-mongodb-backend`? | *Assumed:* pymongo `SessionStore` (decision 3). |
+| 3 | Sessions | **Must survive the load balancer moving a user to another front end or container.** This is met by the shared Mongo `SessionStore` with primary reads and majority writes (decision 3). |
 | 4 | Is View As read-only? | **Yes** (decision 6). |
 | 5 | May admins edit or delete other users' `PERSONAL` resources? | **No.** Admins act only on orphans (decision 10). |
-| 6 | Where is team membership managed? | **On the user editing page in settings; a users management page is required** (decision 11). The IdP mapping split is *assumed*. |
+| 6 | Where is team membership managed? | **On the user editing page in settings; a users management page is required** (decision 11). **The IdP is used for authentication only, never for permissions or teams.** |
 | 7 | What happens to unknown client locations? | **They get the built-in Default zone** (decision 12). |
 | 8 | Limits: 500 items per list, 100 widgets, 200 rows per LIST widget, 100 nav dashboards | **OK.** |
 | 9 | Audit retention default | *Assumed:* 365 days (TTL), with `0` meaning keep forever. |
 | 10 | Load-test p95 targets and topology (`T-S6-14`) | *Assumed:* as proposed in [`TASKS.md`](../../TASKS.md). |
 | 11 | Existing data to migrate? | **None.** This is a new app with no production deployments, so there are no migrations or v1 import (decision 2). |
-| 12 | Transition on `main` (the old UI is removed in `T-S6-04` before the Vue views exist) | *Assumed:* accept a temporary API-only or partial UI on `main`. Tagging the last snapshot-UI commit (`stage4-final`) needs the owner's go-ahead. |
+| 12 | Transition while building | **No working system is needed in the interim. Keep `main` up to date only when it makes sense.** Phase B runs on a `stage6` branch, pushed to both remotes, and merges into `main` at coherent milestones. No `stage4-final` tag. |

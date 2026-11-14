@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-11-14 — Stage 6 design: identity, sessions and branching (docs only)
+- External identity (OIDC, LDAP) is used for authentication only:
+  - `panic_common.claim_mapping`, all `PANIC_RBAC_*` group mappings and `idp_permissions` are dropped from the plan.
+  - Permissions and teams are set only on the users pages.
+  - A first external sign-in creates a user with no permissions or teams.
+- New rule AR-4.7, session continuity: a load balancer may move a user to any panic-web or panic-server instance or container without interrupting the session.
+  - shared Mongo session store with primary reads and `w=majority` writes
+  - identical secret key on every replica
+  - OIDC state kept in the session, cookie-based CSRF
+  - a shared public hostname or cookie domain
+  - cross-replica tests and a two-replica CI smoke test
+- Phase B runs on the `stage6` branch, `main` is updated only at milestones, and no interim working system is required.
+
 ## 2026-11-14 — Stage 6 design: owner review incorporated (docs only)
 - ADR-0001 records the owner's answers.
 - New decisions:

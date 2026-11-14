@@ -55,8 +55,7 @@ There is no full-state load. Every repository call is scoped to what one screen 
   "password_hash": "pbkdf2_sha256$…",            // LOCAL only; never leaves the repository
   "default_remote_user": "jdoe",
   "ssh_template": "ssh {user}@{host} -p {port} {flags}",
-  "permissions": ["CAN_ADD_TEAM"],                // manual grants (users page)
-  "idp_permissions": ["CAN_ADD_GLOBAL"],          // from IdP group mapping, rewritten at each external sign-in
+  "permissions": ["CAN_ADD_TEAM"],                // set only on the users page; never from the IdP
   "team_ids": ["team-…"],                         // single source of truth for membership, set only on the users page (§4.3)
   "disabled": false,                              // disabled users cannot sign in; users are never deleted
   "pinned_dashboard_ids": ["<uuid>"],
@@ -68,8 +67,10 @@ There is no full-state load. Every repository call is scoped to what one screen 
 
 Indexes: `{username: 1}` unique · `{team_ids: 1}` · `{permissions: 1}` · `{disabled: 1}` · `{search_keys: 1}` (§4.10).
 
-Effective permissions are `permissions ∪ idp_permissions` (`panic_common.rbac.effective_permissions`).
-Removing or disabling the last user with a manual `GLOBAL_ADMIN` grant is refused
+External identity (OIDC, LDAP) is used for authentication only. A first external sign-in
+creates the user with `permissions: []` and `team_ids: []`. Later sign-ins update only
+`display_name` and `last_login_at`.
+Removing `GLOBAL_ADMIN` from, or disabling, the last enabled admin is refused
 (`409 PROTECTED_RESOURCE`). Disabling a user, or enabling them again, recomputes `orphaned` on
 the `PERSONAL` resources they own (§5.1).
 
@@ -87,7 +88,7 @@ Indexes: `{code: 1}` unique.
 **Changed in Stage 6:** `TeamDefinition.members` is no longer stored. Membership lives only in
 `users.team_ids` and is edited only on the user page (`/settings/users/<id>`). A team's members
 are `users.find({team_ids: <id>})`, shown read-only on `/teams`. External sign-in never changes
-team membership: the IdP group → team mapping is removed.
+team membership: IdP groups are not mapped to anything.
 
 Deleting a team does three things:
 - `$pull`s its id from `users.team_ids` and from resources' `team_ids`.
@@ -217,8 +218,14 @@ This avoids a Mongo text index (no prefix matching) and an external search engin
 
 `{_id: <session_key>, data: <signed/encoded session>, expire_at: ISODate}`. TTL index on
 `expire_at` (`expireAfterSeconds: 0`). Session data holds only `panic_user_id`, `panic_view_as_user_id`,
-OIDC state/nonce/PKCE verifier and the CSRF secret. Any server replica serves any session.
-See ADR-0001 decision 3 for why this is a small repository-backed `SessionStore` rather than an ORM backend.
+and the OIDC state, nonce and PKCE verifier (CSRF is cookie-based).
+
+**Continuity across replicas** (AR-4.7): the store reads with `ReadPreference.PRIMARY` and
+writes with `w=majority`, overriding the URI. A load balancer can therefore move a user between
+panic-web or panic-server instances or containers mid-session without a re-login. Removing a
+user's sessions on disable is a `delete_many({"uid": <user id>})`, so documents also carry
+`uid`, indexed. See ADR-0001 decision 3 for why this is a small repository-backed
+`SessionStore` rather than an ORM backend.
 
 ### 4.12 `rate_limits`
 
@@ -305,7 +312,7 @@ editable is `403 PERMISSION_DENIED`. A visible orphan is `403 ORPHANED_RESOURCE`
 (`format: panic-export`, `schema_version: 2`). It is used for backup and for provisioning shared
 configuration between environments. There is **no** import of Stage 1–4 (`schema_version: 1`)
 files and no data migration from SQL, because PANIC has no existing deployments (owner
-decision). Users export with `team_ids`, `permissions`, `idp_permissions` and `disabled`.
+decision). Users export with `team_ids`, `permissions` and `disabled`.
 Password hashes, sessions, rate limits and the audit log are never exported.
 
 ## 8. Domain enums (unchanged)

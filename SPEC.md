@@ -150,7 +150,7 @@ Every Catalog Item supports one of four protocols with protocol-specific target 
 * **Users Management (`/settings/users`, Stage 6):**
   * Global Admins list, search, create (pre-provision) and disable users. Users are never deleted, so the audit trail stays intact, and disabled users cannot sign in.
   * The user edit page (`/settings/users/<user-id>`) sets display name, permission flags, **team membership**, and enabled/disabled. It also offers **View As** for that user.
-  * Permissions mapped from IdP groups are shown locked and refreshed at each external sign-in. Manual grants are kept separately and survive sign-in. Sign-in never changes team membership.
+  * External identity providers (OIDC, LDAP) are used **for authentication only**. Permissions and team membership are set only here; IdP groups are never mapped to them. A first external sign-in creates the user with no permissions and no teams.
 * **In-App RBAC Permissions (managed on the users pages; `/rbac` redirects there in Stage 6):**
   * `GLOBAL_ADMIN` (*Global Admin*): Full administrative access to System Settings, Pre-Defined Sites, Teams, Security Zones, RBAC permissions, and all scopes; enables the **"View As"** switcher.
   * `CAN_ADD_GLOBAL` (*Can Add to Global Scope Items*): Create/edit `GLOBAL` Catalog Items, Endpoint Lists, and Dashboards.
@@ -181,7 +181,7 @@ Every Catalog Item supports one of four protocols with protocol-specific target 
    * Structured JSON logging with `X-Request-ID` correlation.
    * Endpoints: `/api/v1/health` (`?ready=1` also checks MongoDB), `/api/v1/version`, and `/metrics` (Prometheus; served by panic-server only, not proxied).
 4. **Scalability & Statelessness (Stage 6):**
-   * panic-server keeps no per-process user state. Sessions, rate-limit counters and audit records live in MongoDB, so any replica can serve any request.
+   * panic-server keeps no per-process user state. Sessions, rate-limit counters and audit records live in MongoDB, so any replica can serve any request. A load balancer can move a user to another front end or container mid-session without interrupting the session.
    * Lists and dashboards use optimistic concurrency (`version` + `If-Match`; `409` on conflict).
    * Reference load: 5,000 endpoints and 50 concurrent users, within the p95 targets in `Documents/TASKS.md` (`T-S6-14`).
 5. **Authorization (Stage 6):**
@@ -193,7 +193,7 @@ Every Catalog Item supports one of four protocols with protocol-specific target 
 
 ## 6. Core Data Model (`panic_common.models`)
 
-> Stage 6 persists these in MongoDB collections. Shapes, indexes, `version` and audit retention are in `Documents/Architecture/DATA_MODEL.md`. Team membership is held only in `UserAccount.team_ids`, set on the user edit page (`TeamDefinition.members` is removed). Users gain `idp_permissions` and `disabled`. Catalog items, lists and dashboards gain an `orphaned` flag. New ids are UUIDv4.
+> Stage 6 persists these in MongoDB collections. Shapes, indexes, `version` and audit retention are in `Documents/Architecture/DATA_MODEL.md`. Team membership is held only in `UserAccount.team_ids`, set on the user edit page (`TeamDefinition.members` is removed). Users gain `disabled`, and IdP group mapping is removed. Catalog items, lists and dashboards gain an `orphaned` flag. New ids are UUIDv4.
 
 * **`UserAccount`**: `id`, `username`, `display_name`, `default_remote_user`, `ssh_template`, `permissions` (`list[PermissionFlag]`), `team_ids`, `pinned_dashboard_ids`, `default_dashboard_id` (nullable UUID), `density` (`COMFORT`|`COMPACT`), `theme` (`DARK`|`LIGHT`), `unreachable_policy` (`HIDE`|`DIM`)
 * **`SystemSettings`**: `default_global_dashboard_id` (UUID referencing a `GLOBAL` dashboard), `updated_by`, `updated_at`

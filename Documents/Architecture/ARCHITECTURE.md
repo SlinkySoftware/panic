@@ -92,11 +92,11 @@ browser ──► corporate reverse proxy / LB ──► panic-web (nginx, zone 
   - Users are managed on `/settings/users`. Team membership is set only on the user page
     (`users.team_ids`).
   - Users are disabled, never deleted, and disabled users cannot sign in.
-  - Effective permissions are the union of the manual grants (`permissions`) and the IdP-mapped
-    grants (`idp_permissions`, refreshed at each external sign-in).
-  - Sign-in never changes team membership.
-  - The last enabled `GLOBAL_ADMIN` (counting manual grants only) cannot be removed or
-    disabled. *(S6)*
+  - **External identity (OIDC, LDAP) is used for authentication only.** Permissions and teams
+    are set only on the users pages. IdP groups and claims are never mapped to them, and
+    sign-in never changes them.
+  - A first external sign-in provisions a user with no permissions and no teams.
+  - The last enabled `GLOBAL_ADMIN` cannot have that permission removed and cannot be disabled. *(S6)*
 - **AR-2.10** **CSRF and cookies.**
   - Session cookies are `HttpOnly` and `SameSite=Lax`, and `Secure` in prod.
   - Every unsafe method needs `X-CSRFToken`, which matches the `panic_csrftoken` cookie.
@@ -136,6 +136,18 @@ browser ──► corporate reverse proxy / LB ──► panic-web (nginx, zone 
 - **AR-4.6** Server is stateless. Sessions, rate-limit counters and audit records live in Mongo,
   with no local disk state and no in-process user state. Any replica can serve any request.
   The zone list may be cached per process for at most `PANIC_ZONE_CACHE_TTL_S`.
+- **AR-4.7** **Session continuity.** A load balancer may move a user to any panic-web or
+  panic-server instance or container at any time without interrupting the session.
+  - There are no sticky sessions.
+  - The session store reads from the primary and writes with `w=majority`, whatever read
+    preference the URI sets.
+  - `PANIC_DJANGO_SECRET_KEY` is identical on every replica.
+  - OIDC flow state lives in the session.
+  - CSRF is cookie-based.
+  - panic-web instances that share users share one public hostname, or set
+    `PANIC_SESSION_COOKIE_DOMAIN`.
+  - Verified by a cross-replica session test and by the two-replica CI smoke test
+    ([ADR-0001](adr/0001-web-server-mongo-split.md) decision 3). *(S6)*
 
 ## 5. Client IP and Security Zone trust model
 
@@ -233,7 +245,7 @@ Configured in `pyproject.toml` (`[tool.importlinter]`, `include_external_package
 
 ```text
 Application/
-  Common/panic_common/        models, errors, rbac, visibility (new), zones, proxy, hygiene, launchers, claim_mapping, search_keys (new)
+  Common/panic_common/        models, errors, rbac, visibility (new), zones, proxy, hygiene, launchers, search_keys (new); claim_mapping removed
   Server/panic_server/
     settings.py conf.py logging.py middleware.py gunicorn_conf.py wsgi.py
     context.py                per-request RequestContext (real user, effective user, view-as, client IP, zone)
