@@ -1,8 +1,11 @@
 # PANIC reference container stack (aligned with reference-app Build/Containers/compose.yaml)
 #
-#   docker compose --env-file /path/to/panic.env -f Build/Containers/compose.yaml up -d
+#   SQLite (single node):
+#     docker compose --env-file /path/to/panic.env -f Build/Containers/compose.yaml up -d
+#   PostgreSQL 17 (set PANIC_DB_ENGINE=postgresql and PANIC_DB_PASSWORD in the env file):
+#     docker compose --env-file /path/to/panic.env -f Build/Containers/compose.yaml --profile postgres up -d
 #
-# Everything environment-specific comes from the env file (AR-3.1).
+# Everything environment-specific comes from the env file (AR-3.1). See Documents/Operations/.
 
 name: panic
 
@@ -21,23 +24,111 @@ services:
     build:
       context: ../..
       dockerfile: Build/Containers/server/Containerfile
+    read_only: true
+    tmpfs: ["/tmp"]
     environment:
       PANIC_ALLOWED_HOSTS: ${PANIC_ALLOWED_HOSTS:-localhost,127.0.0.1},panic-server
-      PANIC_ENV:
+      PANIC_ENV: ${PANIC_ENV:-prod}
       PANIC_TZ:
       PANIC_LOG_LEVEL:
       PANIC_LOG_FORMAT:
       PANIC_DJANGO_SECRET_KEY:
       PANIC_DEBUG:
       PANIC_INSTANCE_NAME:
+      PANIC_CSRF_TRUSTED_ORIGINS:
+      PANIC_SESSION_COOKIE_SECURE:
+      PANIC_SECURE_PROXY_SSL_HEADER:
+      PANIC_HSTS_SECONDS:
+      # Database
+      PANIC_DB_ENGINE: ${PANIC_DB_ENGINE:-sqlite}
+      PANIC_DB_HOST: ${PANIC_DB_HOST:-postgres}
+      PANIC_DB_PORT:
+      PANIC_DB_NAME: ${PANIC_DB_NAME:-panic}
+      PANIC_DB_USER: ${PANIC_DB_USER:-panic}
+      PANIC_DB_PASSWORD:
+      PANIC_DB_PASSWORD_FILE:
+      PANIC_DB_CONN_MAX_AGE:
+      PANIC_MIGRATE_ON_START:
+      PANIC_SEED_ON_START:
+      PANIC_AUTO_SEED:
+      PANIC_GUNICORN_WORKERS:
+      PANIC_GUNICORN_THREADS:
+      # Reverse proxy & zones
       PANIC_TRUST_PROXY_HEADERS:
       PANIC_PROXY_IP_HEADER:
+      PANIC_TRUSTED_PROXY_CIDRS:
+      # Authentication
+      PANIC_AUTH_MODE:
+      PANIC_AUTH_LOCAL_ENABLED:
+      PANIC_BOOTSTRAP_ADMIN_USER:
+      PANIC_BOOTSTRAP_ADMIN_PASSWORD:
+      PANIC_BOOTSTRAP_ADMIN_PASSWORD_FILE:
+      PANIC_OIDC_ENABLED:
+      PANIC_OIDC_PROVIDER_NAME:
+      PANIC_OIDC_ISSUER:
+      PANIC_OIDC_CLIENT_ID:
+      PANIC_OIDC_CLIENT_SECRET:
+      PANIC_OIDC_CLIENT_SECRET_FILE:
+      PANIC_OIDC_REDIRECT_URI:
+      PANIC_OIDC_SCOPES:
+      PANIC_OIDC_GROUPS_CLAIM:
+      PANIC_LDAP_ENABLED:
+      PANIC_LDAP_URI:
+      PANIC_LDAP_START_TLS:
+      PANIC_LDAP_BIND_DN:
+      PANIC_LDAP_BIND_PASSWORD:
+      PANIC_LDAP_BIND_PASSWORD_FILE:
+      PANIC_LDAP_USER_BASE_DN:
+      PANIC_LDAP_USER_FILTER:
+      PANIC_LDAP_GROUP_BASE_DN:
+      PANIC_LDAP_GROUP_FILTER:
+      PANIC_RBAC_ADMIN_GROUPS:
+      PANIC_RBAC_GLOBAL_CONTRIB_GROUPS:
+      PANIC_RBAC_TEAM_CONTRIB_GROUPS:
+      PANIC_RBAC_TEAM_GROUP_MAP:
+      PANIC_RBAC_TEAM_GROUP_PREFIX:
+      # Hardening
+      PANIC_RATE_LIMIT_ENABLED:
+      PANIC_RATE_LIMIT_LOGIN:
+      PANIC_RATE_LIMIT_API:
+      PANIC_CACHE_URL:
+      # JIT entitlements (Stage 5)
+      PANIC_JIT_ENTITLEMENTS_ENABLED:
+      PANIC_ENTITLEMENT_PROVIDER:
       PANIC_ENTITLEMENT_CACHE_TTL_S:
       PANIC_ENTITLEMENT_TIMEOUT_S:
-      PANIC_CATALOG_MODERATION_MODE:
+    volumes:
+      - panic-data:/data
     ports:
       - "${PANIC_WEB_PUBLISH:-8210}:8210"
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
     networks:
       default:
         aliases: [panic-server]
     stop_grace_period: 20s
+
+  postgres:
+    <<: *hardening
+    profiles: [postgres]
+    image: docker.io/library/postgres:17-alpine
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    environment:
+      POSTGRES_DB: ${PANIC_DB_NAME:-panic}
+      POSTGRES_USER: ${PANIC_DB_USER:-panic}
+      POSTGRES_PASSWORD: ${PANIC_DB_PASSWORD:-}
+    volumes:
+      - panic-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    stop_grace_period: 30s
+
+volumes:
+  panic-data:
+  panic-pgdata:

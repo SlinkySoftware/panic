@@ -1145,4 +1145,14 @@ def _build_store() -> DatabasePortalStore:
     return DatabasePortalStore()
 
 
-STORE = _build_store()
+if TYPE_CHECKING:
+    STORE: DatabasePortalStore
+
+
+def __getattr__(name: str) -> Any:
+    # ``STORE`` is built lazily (PEP 562) so ``store_db`` -> ``state`` imports never cycle.
+    if name == "STORE":
+        store = _build_store()
+        globals()["STORE"] = store
+        return store
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

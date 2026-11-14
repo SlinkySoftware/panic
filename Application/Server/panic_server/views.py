@@ -11,6 +11,7 @@ from typing import Any
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render
+from django.views.static import serve as static_serve
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from panic_common.errors import ErrorCode
@@ -141,6 +142,13 @@ def export_api_view(request: HttpRequest) -> JsonResponse:
     )
     response = JsonResponse(export_state(STORE, shared_only=shared_only))
     response["Content-Disposition"] = 'attachment; filename="panic-export.json"'
+    return response
+
+
+def static_asset_view(request: HttpRequest, path: str) -> HttpResponse:
+    """Serve a collected static asset with a one-day public cache lifetime."""
+    response = static_serve(request, path, document_root=settings.STATIC_ROOT)
+    response["Cache-Control"] = "public, max-age=86400"
     return response
 
 

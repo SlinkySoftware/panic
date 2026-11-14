@@ -165,6 +165,10 @@ TEMPLATES = [
 
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+# ``manage.py collectstatic`` target. When PANIC_SERVE_STATIC is true and DEBUG is off, Django
+# serves this directory itself (suitable behind a caching reverse proxy); otherwise let the proxy serve it.
+STATIC_ROOT = env_str("PANIC_STATIC_ROOT", str(BASE_DIR.parent / "staticfiles"))
+PANIC_SERVE_STATIC = env_bool("PANIC_SERVE_STATIC", True)
 
 LANGUAGE_CODE = "en-au"
 TIME_ZONE = "UTC"

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from django.urls import include, path
+from django.conf import settings
+from django.urls import include, path, re_path
 
 from panic_server import views
 
@@ -82,3 +83,9 @@ urlpatterns = [
     path("api/v1/export", views.export_api_view, name="api_export"),
     path("api/v1/rbac", views.rbac_api_view, name="api_rbac"),
 ]
+
+if settings.PANIC_SERVE_STATIC and not settings.DEBUG:
+    # Production static serving from STATIC_ROOT (collectstatic). In DEBUG, staticfiles' runserver handles it.
+    urlpatterns.append(
+        re_path(r"^static/(?P<path>.*)$", views.static_asset_view, name="static_asset"),
+    )

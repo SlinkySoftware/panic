@@ -53,18 +53,24 @@ def _bucket(request: HttpRequest) -> str | None:
 
 
 def hit(bucket: str, key: str, rate: str) -> tuple[bool, int]:
-    """Count one request in a fixed window. Returns ``(allowed, retry_after_seconds)``."""
+    """Count one request in a window that starts at the client's first request.
+
+    Returns ``(allowed, retry_after_seconds)``. ``incr`` keeps the key's original expiry, so the
+    window is not extended by further requests.
+    """
     limit, window = parse_rate(rate)
     now = int(time.time())
-    window_start = now - (now % window)
-    cache_key = f"panic:rl:{bucket}:{key}:{window_start}"
-    cache.add(cache_key, 0, timeout=window + 1)
+    cache_key = f"panic:rl:{bucket}:{key}"
+    cache.add(cache_key, now, timeout=window)  # value = window start
+    count_key = cache_key + ":n"
+    cache.add(count_key, 0, timeout=window)
     try:
-        count = cache.incr(cache_key)
+        count = cache.incr(count_key)
     except ValueError:  # evicted between add() and incr()
-        cache.set(cache_key, 1, timeout=window + 1)
+        cache.set(count_key, 1, timeout=window)
         count = 1
-    return count <= limit, window_start + window - now
+    started = cache.get(cache_key, now)
+    return count <= limit, max(1, int(started) + window - now)
 
 
 class RateLimitMiddleware:

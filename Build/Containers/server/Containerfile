@@ -1,17 +1,38 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# PANIC Server production image: unprivileged user, collected static assets, migrate-on-start
+# entrypoint, and a container HEALTHCHECK against /api/v1/health.
 FROM python:3.13-slim
 
-WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PANIC_SERVER_BIND=0.0.0.0:8210
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PANIC_SERVER_BIND=0.0.0.0:8210 \
+    PANIC_SQLITE_PATH=/data/panic.sqlite3 \
+    PANIC_STATIC_ROOT=/app/staticfiles
 
+RUN groupadd --system --gid 10001 panic \
+ && useradd --system --uid 10001 --gid panic --home-dir /app --shell /usr/sbin/nologin panic
+
+WORKDIR /app
 COPY pyproject.toml ./
 COPY Application/Common ./Application/Common
 COPY Application/Server ./Application/Server
+RUN pip install ./Application/Common "./Application/Server[postgres]"
 
-RUN pip install --no-cache-dir ./Application/Common ./Application/Server
-
-EXPOSE 8210
 WORKDIR /app/Application/Server
-CMD ["gunicorn", "panic_server.wsgi:application", "--bind", "0.0.0.0:8210", "--workers", "2", "--threads", "4"]
+RUN python -m django collectstatic --noinput --settings=panic_server.settings \
+ && rm -f /data/panic.sqlite3 \
+ && mkdir -p /data && chown -R panic:panic /data
+
+COPY --chmod=0755 Build/Containers/server/entrypoint.sh /usr/local/bin/panic-entrypoint
+
+USER panic:panic
+VOLUME ["/data"]
+EXPOSE 8210
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD python -c "import os,sys,urllib.request; p=os.environ['PANIC_SERVER_BIND'].rsplit(':',1)[1]; sys.exit(0 if urllib.request.urlopen(f'http://127.0.0.1:{p}/api/v1/health', timeout=4).status == 200 else 1)"
+
+ENTRYPOINT ["/usr/local/bin/panic-entrypoint"]
+CMD ["gunicorn"]

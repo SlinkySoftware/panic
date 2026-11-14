@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-14 — T-S4-01: Production Container & Compose Stack
+- `Containerfile`: unprivileged `panic:panic` (uid/gid 10001), `collectstatic` at build, `/data` volume (`PANIC_SQLITE_PATH=/data/panic.sqlite3`), `HEALTHCHECK` on `/api/v1/health`, installs the `postgres` extra (`psycopg[binary]`).
+- `entrypoint.sh`: `migrate --noinput` (`PANIC_MIGRATE_ON_START`), `panic_seed --if-empty` (`PANIC_SEED_ON_START=if-empty|never`), Gunicorn tuned by `PANIC_GUNICORN_WORKERS/THREADS/TIMEOUT`.
+- `STATIC_ROOT` (`PANIC_STATIC_ROOT`) with Django serving collected assets when `PANIC_SERVE_STATIC=true` and `DEBUG` is off.
+- `compose.yaml`: read-only root FS, named volumes, full `PANIC_*` pass-through, optional `postgres` profile (PostgreSQL 17 with health-gated startup). `.dockerignore` added.
+- Fix: `panic_server.state.STORE` is now built lazily (PEP 562) — `manage.py migrate` / `panic_seed` previously failed with a circular import when `store_db` was imported first.
+- Fix: rate-limit windows start at the client's first request (removes a window-boundary race).
+
 ## 2026-11-14 — T-S3-04: CSRF, Security Headers, Rate Limiting & Audit Filtering
 - `CsrfViewMiddleware` enforced on every state-changing request (all `@csrf_exempt` removed); `panic.js` `apiRequest` sends `X-CSRFToken` from the `panic_csrftoken` cookie / `<meta name="csrf-token">` and redirects to `/login` on `401`. API CSRF failures return `403 CSRF_FAILED` JSON.
 - `SecurityHeadersMiddleware`: `Content-Security-Policy` (override with `PANIC_CSP`), `X-Content-Type-Options`, `Referrer-Policy: same-origin`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`. Optional `PANIC_SECURE_SSL_REDIRECT`, `PANIC_HSTS_SECONDS`, `PANIC_SECURE_PROXY_SSL_HEADER`.
