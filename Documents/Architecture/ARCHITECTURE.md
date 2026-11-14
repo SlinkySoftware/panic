@@ -33,8 +33,10 @@ browser ──► corporate reverse proxy / LB ──► panic-web (nginx, zone 
   schemes, or streamed `.rdp` files (`Content-Type: application/x-rdp`).
 - **AR-1.4** **Explicit, bookmarkable UI URLs.** The SPA router owns `/`, `/dashboard`,
   `/dashboard/<uuid>`, `/dashboard/<uuid>/edit`, `/catalog`, `/lists`, `/sites`, `/teams`,
-  `/zones`, `/rbac`, `/settings`, `/profile`, `/audit` and `/login`. panic-web answers every
-  non-API, non-asset path with `index.html` (history-mode fallback). *(S6)*
+  `/zones`, `/settings`, `/settings/users`, `/settings/users/<id>`, `/settings/orphans`,
+  `/settings/client-ip`, `/profile`, `/audit` and `/login`. `/rbac` redirects to
+  `/settings/users`. panic-web answers every non-API, non-asset path with `index.html`
+  (history-mode fallback). *(S6)*
 - **AR-1.5** Web contains no Python. The image holds nginx, static files and a config template.
   Its only required runtime variable is `PANIC_SERVER_URL`, which is validated at start:
   scheme, host and port only, with no path, credentials or newlines. *(S6)*
@@ -52,9 +54,13 @@ browser ──► corporate reverse proxy / LB ──► panic-web (nginx, zone 
   files or CLI templates passes through `panic_common.launchers.sanitize_launch_param`.
 - **AR-2.3** **`.rdp` files are ephemeral.** They are generated in memory per request and
   streamed with `Cache-Control: no-store`. They are never written to disk.
-- **AR-2.4** **Zone reachability.** The caller's Security Zone comes **only** from the real client
-  IP (§5), matched against Zone CIDRs by longest prefix, then highest priority. There is no
-  simulator or override in any environment. *(S6)*
+- **AR-2.4** **Zone reachability.**
+  - The caller's Security Zone comes **only** from the real client IP (§5), matched against Zone
+    CIDRs by longest prefix, then highest priority. There is no simulator or override in any
+    environment.
+  - When the location is unknown (§5) or the IP matches no CIDR, the caller is in the built-in
+    **Default** zone (`zone-default`). Every request has exactly one zone. The Default zone
+    cannot be deleted or given CIDRs. *(S6)*
 - **AR-2.5** **Unified scope and same-scope lists.**
   - Catalog items, endpoint lists and dashboards share `ScopeType`.
   - A list may contain only items of its own scope that the editor can see (`SCOPE_MISMATCH`).
@@ -67,8 +73,13 @@ browser ──► corporate reverse proxy / LB ──► panic-web (nginx, zone 
   - Every read and write is filtered by `panic_common.visibility` (pure filter spec, translated by
     the repository).
   - A resource the caller cannot see is reported as `404 NOT_FOUND`, never `403`.
-  - Edits require `panic_common.rbac.can_edit` (scope permission, plus team membership or
-    ownership; see [`DATA_MODEL.md`](DATA_MODEL.md) §6). *(S6)*
+  - Edits require `panic_common.rbac.can_edit`: the scope permission, plus team membership or
+    ownership. Global Admins **cannot** edit other users' `PERSONAL` resources. See
+    [`DATA_MODEL.md`](DATA_MODEL.md) §6. *(S6)*
+  - **Orphans** are `TEAM` resources with no teams, or `PERSONAL` resources with no active
+    owner. They are visible only to Global Admins and are read-only for everyone. The only
+    actions are "assign to user" and delete, both admin-only and audited
+    ([ADR-0001](adr/0001-web-server-mongo-split.md) decision 10). *(S6)*
 - **AR-2.8** **Every endpoint declares its access.** Each DRF view declares one of `public`,
   `authenticated` or `admin` through a shared permission class. `tests/test_authz_matrix.py`
   walks every URL pattern and asserts anonymous, plain-user and admin outcomes. *(S6)*
@@ -76,7 +87,16 @@ browser ──► corporate reverse proxy / LB ──► panic-web (nginx, zone 
   - Only `GLOBAL_ADMIN` may start it. It is stored in the server-side session and changes only
     the identity used for visibility and permissions, never the zone.
   - Start and stop are audited. Every audit entry written while it is active records both users.
-  - While it is active, mutations are refused (`403 VIEW_AS_READ_ONLY`), pending owner confirmation. *(S6)*
+  - While it is active, every mutation except leaving View As is refused (`403 VIEW_AS_READ_ONLY`). *(S6)*
+- **AR-2.11** **Users and teams.**
+  - Users are managed on `/settings/users`. Team membership is set only on the user page
+    (`users.team_ids`).
+  - Users are disabled, never deleted, and disabled users cannot sign in.
+  - Effective permissions are the union of the manual grants (`permissions`) and the IdP-mapped
+    grants (`idp_permissions`, refreshed at each external sign-in).
+  - Sign-in never changes team membership.
+  - The last enabled `GLOBAL_ADMIN` (counting manual grants only) cannot be removed or
+    disabled. *(S6)*
 - **AR-2.10** **CSRF and cookies.**
   - Session cookies are `HttpOnly` and `SameSite=Lax`, and `Secure` in prod.
   - Every unsafe method needs `X-CSRFToken`, which matches the `panic_csrftoken` cookie.
@@ -134,20 +154,24 @@ The chain is: **user → corporate reverse proxy/LB → panic-web (nginx) → in
   1. `peer = REMOTE_ADDR`.
   2. If header trust is off (`PANIC_TRUST_PROXY_HEADERS=false`), the client is `peer` and its
      zone is resolved normally.
-  3. If `peer` is **not** trusted, the request is an *untrusted peer*. With
-     `PANIC_UNTRUSTED_PEER_POLICY=reject`, it gets `403 UNTRUSTED_PEER`, except `health` and
-     `version` from loopback. With `unzoned`, the client is `peer` and the request has no zone.
-     Headers are ignored either way.
+  3. If `peer` is **not** trusted, the request is an *untrusted peer* and its headers are
+     ignored.
+     - With `PANIC_UNTRUSTED_PEER_POLICY=default` (the default), the client IP is `peer`, the
+       location is unknown, and the zone is **Default**.
+     - With `reject`, it gets `403 UNTRUSTED_PEER`, except `health` and `version` from loopback.
   4. Otherwise the hops are the parsed entries of the configured header
      (`PANIC_PROXY_IP_HEADER`: `X-Forwarded-For` by default, or `Forwarded`, never both) followed
      by `peer`. Only the right-most `PANIC_XFF_MAX_HOPS` hops (default 16) are considered,
      and a header longer than `PANIC_XFF_MAX_BYTES` (default 4096) is truncated from the left.
   5. Walk right to left and skip trusted hops. The **first untrusted hop** is the client.
   6. If the walk reaches a token that is not an IP before finding an untrusted hop (`unknown`,
-     an obfuscated `Forwarded` identifier, garbage), it stops: the request is **unzoned** and the
-     client IP is the last trusted hop. Ports (`192.0.2.1:443`, `[2001:db8::1]:443`) and
+     an obfuscated `Forwarded` identifier, garbage), it stops. The location is unknown, so the
+     request gets the **Default** zone, and the client IP is recorded as the last trusted hop. Ports (`192.0.2.1:443`, `[2001:db8::1]:443`) and
      IPv4-mapped IPv6 are normalised. Tokens to the left of the client are never parsed for trust.
-  7. If every considered hop is trusted, the request is **unzoned** (decision `ALL_HOPS_TRUSTED`).
+  7. If every considered hop is trusted, the location is unknown and the request gets the
+     **Default** zone (decision `ALL_HOPS_TRUSTED`).
+  8. A resolved client IP that matches no zone CIDR also gets the **Default** zone
+     (`zone_source: DEFAULT`). Otherwise `zone_source` is `CIDR`.
 - **AR-5.4** The resolution and every hop's trust decision are recorded on the request context.
   `GET /api/v1/admin/client-ip` (admin only) returns them: raw header values, hops, decisions,
   resolved IP, zone and candidate zones. The resolved IP and zone go into the access log, not
@@ -161,7 +185,7 @@ The chain is: **user → corporate reverse proxy/LB → panic-web (nginx) → in
   - over-long headers and too many hops
   - repeated header lines
   - `Forwarded` parsing
-  - the `reject` / `unzoned` policies
+  - the `default` / `reject` policies, and the Default-zone fallback for every unknown-location case
   - the `ALL_HOPS_TRUSTED` case
 
 ## 6. API and data access

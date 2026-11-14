@@ -81,7 +81,8 @@ user ─► corporate reverse proxy / LB ─► panic-web (nginx; one or more pe
     * `<url>/` and `<url>/dashboard` — Resolve to the active user's effective **Default Dashboard** (`<url>/dashboard/<dash-uuid>`).
     * `<url>/dashboard/<dash-uuid>` — Specific dashboard in Locked (View) Mode, identified by a canonical UUIDv4 (`<dash-uuid>`).
     * `<url>/dashboard/<dash-uuid>/edit` — Specific dashboard in Unlocked (Edit) Mode.
-    * `<url>/catalog`, `<url>/lists`, `<url>/sites`, `<url>/teams`, `<url>/zones`, `<url>/rbac`, `<url>/settings`, `<url>/profile`, `<url>/audit`.
+    * `<url>/catalog`, `<url>/lists`, `<url>/sites`, `<url>/teams`, `<url>/zones`, `<url>/settings`, `<url>/profile`, `<url>/audit`.
+    * `<url>/settings/users` (users management), `<url>/settings/users/<user-id>` (edit one user), `<url>/settings/orphans` (orphaned resources), `<url>/settings/client-ip` (client-IP diagnostics). `<url>/rbac` redirects to `<url>/settings/users` (Stage 6).
 * **Default Dashboard Hierarchy (User Default vs. App-Wide Default Global Dashboard):**
   * **User Default Dashboard (`user.default_dashboard_id`):** Users can select their personal Default Dashboard from the list of dashboards accessible to them (`GLOBAL`, their `TEAM`s, or `PERSONAL`) via the dashboard header (`Set as My Default` / `Reset`), Dashboard Properties modal, `/profile`, or `/settings`.
   * **App-Wide System Setting — Default Global Dashboard (`system_settings.default_global_dashboard_id`):** Global Admins can configure the application-wide **Default Global Dashboard** (must be a `GLOBAL` scope dashboard) on `/settings` or in Dashboard Properties. Any user who has not set a personal override automatically inherits the Default Global Dashboard. The active Default Global Dashboard is protected against deletion, unpinning, and scope demotion.
@@ -136,6 +137,7 @@ Every Catalog Item supports one of four protocols with protocol-specific target 
   * Global Admins define named **Security Zones** (`name`, `description`, `priority`, and IPv4/IPv6 CIDR blocks).
   * On each request, PANIC resolves the connecting jump host's source IP against defined Zone CIDRs using longest-prefix match, breaking ties by highest `priority`.
   * The source IP is always the real client IP. PANIC walks the `X-Forwarded-For` chain from right to left, skipping only configured trusted proxies. There is no simulator or zone override in any environment (Stage 6).
+  * **Default zone (Stage 6):** A built-in zone named **Default** always exists. It has no CIDRs and cannot be deleted. Clients whose location is unknown are placed in it: the direct peer is not a trusted proxy, the forwarding chain is malformed or contains only trusted proxies, or the IP matches no zone CIDR. Catalog Items can include Default in their zone restrictions.
   * Includes an interactive **Test IP Address** diagnostic tool on `/zones`.
   * Global Admins also get a **client-IP diagnostics** view. It shows the raw forwarding headers, each hop, each trust decision, and the resolved IP and zone.
 * **Zone Reachability Filtering:**
@@ -144,16 +146,21 @@ Every Catalog Item supports one of four protocols with protocol-specific target 
 
 ### 4.5 Teams, In-App RBAC & Admin "View As"
 * **Teams (`/teams`):**
-  * Directory of operational teams (`code`, `name`, `description`, `members[]`) governing visibility of `TEAM`-scoped Catalog Items, Endpoint Lists, and Dashboards.
-* **In-App RBAC Permissions (`/rbac`):**
+  * Directory of operational teams (`code`, `name`, `description`) governing visibility of `TEAM`-scoped Catalog Items, Endpoint Lists, and Dashboards. Members are shown read-only; from Stage 6, membership is set only on each user's edit page.
+* **Users Management (`/settings/users`, Stage 6):**
+  * Global Admins list, search, create (pre-provision) and disable users. Users are never deleted, so the audit trail stays intact, and disabled users cannot sign in.
+  * The user edit page (`/settings/users/<user-id>`) sets display name, permission flags, **team membership**, and enabled/disabled. It also offers **View As** for that user.
+  * Permissions mapped from IdP groups are shown locked and refreshed at each external sign-in. Manual grants are kept separately and survive sign-in. Sign-in never changes team membership.
+* **In-App RBAC Permissions (managed on the users pages; `/rbac` redirects there in Stage 6):**
   * `GLOBAL_ADMIN` (*Global Admin*): Full administrative access to System Settings, Pre-Defined Sites, Teams, Security Zones, RBAC permissions, and all scopes; enables the **"View As"** switcher.
   * `CAN_ADD_GLOBAL` (*Can Add to Global Scope Items*): Create/edit `GLOBAL` Catalog Items, Endpoint Lists, and Dashboards.
   * `CAN_ADD_TEAM` (*Can Add Team Scope Items*): Create/edit `TEAM` Catalog Items, Endpoint Lists, and Dashboards for the user's teams.
-  * All authenticated users can create and manage `PERSONAL` Catalog Items, Endpoint Lists, and Dashboards.
+  * All authenticated users can create and manage their own `PERSONAL` Catalog Items, Endpoint Lists, and Dashboards. Nobody else can edit or delete them, not even Global Admins.
+* **Orphaned Resources (Stage 6):** A `TEAM` resource with no remaining teams (for example, after its team was deleted), or a `PERSONAL` resource with no enabled owner, is *orphaned*. Orphans are visible only to Global Admins and are read-only. An admin can only **assign** an orphan **to a user**, which makes it that user's `PERSONAL` resource, or **delete** it. Both actions are audited. `/settings/orphans` lists all orphans.
 * **Admin "View As" Perspective Switcher:**
   * Users with `GLOBAL_ADMIN` permission can preview the entire portal (dashboards, left-rail navigation, catalog items, and endpoint lists) from the perspective of any other user account via the top bar or `/rbac`, with a one-click **Exit View As** banner.
   * View As changes only the permissions and data perspective, never the Security Zone. It is stored in the admin's server-side session and audited.
-  * View As is read-only: mutations are refused while it is active (Stage 6, pending owner confirmation).
+  * View As is read-only: every mutation except leaving View As is refused while it is active (Stage 6).
 * **Identity (Stage 6):** Users are always identified by a real sign-in: the local bootstrap admin, OIDC, or LDAP. The Stage 1 RBAC / source-IP simulator is removed from every environment.
 
 ---
@@ -186,12 +193,12 @@ Every Catalog Item supports one of four protocols with protocol-specific target 
 
 ## 6. Core Data Model (`panic_common.models`)
 
-> Stage 6 persists these in MongoDB collections. Shapes, indexes, `version` and audit retention are in `Documents/Architecture/DATA_MODEL.md`. Team membership is held only in `UserAccount.team_ids` (`TeamDefinition.members` is derived), and new ids are UUIDv4.
+> Stage 6 persists these in MongoDB collections. Shapes, indexes, `version` and audit retention are in `Documents/Architecture/DATA_MODEL.md`. Team membership is held only in `UserAccount.team_ids`, set on the user edit page (`TeamDefinition.members` is removed). Users gain `idp_permissions` and `disabled`. Catalog items, lists and dashboards gain an `orphaned` flag. New ids are UUIDv4.
 
 * **`UserAccount`**: `id`, `username`, `display_name`, `default_remote_user`, `ssh_template`, `permissions` (`list[PermissionFlag]`), `team_ids`, `pinned_dashboard_ids`, `default_dashboard_id` (nullable UUID), `density` (`COMFORT`|`COMPACT`), `theme` (`DARK`|`LIGHT`), `unreachable_policy` (`HIDE`|`DIM`)
 * **`SystemSettings`**: `default_global_dashboard_id` (UUID referencing a `GLOBAL` dashboard), `updated_by`, `updated_at`
 * **`SiteDefinition`**: `id`, `code`, `name`, `description`, `created_at`
-* **`TeamDefinition`**: `id`, `code`, `name`, `description`, `members` (`list[str]`), `created_at`
+* **`TeamDefinition`**: `id`, `code`, `name`, `description`, `members` (`list[str]`; removed in Stage 6, see `UserAccount.team_ids`), `created_at`
 * **`SecurityZone`**: `id`, `name`, `description`, `priority`, `cidrs` (`list[str]`), `created_at`
 * **`CatalogItem`**: `id`, `title`, `description`, `protocol` (`WEB`|`SSH`|`RDP`|`LOCAL_APP`), `host`, `port` (nullable), `site`, `path_or_args`, `custom_uri`, `account_override`, `tags`, `normalized_key`, `scope` (`GLOBAL`|`TEAM`|`PERSONAL`), `team_ids`, `owner_usernames`, `zone_ids`, `created_by`, `created_at`
 * **`EndpointList`**: `id`, `title`, `description`, `scope` (`GLOBAL`|`TEAM`|`PERSONAL`), `team_ids`, `owner_usernames`, `item_ids` (ordered `list[str]` of same-scope `CatalogItem.id`s), `created_by`, `created_at`

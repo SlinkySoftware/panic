@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-11-14 — Stage 6 design: owner review incorporated (docs only)
+- ADR-0001 records the owner's answers.
+- New decisions:
+  - 10: orphaned resources are visible only to admins and read-only; the only actions are assign-to-user and delete.
+  - 11: a users management page (`/settings/users`, `/settings/users/<id>`) is the only place team membership is set. `/rbac` redirects there, users are disabled rather than deleted, and IdP-mapped permissions are kept separate from manual grants.
+  - 12: a built-in **Default** Security Zone for unknown client locations, replacing "unzoned".
+- Also decided:
+  - View As is read-only.
+  - Admins cannot edit other users' `PERSONAL` resources.
+  - There is no Stage 1–4 data migration or v1 import.
+  - `PANIC_UNTRUSTED_PEER_POLICY` is now `default` (the default) or `reject`.
+- `ARCHITECTURE.md`, `DATA_MODEL.md`, `API.md`, `SPEC.md` and `TASKS.md` are updated to match: new `orphaned`, `idp_permissions`, `disabled` and `builtin` fields; users and orphans endpoints; the `ORPHANED_RESOURCE` error; and `zone_source` in bootstrap and diagnostics.
+
 ## 2026-11-14 — Security hotfix: ADR-0001 findings F1–F3
 - F1: `POST /api/v1/rbac` (`update_user`, `create_user`) now requires `GLOBAL_ADMIN` on the signed-in user. Before this fix, any user could grant themselves Global Admin.
 - F2: `GET /api/v1/audit` is Global Admin only (otherwise `403`), and the portal snapshot's `audit_logs` is empty for non-admins.

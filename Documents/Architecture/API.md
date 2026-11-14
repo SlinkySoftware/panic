@@ -49,8 +49,9 @@ Envelope: `{"error_code": "<ErrorCode>", "detail": "<human text>", "fields": {"<
 | 401 | `UNAUTHENTICATED` | No/expired session, bad credentials on login |
 | 403 | `PERMISSION_DENIED` | Visible but not allowed (e.g. edit without rights, admin endpoint) |
 | 403 | `CSRF_FAILED` | Missing/invalid CSRF token |
-| 403 | `VIEW_AS_READ_ONLY` | Mutation while View As is active (pending owner confirmation) |
-| 403 | `UNTRUSTED_PEER` | Direct peer not in `PANIC_TRUSTED_PROXY_CIDRS` and policy `reject` |
+| 403 | `VIEW_AS_READ_ONLY` | Mutation while View As is active (anything except leaving View As) |
+| 403 | `ORPHANED_RESOURCE` | Edit attempted on an orphaned resource (only assign-to-user or delete, admin only) |
+| 403 | `UNTRUSTED_PEER` | Direct peer not in `PANIC_TRUSTED_PROXY_CIDRS` **and** `PANIC_UNTRUSTED_PEER_POLICY=reject`. With the default policy (`default`), the request proceeds in the Default zone instead. |
 | 404 | `NOT_FOUND` | Unknown **or invisible** resource; unknown path |
 | 409 | `VERSION_CONFLICT` | Stale `If-Match` (`current_version` extra) |
 | 409 | `DUPLICATE_CATALOG_ITEM` | Same `normalized_key` in a visible same-scope item; resend with `force_allow_duplicate: true` (`existing_item` summary extra) |
@@ -93,12 +94,14 @@ Called once per page load (and after sign-in / View As changes).
          "prefs": {"density": "COMFORT", "theme": "DARK", "unreachable_policy": "DIM"}},
   "view_as": null,                       // or {"id","username","display_name"} of the subject
   "permissions": {"global_admin": false, "can_add_global": false, "can_add_team": true, "can_view_as": false},
-  "client": {"ip": "198.51.100.23", "zone": {"id": "zone-…", "name": "Jump Hosts"}, "zoned": true},
+  "client": {"ip": "198.51.100.23", "zone": {"id": "zone-…", "name": "Jump Hosts"}, "zone_source": "CIDR"},
   "nav": {"dashboards": [{"id": "uuid", "title": "Network Ops", "default": true, "locked": true}]},
   "default_dashboard": {"id": "uuid", "source": "USER | SYSTEM_GLOBAL | FALLBACK"}
 }
 ```
 
+`client.zone` is always present. `zone_source` is `CIDR` for a matched zone, or `DEFAULT`
+when the location is unknown or no CIDR matched (zone `{"id": "zone-default", "name": "Default"}`).
 `me`/`permissions` describe the effective user; the real admin is in `real_user` (same shape as
 `me`) when `view_as` is set. `locked` = cannot be removed from the menu (always_display or app-wide
 default). `/` and `/dashboard` route client-side to `default_dashboard.id`.
@@ -202,21 +205,24 @@ Writes under `/me` act on the **real** signed-in user and are refused during Vie
 | `GET /api/v1/sites` | A | All sites `{id, code, name, description}` (small; for pickers) |
 | `POST /api/v1/sites` · `PATCH /api/v1/sites/{id}` · `DELETE /api/v1/sites/{id}` | G | Code unique (`400`); rename cascades to items; last site `409 PROTECTED_RESOURCE` |
 | `GET /api/v1/teams` | A | `{id, code, name, description}` (pickers) |
-| `GET /api/v1/teams/{id}/members?page=` | G | Paged user summaries |
-| `POST /api/v1/teams` · `PATCH /api/v1/teams/{id}` · `DELETE /api/v1/teams/{id}` | G | Delete `$pull`s the id from users; resources still referencing it are reported in the response (`{orphaned: {catalog: n, lists: n, dashboards: n}}`) |
-| `GET /api/v1/zones` | A | Non-admins: `{id, name}`; admins: `+ description, priority, cidrs, version` |
-| `POST /api/v1/zones` · `PATCH /api/v1/zones/{id}` · `DELETE /api/v1/zones/{id}` | G | CIDRs validated/canonicalised; delete `$pull`s from items' `zone_ids` (reported) |
-| `POST /api/v1/zones/test-ip` | G | `{"ip": "192.0.2.10"}` → `{resolution: {winning_zone, matched_cidr, candidates[]}, reachable_count, blocked_count}` |
-| `GET /api/v1/users?q=&permission=&team_id=&page=` | G | `{id, username, display_name, auth_source, permissions, team_ids, last_login_at, version}` |
-| `POST /api/v1/users` | G | Pre-provision `{username, display_name?, permissions, team_ids}` (no password; local sign-in stays bootstrap-admin only) |
-| `PATCH /api/v1/users/{id}` | G | `{permissions?, team_ids?}`; removing the last `GLOBAL_ADMIN` → `409 PROTECTED_RESOURCE` |
+| `GET /api/v1/teams/{id}/members?page=` | G | Paged user summaries. **Read-only**: membership is edited only through `PATCH /api/v1/users/{id}` |
+| `POST /api/v1/teams` · `PATCH /api/v1/teams/{id}` · `DELETE /api/v1/teams/{id}` | G | Team bodies have no `members`. Delete `$pull`s the id from users and resources, marks resources left with no teams as orphaned, and returns `200 {orphaned: {catalog: n, lists: n, dashboards: n}}` |
+| `GET /api/v1/zones` | A | Always includes the built-in Default zone (`builtin: true`). Non-admins get `{id, name, builtin}`; admins also get `description, priority, cidrs, version` |
+| `POST /api/v1/zones` · `PATCH /api/v1/zones/{id}` · `DELETE /api/v1/zones/{id}` | G | CIDRs are validated and canonicalised. Delete `$pull`s the zone from items' `zone_ids` (reported). For `zone-default`: delete gives `409 PROTECTED_RESOURCE`; renaming or adding CIDRs gives `400 VALIDATION_ERROR`; the description can be edited |
+| `POST /api/v1/zones/test-ip` | G | `{"ip": "192.0.2.10"}` → `{resolution: {winning_zone, zone_source, matched_cidr, candidates[]}, reachable_count, blocked_count}`. An unmatched IP resolves to Default |
+| `GET /api/v1/users?q=&permission=&team_id=&disabled=&page=` | G | Users management page (`/settings/users`): `{id, username, display_name, auth_source, permissions, idp_permissions, effective_permissions, team_ids, disabled, last_login_at, version}` |
+| `GET /api/v1/users/{id}` | G | User edit page (`/settings/users/<id>`): the row above plus `owned_counts {catalog, lists, dashboards}` |
+| `POST /api/v1/users` | G | Pre-provision `{username, display_name?, permissions, team_ids}`. No password: local sign-in stays bootstrap-admin only |
+| `PATCH /api/v1/users/{id}` | G | `{display_name?, permissions?, team_ids?, disabled?}`. **The only way to change team membership.** `idp_permissions` is read-only. Removing or disabling the last manual `GLOBAL_ADMIN` gives `409 PROTECTED_RESOURCE`. Disabling flushes the user's sessions and recomputes orphans |
+| `GET /api/v1/admin/orphans?kind=catalog\|list\|dashboard&q=&page=` | G | Orphaned resources (`/settings/orphans`): `{kind, id, title, scope, former_team_ids?, former_owners?, updated_at}` |
+| `POST /api/v1/admin/orphans/{kind}/{id}/assign` | G | `{"username": "jdoe"}` (must be enabled) → the resource now `PERSONAL` for that user, plus `dropped_item_ids` for lists. Audited. Deleting an orphan uses the normal `DELETE` endpoint (allowed for admins on orphans only) |
 | `PUT /api/v1/admin/view-as` | G (real user) | `{"user_id": "usr-…"}` → `200 bootstrap` payload for the new perspective; audited |
-| `DELETE /api/v1/admin/view-as` | signed-in admin | Exit View As → `200 bootstrap`; audited. Allowed during View As |
+| `DELETE /api/v1/admin/view-as` | signed-in admin | Exit View As → `200 bootstrap`; audited. The only mutation allowed during View As |
 | `GET /api/v1/settings` | A | `{default_global_dashboard: {id, title}, version}` |
 | `PATCH /api/v1/settings` | G | `{default_global_dashboard_id}` (must be GLOBAL) |
 | `GET /api/v1/audit?actor=&action=&target_type=&target_id=&q=&since=&until=&limit=&cursor=` | G | Keyset-paged entries (newest first), `limit` ≤ 200 |
 | `GET /api/v1/export?shared_only=` | G | Portable JSON (`schema_version: 2`), audited; attachment |
-| `GET /api/v1/admin/client-ip` | G | Trust-chain diagnostics (§6) |
+| `GET /api/v1/admin/client-ip` | G | Trust-chain diagnostics (§6), shown at `/settings/client-ip` |
 
 ### 4.8 Operations
 
@@ -261,15 +267,17 @@ The response headers `X-Client-IP` / `X-Security-Zone` are dropped (diagnostics 
 }
 ```
 
-`decision` ∈ `HEADERS_DISABLED`, `UNTRUSTED_PEER`, `NO_HEADER`, `FIRST_UNTRUSTED_HOP`,
-`ALL_HOPS_TRUSTED`, `MALFORMED_HOP`.
+`decision` is one of `HEADERS_DISABLED`, `UNTRUSTED_PEER`, `NO_HEADER`, `FIRST_UNTRUSTED_HOP`,
+`ALL_HOPS_TRUSTED` or `MALFORMED_HOP`. `UNTRUSTED_PEER` (with
+the `default` policy), `NO_HEADER` (a trusted peer sending no header), `ALL_HOPS_TRUSTED` and `MALFORMED_HOP` mean the location is unknown: `zone`
+is Default and `zone_source` is `DEFAULT`. The response includes `"zone_source"` next to `zone`.
 
 ## 7. Rate limits
 
 Mongo-backed fixed windows (AR-4.6), keyed by resolved client IP (and username for login):
 `PANIC_RATE_LIMIT_LOGIN` (default `10/60` per IP, `5/60` per username via
 `PANIC_RATE_LIMIT_LOGIN_USER`), `PANIC_RATE_LIMIT_API` (`300/60` per IP, unsafe methods only).
-Exceeded → `429 RATE_LIMITED` + `Retry-After`. Unzoned/untrusted callers share the peer's bucket.
+Exceeded → `429 RATE_LIMITED` + `Retry-After`. Callers whose location is unknown share the bucket of the IP recorded for them (peer or last trusted hop).
 
 ## 8. Payload budgets (uncompressed JSON, reference dataset)
 

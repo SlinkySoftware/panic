@@ -28,9 +28,10 @@ There is no full-state load. Every repository call is scoped to what one screen 
 
 ## 3. Conventions (all collections)
 
-- **`_id`** is a string. Existing ids (`cat-…`, `list-…`, `usr-…`, dashboard UUIDv4s) are kept on
-  import. **Changed in Stage 6:** new documents get a UUIDv4 string id (the old 6-hex-digit suffix
-  has a ~50 % collision chance at 5,000 items). The API exposes `_id` as `id`.
+- **`_id`** is a string: UUIDv4 for every new document. The Stage 1–4 6-hex-digit suffixes had
+  about a 50 % collision chance at 5,000 items. Imports and the demo fixtures keep the ids they
+  carry. Exceptions are the fixed ids `system` (settings) and `zone-default` (Default zone). The
+  API exposes `_id` as `id`.
 - **Timestamps** are BSON dates (UTC): `created_at`, `updated_at`; the API renders them as RFC 3339.
 - **`created_by` / `updated_by`**: usernames (the real signed-in user, never a View As subject).
 - **`version`** (`int`, starts at `1`) on every mutable document. Every write is
@@ -54,8 +55,10 @@ There is no full-state load. Every repository call is scoped to what one screen 
   "password_hash": "pbkdf2_sha256$…",            // LOCAL only; never leaves the repository
   "default_remote_user": "jdoe",
   "ssh_template": "ssh {user}@{host} -p {port} {flags}",
-  "permissions": ["CAN_ADD_TEAM"],
-  "team_ids": ["team-…"],                         // single source of truth for membership (§4.3)
+  "permissions": ["CAN_ADD_TEAM"],                // manual grants (users page)
+  "idp_permissions": ["CAN_ADD_GLOBAL"],          // from IdP group mapping, rewritten at each external sign-in
+  "team_ids": ["team-…"],                         // single source of truth for membership, set only on the users page (§4.3)
+  "disabled": false,                              // disabled users cannot sign in; users are never deleted
   "pinned_dashboard_ids": ["<uuid>"],
   "default_dashboard_id": "<uuid> | null",
   "prefs": {"density": "COMFORT", "theme": "DARK", "unreachable_policy": "DIM"},
@@ -63,7 +66,12 @@ There is no full-state load. Every repository call is scoped to what one screen 
 }
 ```
 
-Indexes: `{username: 1}` unique · `{team_ids: 1}` · `{permissions: 1}` · `{search_keys: 1}` (§4.10).
+Indexes: `{username: 1}` unique · `{team_ids: 1}` · `{permissions: 1}` · `{disabled: 1}` · `{search_keys: 1}` (§4.10).
+
+Effective permissions are `permissions ∪ idp_permissions` (`panic_common.rbac.effective_permissions`).
+Removing or disabling the last user with a manual `GLOBAL_ADMIN` grant is refused
+(`409 PROTECTED_RESOURCE`). Disabling a user, or enabling them again, recomputes `orphaned` on
+the `PERSONAL` resources they own (§5.1).
 
 ### 4.2 `sites`
 
@@ -77,13 +85,25 @@ referencing items with one `update_many` (as today).
 Indexes: `{code: 1}` unique.
 
 **Changed in Stage 6:** `TeamDefinition.members` is no longer stored. Membership lives only in
-`users.team_ids`; a team's members are `users.find({team_ids: <id>})`. Stages 1–4 kept both lists
-in step by hand. Exports still write `members` (derived) and imports turn it into `team_ids`.
+`users.team_ids` and is edited only on the user page (`/settings/users/<id>`). A team's members
+are `users.find({team_ids: <id>})`, shown read-only on `/teams`. External sign-in never changes
+team membership: the IdP group → team mapping is removed.
+
+Deleting a team does three things:
+- `$pull`s its id from `users.team_ids` and from resources' `team_ids`.
+- Marks `TEAM` resources left with no teams as `orphaned` (§5.1).
+- Reports how many resources it orphaned.
 
 ### 4.4 `zones` (Security Zones)
 
-`{_id, name, description, priority, cidrs: ["192.0.2.0/24", "2001:db8::/48"], created_at, updated_at, version}`.
+`{_id, name, description, priority, cidrs: ["192.0.2.0/24", "2001:db8::/48"], builtin?, created_at, updated_at, version}`.
 CIDRs are canonicalised by `panic_common.zones.validate_cidr_list`. Indexes: `{name: 1}` unique.
+
+**Default zone.** `{_id: "zone-default", name: "Default", builtin: true, cidrs: []}` is created by
+`panic_migrate` (step 1) and always exists. It cannot be deleted, renamed or given CIDRs; only its
+`description` can be edited. A request whose client location is unknown is placed in it
+([`ARCHITECTURE.md`](ARCHITECTURE.md) §5, AR-5.3). The same applies to an IP that matches no
+CIDR. Items list it in `zone_ids` like any other zone. `zone_ids: []` ("All Zones") includes it.
 Zones are few (tens) and every zoned request needs all of them, so the repository caches the
 zone set per process for `PANIC_ZONE_CACHE_TTL_S` (default 10 s) and invalidates its own cache on
 writes. Longest-prefix matching stays in `panic_common.zones`.
@@ -239,9 +259,30 @@ The repository translates it into one `$or` for `catalog_items`, `endpoint_lists
 `panic_common.rbac.is_visible_in_scope` stays the single in-memory definition; a test runs both
 against the same generated documents (real Mongo) and requires identical results.
 
-**Changed in Stage 6 (owner to confirm):** a `TEAM` resource with no `team_ids`, or a `PERSONAL`
-resource with no `owner_usernames`, is no longer visible to everyone; only Global Admins see such
-orphans (the API never creates them; they can only come from old imports).
+Normal queries also add `{"orphaned": {"$ne": true}}`. Global Admins get a second branch
+`{"orphaned": true}` (read-only, §5.1).
+
+### 5.1 Orphaned resources (owner decision, ADR-0001 decision 10)
+
+- **Definition:**
+  - a `TEAM` catalog item, list or dashboard with no `team_ids`, or
+  - a `PERSONAL` one whose `owner_usernames` holds no enabled user.
+- **Storage:** catalog items, lists and dashboards carry a denormalised `orphaned: bool`, indexed
+  `{orphaned: 1, scope: 1}`, so that orphan checks are indexed queries rather than joins. It is
+  recomputed by the service layer when:
+  - a team is deleted
+  - a user is disabled or enabled
+  - a resource's scope, teams or owners change
+  - `panic_migrate` runs a consistency step
+- **Visibility:** orphans are visible only to Global Admins, with an "Orphaned" badge. They are
+  read-only for everyone: `can_edit` is always false.
+- **Actions** (admin only, audited):
+  - **Assign to user** (`POST /api/v1/admin/orphans/{kind}/{id}/assign`): sets `scope=PERSONAL`,
+    `owner_usernames=[<enabled user>]`, `team_ids=[]` and `orphaned=false`. A list keeps only the
+    items that are that user's `PERSONAL` items; the dropped ids are reported. A dashboard keeps
+    its widgets, and those the user cannot see render as placeholders.
+  - **Delete** (the normal `DELETE`, with the same cascades as any delete).
+- The API never creates orphans directly: create and edit require teams or owners.
 
 ## 6. Edit rights
 
@@ -252,17 +293,20 @@ checked only the scope permission, so e.g. any user could edit another user's `P
 |---|---|---|
 | `GLOBAL` | `CAN_ADD_GLOBAL` | `CAN_ADD_GLOBAL` |
 | `TEAM` | `CAN_ADD_TEAM` and member of every chosen team (Global Admin: any team) | `CAN_ADD_TEAM` and member of at least one of the resource's teams, before and after the change (Global Admin: any) |
-| `PERSONAL` | everyone (owner = self) | an owner (Global Admin: any, for clean-up) |
+| `PERSONAL` | everyone (owner = self) | an owner only. **Global Admins cannot edit or delete other users' personal resources** (owner decision). |
+| orphan (§5.1) | n/a | nobody. Global Admins may only assign to a user or delete. |
 
-A resource that is not visible is reported as `404 NOT_FOUND`, never `403`.
+A resource that is not visible is reported as `404 NOT_FOUND`, never `403`. Visible but not
+editable is `403 PERMISSION_DENIED`. A visible orphan is `403 ORPHANED_RESOURCE`.
 
 ## 7. Export / import
 
 `manage.py panic_export` / `panic_import` and `GET /api/v1/export` keep the portable JSON format
-(`format: panic-export`). Stage 6 writes `schema_version: 2` (adds `version`, `auth_source`, RFC 3339
-timestamps; `teams[].members` derived from `users.team_ids`) and still imports `schema_version: 1`
-files, which is the upgrade path from a Stage 1–4 SQLite/PostgreSQL install. Password hashes and
-sessions are never exported.
+(`format: panic-export`, `schema_version: 2`). It is used for backup and for provisioning shared
+configuration between environments. There is **no** import of Stage 1–4 (`schema_version: 1`)
+files and no data migration from SQL, because PANIC has no existing deployments (owner
+decision). Users export with `team_ids`, `permissions`, `idp_permissions` and `disabled`.
+Password hashes, sessions, rate limits and the audit log are never exported.
 
 ## 8. Domain enums (unchanged)
 
