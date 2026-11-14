@@ -210,3 +210,11 @@ LOGGING = logging_config(
     env_str("PANIC_LOG_LEVEL", "INFO").upper(),
     env_str("PANIC_LOG_FORMAT", "json").lower(),
 )
+
+# ---------------------------------------------------------------- MongoDB (Stage 6, T-S6-02)
+# panic_server.store is the only package that opens this (AR-4.1); see DATA_MODEL.md §2.
+PANIC_MONGO_URI = env_str("PANIC_MONGO_URI", "")
+PANIC_ZONE_CACHE_TTL_S = env_int("PANIC_ZONE_CACHE_TTL_S", 10)
+PANIC_AUDIT_RETENTION_DAYS = env_int("PANIC_AUDIT_RETENTION_DAYS", 365)
+# Test-only override so the test suite never touches a dev/prod database (see tests/conftest.py).
+PANIC_TEST_MONGO_URI = env_str("PANIC_TEST_MONGO_URI", "")

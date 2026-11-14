@@ -134,6 +134,18 @@ Permissions and team memberships are re-synchronised on every external sign-in.
 | `PANIC_RATE_LIMIT_API` | `300/60` | `count/seconds` for state-changing `/api/*` requests. |
 | `PANIC_CACHE_URL` | *(local memory)* | `redis://…` shared cache for rate limits across workers/nodes (install the `redis` extra). |
 
+## MongoDB (Stage 6)
+
+See [`DATA_MODEL.md`](../Architecture/DATA_MODEL.md) §2. `panic_server.store` is the only package
+that opens a connection.
+
+| Variable | Default | Description |
+|---|---|---|
+| `PANIC_MONGO_URI` | *(empty; required)* | `mongodb://` / `mongodb+srv://` URI. Replica set, TLS, `authSource`, read preference and timeouts go in the URI; the database is the URI path component (default `panic`). Use `PANIC_MONGO_URI_FILE` to keep credentials out of the environment. |
+| `PANIC_ZONE_CACHE_TTL_S` | `10` | How long the repository caches the full Security Zone set per process. |
+| `PANIC_AUDIT_RETENTION_DAYS` | `365` | `audit_log` TTL, in days. `0` disables expiry (no TTL index). |
+| `PANIC_TEST_MONGO_URI` | *(empty)* | Test-only override so `pytest` never touches a dev/prod database; falls back to `PANIC_MONGO_URI`, then the local dev-mongo container. |
+
 ## Reserved
 
 `PANIC_CATALOG_MODERATION_MODE` appears in `.env.example` but is not

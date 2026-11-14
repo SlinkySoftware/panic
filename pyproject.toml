@@ -71,6 +71,7 @@ addopts = "-ra --strict-markers"
 filterwarnings = ["ignore::DeprecationWarning:ldap3.*"]
 DJANGO_SETTINGS_MODULE = "panic_server.settings"
 django_find_project = false
+markers = ["mongo: requires a MongoDB connection"]
 
 # ---------------------------------------------------------------- import-linter
 [tool.importlinter]
@@ -95,8 +96,6 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
-# T-S6-02 must add `ignore_imports = ["panic_server.store.** -> pymongo", "... -> bson"]`
-# once panic_server.store exists; an unmatched ignore_imports pattern fails import-linter today.
 name = "AR-4.1: Only the store imports pymongo/bson"
 type = "forbidden"
 source_modules = ["panic_server"]
@@ -104,3 +103,8 @@ forbidden_modules = [
     "pymongo",
     "bson",
 ]
+ignore_imports = [
+    "panic_server.store.** -> pymongo",
+    "panic_server.store.** -> bson",
+]
+allow_indirect_imports = true

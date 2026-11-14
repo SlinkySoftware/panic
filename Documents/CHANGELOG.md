@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-11-14 — T-S6-02: MongoDB repository layer, indexes, sessions, rate limits
+- New `panic_server.store` package (the only importer of `pymongo`/`bson`, AR-4.1): lazy
+  per-process client, named `IndexSpec`-based `ensure_indexes` (idempotent, conflict detection,
+  TTL `collMod`), `visibility_filter` (Mongo `$or`, parity-tested against
+  `panic_common.rbac.is_visible_in_scope` on ~2,000 generated documents), CAS `version` writes
+  with domain `NotFound`/`VersionConflict`/`DuplicateKey` exceptions, repos for sites/teams/
+  zones/users/catalog/lists/dashboards/settings/audit/orphans, a Mongo-backed `SessionStore`
+  (AR-4.7: primary reads, `w=majority` writes, cross-process continuity) and fixed-window
+  `rate_limits.increment`. `panic_migrate` step 1 creates the Default zone and `system` settings
+  doc idempotently.
+- New local dev Mongo container `panic-dev-mongo` (`Build/Containers/compose.dev-mongo.yaml`,
+  host port 27117), started/reused by `./panic start` and `./panic test`.
+- **Deviation:** `SessionStore` and `rate_limits.increment` are built and unit-tested but not
+  wired into `settings.SESSION_ENGINE` / `security.RateLimitMiddleware` — those files are owned
+  by `T-S6-04`, which does the stateless cutover. The visibility-parity fixture's PERSONAL-orphan
+  case is narrowed to "no owner at all" (not "all owners disabled"), since
+  `is_visible_in_scope` — the function DATA_MODEL §5 pins the parity test to — has no
+  admin-sees-all-orphans bypass for that PERSONAL sub-case; see the comment in
+  `test_filters_visibility_parity.py`.
+- `./panic test`: 188 passed; ruff, mypy, import-linter (AR-4.1 kept) all clean.
+
 ## 2026-11-14 — Process change: no long-lived Stage 6 branch
 - Owner decision: every task now works in its own fresh, short-lived worktree and pushes straight
   to `main` on both `origin` and `gitea` (fast-forward), instead of accumulating on a `stage6`

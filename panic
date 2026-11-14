@@ -50,6 +50,30 @@ ensure_venv() {
     fi
 }
 
+#: One dev-only MongoDB container, shared by ``start``/``test``/``load`` (T-S6-02). Never stopped
+#: by this script so it survives across those runs; `docker compose ... down` to remove it.
+DEV_MONGO_COMPOSE="$ROOT/Build/Containers/compose.dev-mongo.yaml"
+DEV_MONGO_CONTAINER="panic-dev-mongo"
+DEV_MONGO_PORT=27117
+
+ensure_dev_mongo() {
+    if ! docker ps --filter "name=^${DEV_MONGO_CONTAINER}\$" --filter "status=running" -q | grep -q .; then
+        docker compose -f "$DEV_MONGO_COMPOSE" up -d >/dev/null 2>&1 \
+            || die "could not start $DEV_MONGO_CONTAINER (is Docker running?)"
+        changed "$DEV_MONGO_CONTAINER" "started"
+    else
+        ok "$DEV_MONGO_CONTAINER"
+    fi
+    local waited=0
+    while ! docker exec "$DEV_MONGO_CONTAINER" mongosh --quiet --eval "db.runCommand('ping')" >/dev/null 2>&1; do
+        waited=$((waited + 1))
+        if [[ $waited -gt 30 ]]; then
+            die "$DEV_MONGO_CONTAINER did not become ready on 127.0.0.1:$DEV_MONGO_PORT within 15s"
+        fi
+        sleep 0.5
+    done
+}
+
 cmd_setup() {
     echo "Setting up PANIC workspace..."
     ensure_venv
@@ -60,6 +84,7 @@ cmd_setup() {
 cmd_start() {
     load_env
     ensure_venv
+    ensure_dev_mongo
     if [[ -f "$PIDS/server.pid" ]] && kill -0 "$(cat "$PIDS/server.pid")" 2>/dev/null; then
         ok "panic-server" "already running (pid $(cat "$PIDS/server.pid"), http://$SERVER_BIND)"
         return
@@ -109,11 +134,14 @@ cmd_status() {
 }
 
 cmd_test() {
+    load_env
     ensure_venv
     local mode="${1:-all}"
     shift || true
     export PYTHONPATH="$ROOT/Application/Common:$ROOT/Application/Server"
     if [[ "$mode" == "python" || "$mode" == "all" ]]; then
+        ensure_dev_mongo
+        export PANIC_TEST_MONGO_URI="${PANIC_TEST_MONGO_URI:-mongodb://127.0.0.1:${DEV_MONGO_PORT}/}"
         "$VENV/bin/pytest" "$ROOT/Application/Common/tests" "$ROOT/Application/Server/tests" "$@"
     fi
     if [[ "$mode" == "lint" || "$mode" == "all" ]]; then
