@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+FROM python:3.13-slim
+
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PANIC_SERVER_BIND=0.0.0.0:8210
+
+COPY pyproject.toml ./
+COPY Application/Common ./Application/Common
+COPY Application/Server ./Application/Server
+
+RUN pip install --no-cache-dir ./Application/Common ./Application/Server
+
+EXPOSE 8210
+WORKDIR /app/Application/Server
+CMD ["gunicorn", "panic_server.wsgi:application", "--bind", "0.0.0.0:8210", "--workers", "2", "--threads", "4"]

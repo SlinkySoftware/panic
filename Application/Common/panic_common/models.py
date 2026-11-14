@@ -1,0 +1,171 @@
+"""Pydantic v2 conceptual data model for PANIC Stage 1."""
+
+from __future__ import annotations
+
+from enum import StrEnum
+from typing import Any
+
+from pydantic import BaseModel, Field
+
+
+class Protocol(StrEnum):
+    WEB = "WEB"
+    SSH = "SSH"
+    RDP = "RDP"
+    LOCAL_APP = "LOCAL_APP"
+
+
+class ScopeType(StrEnum):
+    GLOBAL = "GLOBAL"
+    TEAM = "TEAM"
+    PERSONAL = "PERSONAL"
+
+
+class PermissionFlag(StrEnum):
+    GLOBAL_ADMIN = "GLOBAL_ADMIN"
+    CAN_ADD_GLOBAL = "CAN_ADD_GLOBAL"
+    CAN_ADD_TEAM = "CAN_ADD_TEAM"
+
+
+class WidgetType(StrEnum):
+    HOST = "HOST"
+    LIST = "LIST"
+
+
+class DensityMode(StrEnum):
+    COMFORT = "COMFORT"
+    COMPACT = "COMPACT"
+
+
+class ThemeMode(StrEnum):
+    DARK = "DARK"
+    LIGHT = "LIGHT"
+
+
+class UnreachablePolicy(StrEnum):
+    HIDE = "HIDE"
+    DIM = "DIM"
+
+
+class SecurityZone(BaseModel):
+    id: str
+    name: str
+    description: str
+    priority: int = 100
+    cidrs: list[str] = Field(default_factory=list)
+    created_at: str = "2026-11-01T00:00:00Z"
+
+
+class SiteDefinition(BaseModel):
+    id: str
+    code: str
+    name: str
+    description: str = ""
+    created_at: str = "2026-11-01T00:00:00Z"
+
+
+class TeamDefinition(BaseModel):
+    id: str
+    name: str
+    code: str
+    description: str = ""
+    members: list[str] = Field(default_factory=list)
+    created_at: str = "2026-11-01T00:00:00Z"
+
+
+class CatalogItem(BaseModel):
+    id: str
+    title: str
+    description: str = ""
+    protocol: Protocol
+    host: str
+    port: int | None = None
+    site: str = "2SYA"
+    path_or_args: str = ""
+    custom_uri: str = ""
+    account_override: str = ""
+    tags: list[str] = Field(default_factory=list)
+    normalized_key: str
+    scope: ScopeType = ScopeType.GLOBAL
+    team_ids: list[str] = Field(default_factory=list)
+    owner_usernames: list[str] = Field(default_factory=list)
+    zone_ids: list[str] = Field(default_factory=list)
+    created_by: str = "joperator"
+    created_at: str = "2026-11-01T09:00:00Z"
+
+
+class EndpointList(BaseModel):
+    id: str
+    title: str
+    description: str = ""
+    scope: ScopeType = ScopeType.GLOBAL
+    team_ids: list[str] = Field(default_factory=list)
+    owner_usernames: list[str] = Field(default_factory=list)
+    item_ids: list[str] = Field(default_factory=list)
+    created_by: str = "joperator"
+    created_at: str = "2026-11-01T09:00:00Z"
+
+
+class DashboardWidget(BaseModel):
+    id: str
+    dashboard_id: str
+    widget_type: WidgetType
+    title: str = ""
+    grid_x: int = 1
+    grid_y: int = 1
+    grid_w: int = 4
+    grid_h: int = 1
+    catalog_item_id: str | None = None
+    list_id: str | None = None
+
+
+class Dashboard(BaseModel):
+    id: str
+    title: str
+    description: str = ""
+    scope: ScopeType = ScopeType.GLOBAL
+    team_ids: list[str] = Field(default_factory=list)
+    owner_usernames: list[str] = Field(default_factory=list)
+    always_display: bool = False
+    sort_order: int = 0
+    widgets: list[DashboardWidget] = Field(default_factory=list)
+    created_by: str = "joperator"
+
+
+class UserAccount(BaseModel):
+    id: str
+    username: str
+    display_name: str
+    default_remote_user: str
+    ssh_template: str = "ssh {user}@{host} -p {port} {flags}"
+    permissions: list[PermissionFlag] = Field(default_factory=list)
+    team_ids: list[str] = Field(default_factory=list)
+    pinned_dashboard_ids: list[str] = Field(default_factory=list)
+    default_dashboard_id: str | None = None
+    density: DensityMode = DensityMode.COMFORT
+    theme: ThemeMode = ThemeMode.DARK
+    unreachable_policy: UnreachablePolicy = UnreachablePolicy.DIM
+
+
+class SystemSettings(BaseModel):
+    default_global_dashboard_id: str
+    updated_by: str = "joperator"
+    updated_at: str = "2026-11-01T00:00:00Z"
+
+
+class SimulationState(BaseModel):
+    simulated_ip: str = "10.10.50.14"
+    override_zone_id: str | None = None
+    active_user_id: str = "usr-admin"
+    view_as_user_id: str | None = None
+
+
+class AuditLogEntry(BaseModel):
+    id: str
+    actor_username: str
+    action: str
+    target_type: str
+    target_id: str
+    summary: str
+    details: dict[str, Any] = Field(default_factory=dict)
+    created_at: str

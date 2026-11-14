@@ -1,0 +1,15 @@
+[project]
+name = "panic-common"
+version = "0.1.0"
+description = "PANIC common data model, normalization/hygiene engine, CIDR zone resolver, and launcher interpolators (pure library, no I/O)"
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic>=2.10.0,<3",
+]
+
+[build-system]
+requires = ["hatchling>=1.24.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["panic_common"]

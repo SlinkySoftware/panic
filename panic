@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+# PANIC dev control script (aligned with reference-app control script conventions).
+#
+#   ./panic setup                         idempotent venv + editable package setup + .env
+#   ./panic start|stop|restart [--prod]
+#   ./panic status
+#   ./panic test [python|lint|all] [pytest args...]
+#   ./panic logs
+#   ./panic manage <django manage.py args...>
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+cd "$ROOT"
+
+VENV="$ROOT/.venv"
+RUN="$ROOT/.run"
+PIDS="$RUN/pids"
+LOGS="$RUN/logs"
+SERVER_DIR="$ROOT/Application/Server"
+
+if [[ -t 1 ]]; then C_OK=$'\e[32m'; C_WARN=$'\e[33m'; C_ERR=$'\e[31m'; C_DIM=$'\e[2m'; C_RST=$'\e[0m'
+else C_OK=""; C_WARN=""; C_ERR=""; C_DIM=""; C_RST=""; fi
+report() { printf '  %-34s %s%s%s\n' "$1" "$3" "$2" "$C_RST"; }
+ok()      { report "$1" "${2:-already OK}" "$C_OK"; }
+changed() { report "$1" "$2" "$C_WARN"; }
+die()     { echo "${C_ERR}error:${C_RST} $*" >&2; exit 1; }
+
+load_env() {
+    if [[ -f "$ROOT/.env" ]]; then
+        set -a
+        # shellcheck disable=SC1091
+        source "$ROOT/.env"
+        set +a
+    fi
+    SERVER_BIND="${PANIC_SERVER_BIND:-0.0.0.0:8120}"
+}
+
+ensure_venv() {
+    mkdir -p "$PIDS" "$LOGS"
+    if [[ ! -x "$VENV/bin/python" ]]; then
+        uv venv "$VENV"
+        uv pip install --python "$VENV/bin/python" -e "$ROOT/Application/Common" -e "$ROOT/Application/Server" >/dev/null 2>&1
+        changed ".venv" "initialized"
+    else
+        ok ".venv"
+    fi
+    if [[ ! -f "$ROOT/.env" && -f "$ROOT/.env.example" ]]; then
+        cp "$ROOT/.env.example" "$ROOT/.env"
+        changed ".env" "created from .env.example"
+    fi
+}
+
+cmd_setup() {
+    echo "Setting up PANIC workspace..."
+    ensure_venv
+    uv pip install --python "$VENV/bin/python" --no-deps -e "$ROOT/Application/Common" -e "$ROOT/Application/Server" >/dev/null 2>&1
+    ok "editable packages" "panic-common, panic-server"
+}
+
+cmd_start() {
+    load_env
+    ensure_venv
+    if [[ -f "$PIDS/server.pid" ]] && kill -0 "$(cat "$PIDS/server.pid")" 2>/dev/null; then
+        ok "panic-server" "already running (pid $(cat "$PIDS/server.pid"), http://$SERVER_BIND)"
+        return
+    fi
+    (
+        cd "$SERVER_DIR"
+        nohup "$VENV/bin/python" manage.py runserver "$SERVER_BIND" --noreload >"$LOGS/server.log" 2>&1 &
+        echo $! >"$PIDS/server.pid"
+    )
+    sleep 1
+    if [[ -f "$PIDS/server.pid" ]] && kill -0 "$(cat "$PIDS/server.pid")" 2>/dev/null; then
+        changed "panic-server" "started (pid $(cat "$PIDS/server.pid"), http://$SERVER_BIND)"
+    else
+        cat "$LOGS/server.log" >&2 || true
+        die "panic-server failed to start"
+    fi
+}
+
+cmd_stop() {
+    if [[ -f "$PIDS/server.pid" ]]; then
+        local pid
+        pid="$(cat "$PIDS/server.pid")"
+        if kill -0 "$pid" 2>/dev/null; then
+            kill "$pid" 2>/dev/null || true
+            sleep 0.5
+            kill -9 "$pid" 2>/dev/null || true
+            changed "panic-server" "stopped (pid $pid)"
+        else
+            ok "panic-server" "not running"
+        fi
+        rm -f "$PIDS/server.pid"
+    else
+        ok "panic-server" "not running"
+    fi
+}
+
+cmd_status() {
+    load_env
+    if [[ -f "$PIDS/server.pid" ]] && kill -0 "$(cat "$PIDS/server.pid")" 2>/dev/null; then
+        ok "panic-server" "running (pid $(cat "$PIDS/server.pid"), http://$SERVER_BIND)"
+    else
+        report "panic-server" "stopped" "$C_DIM"
+    fi
+}
+
+cmd_test() {
+    ensure_venv
+    local mode="${1:-all}"
+    shift || true
+    export PYTHONPATH="$ROOT/Application/Common:$ROOT/Application/Server"
+    if [[ "$mode" == "python" || "$mode" == "all" ]]; then
+        "$VENV/bin/pytest" "$ROOT/Application/Common/tests" "$ROOT/Application/Server/tests" "$@"
+    fi
+    if [[ "$mode" == "lint" || "$mode" == "all" ]]; then
+        "$VENV/bin/ruff" check "$ROOT/Application/Common" "$ROOT/Application/Server"
+        "$VENV/bin/mypy" "$ROOT/Application/Common/panic_common" "$ROOT/Application/Server/panic_server"
+        "$VENV/bin/lint-imports"
+    fi
+}
+
+case "${1:-help}" in
+    setup)   cmd_setup ;;
+    start)   cmd_start ;;
+    stop)    cmd_stop ;;
+    restart) cmd_stop; cmd_start ;;
+    status)  cmd_status ;;
+    test)    shift; cmd_test "$@" ;;
+    lint)    cmd_test lint ;;
+    logs)    tail -n 100 -f "$LOGS/server.log" ;;
+    manage)  shift; ensure_venv; (cd "$SERVER_DIR" && "$VENV/bin/python" manage.py "$@") ;;
+    *)       echo "Usage: ./panic {setup|start|stop|restart|status|test|lint|logs|manage}" ;;
+esac

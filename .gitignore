@@ -1,0 +1,54 @@
+# Environment & secrets (AR-3.1)
+.env
+.env.*
+!.env.example
+*.env.local
+*.local.conf
+*.pem
+*.key
+secrets/
+Build/Containers/*override*.y*ml
+Build/Containers/secrets/
+
+# Toolchain & runtime state (managed by ./panic)
+.tools/
+.venv/
+.run/
+Build/Work/
+Build/Containers/images/
+
+# Python bytecode, packaging & test/linter caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.import_linter_cache/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.egg-info/
+dist/
+build/
+
+# Local databases & runtime data
+*.sqlite3
+*.sqlite3-*
+/data/
+/.dev-data/
+
+# Agent worktrees, editors & OS metadata
+.claude/worktrees/
+.worktrees/
+.cache/
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+
+# Local scratch notes
+appidea.txt

@@ -1,0 +1,83 @@
+[project]
+name = "panic-workspace"
+version = "0.1.0"
+description = "PANIC uv workspace root (Portal for Accessing Networks, Infrastructure, and Compute)"
+requires-python = ">=3.13"
+dependencies = [
+    "panic-common",
+    "panic-server",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-django>=4.8.0",
+    "ruff>=0.9.0",
+    "mypy>=1.14.0",
+    "import-linter>=2.1",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["Application/Common", "Application/Server"]
+
+[tool.uv.sources]
+panic-common = { workspace = true }
+panic-server = { workspace = true }
+
+# ---------------------------------------------------------------- ruff
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+extend-exclude = ["Build/Work", ".tools", ".venv", "*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "RUF", "S", "PT", "DTZ"]
+ignore = ["S101", "RUF012", "S603", "S607"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S104", "S105", "S106", "S108", "S311", "DTZ001", "PT011", "PT018"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["panic_common", "panic_server"]
+
+# ---------------------------------------------------------------- mypy
+[tool.mypy]
+python_version = "3.13"
+plugins = ["pydantic.mypy"]
+warn_unused_configs = true
+ignore_missing_imports = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["panic_common.*"]
+strict = true
+
+[[tool.mypy.overrides]]
+module = ["panic_server.*"]
+disallow_subclassing_any = false
+disallow_untyped_decorators = false
+warn_return_any = false
+
+# ---------------------------------------------------------------- pytest
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers"
+DJANGO_SETTINGS_MODULE = "panic_server.settings"
+django_find_project = false
+
+# ---------------------------------------------------------------- import-linter
+[tool.importlinter]
+root_packages = ["panic_common", "panic_server"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "AR-1.1: Common is a pure library (no Django, DRF, or Server imports)"
+type = "forbidden"
+source_modules = ["panic_common"]
+forbidden_modules = [
+    "panic_server",
+    "django",
+    "rest_framework",
+]

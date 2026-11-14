@@ -1,0 +1,43 @@
+# PANIC reference container stack (aligned with reference-app Build/Containers/compose.yaml)
+#
+#   docker compose --env-file /path/to/panic.env -f Build/Containers/compose.yaml up -d
+#
+# Everything environment-specific comes from the env file (AR-3.1).
+
+name: panic
+
+x-panic-hardening: &hardening
+  restart: unless-stopped
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: json-file
+    options: { max-size: "20m", max-file: "5" }
+
+services:
+  server:
+    <<: *hardening
+    image: ${PANIC_IMAGE_PREFIX:-panic-local}/panic-server:${PANIC_IMAGE_TAG:-latest}
+    build:
+      context: ../..
+      dockerfile: Build/Containers/server/Containerfile
+    environment:
+      PANIC_ALLOWED_HOSTS: ${PANIC_ALLOWED_HOSTS:-localhost,127.0.0.1},panic-server
+      PANIC_ENV:
+      PANIC_TZ:
+      PANIC_LOG_LEVEL:
+      PANIC_LOG_FORMAT:
+      PANIC_DJANGO_SECRET_KEY:
+      PANIC_DEBUG:
+      PANIC_INSTANCE_NAME:
+      PANIC_TRUST_PROXY_HEADERS:
+      PANIC_PROXY_IP_HEADER:
+      PANIC_ENTITLEMENT_CACHE_TTL_S:
+      PANIC_ENTITLEMENT_TIMEOUT_S:
+      PANIC_CATALOG_MODERATION_MODE:
+    ports:
+      - "${PANIC_WEB_PUBLISH:-8210}:8210"
+    networks:
+      default:
+        aliases: [panic-server]
+    stop_grace_period: 20s
