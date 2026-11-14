@@ -13,6 +13,7 @@ from panic_server.store.cas import (
     base_kwargs,
     cas_update,
     delete_versioned,
+    from_iso_z,
     get_or_404,
     insert_versioned,
     new_id,
@@ -98,3 +99,40 @@ def update_dashboard(
 
 def delete_dashboard(db: Database[dict[str, Any]], dashboard_id: str, expected_version: int) -> None:
     delete_versioned(db[COLLECTION], dashboard_id, expected_version)
+
+
+def list_all_dashboards(db: Database[dict[str, Any]]) -> list[Dashboard]:
+    """Every dashboard regardless of visibility/orphan status (T-S6-03: admin export only)."""
+    return [_to_model(d) for d in db[COLLECTION].find().sort("_id", 1)]
+
+
+def upsert_dashboard(db: Database[dict[str, Any]], model: Dashboard) -> Dashboard:
+    """Insert-or-fully-replace a dashboard by ``model.id`` (T-S6-03: portable import).
+
+    Widgets are stored without ``dashboard_id`` (DATA_MODEL.md §4.7: "dropped (implicit)"),
+    the inverse of ``_to_model``'s re-injection on read.
+    """
+    widgets = [w.model_dump(mode="json", exclude={"dashboard_id"}) for w in model.widgets]
+    doc: dict[str, Any] = {
+        "title": model.title,
+        "description": model.description,
+        "scope": model.scope,
+        "team_ids": list(model.team_ids),
+        "owner_usernames": list(model.owner_usernames),
+        "always_display": model.always_display,
+        "sort_order": model.sort_order,
+        "widgets": widgets,
+        "search_keys": list(model.search_keys),
+        "orphaned": model.orphaned,
+        "created_by": model.created_by,
+        "updated_by": model.updated_by,
+        "updated_at": from_iso_z(model.updated_at),
+        "version": model.version,
+    }
+    db[COLLECTION].update_one({"_id": model.id}, {"$set": doc}, upsert=True)
+    return model
+
+
+def delete_all_dashboards(db: Database[dict[str, Any]]) -> int:
+    """Wipe every dashboard (``panic_seed --reset``). Returns the number deleted."""
+    return db[COLLECTION].delete_many({}).deleted_count

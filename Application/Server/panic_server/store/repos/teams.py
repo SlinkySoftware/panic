@@ -16,6 +16,7 @@ from panic_server.store.cas import (
     base_kwargs,
     cas_update,
     delete_versioned,
+    from_iso_z,
     get_or_404,
     insert_versioned,
     new_id,
@@ -99,3 +100,22 @@ def delete_team(db: Database[dict[str, Any]], team_id: str, expected_version: in
         orphaned_total += orphaned.modified_count
     counts["orphaned"] = orphaned_total
     return counts
+
+
+def upsert_team(db: Database[dict[str, Any]], model: TeamDefinition) -> TeamDefinition:
+    """Insert-or-fully-replace a team by ``model.id`` (T-S6-03). ``members`` is never stored (Stage 6)."""
+    doc = {
+        "code": model.code,
+        "name": model.name,
+        "description": model.description,
+        "created_at": from_iso_z(model.created_at),
+        "updated_at": from_iso_z(model.updated_at),
+        "version": model.version,
+    }
+    db[COLLECTION].update_one({"_id": model.id}, {"$set": doc}, upsert=True)
+    return model
+
+
+def delete_all_teams(db: Database[dict[str, Any]]) -> int:
+    """Wipe every team (``panic_seed --reset``). Returns the number deleted."""
+    return db[COLLECTION].delete_many({}).deleted_count

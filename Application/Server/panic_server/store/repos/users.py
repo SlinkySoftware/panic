@@ -14,7 +14,7 @@ from typing import Any
 from pymongo.database import Database
 
 from panic_common.models import UserAccount
-from panic_server.store.cas import base_kwargs, cas_update, get_or_404, insert_versioned, new_id, utcnow
+from panic_server.store.cas import base_kwargs, cas_update, from_iso_z, get_or_404, insert_versioned, new_id, utcnow
 
 COLLECTION = "users"
 _PREFS_FIELDS = ("density", "theme", "unreachable_policy")
@@ -117,3 +117,39 @@ def update_user(
     set_fields.update(fields)
     doc = cas_update(db[COLLECTION], user_id, expected_version, {"$set": set_fields, "$inc": {"version": 1}})
     return _to_model(doc)
+
+
+def upsert_user(db: Database[dict[str, Any]], model: UserAccount) -> UserAccount:
+    """Insert-or-fully-replace a user by ``model.id`` (T-S6-03: portable import, byte-stable).
+
+    Never touches ``password_hash``: it is not on :class:`UserAccount` to begin with, and using
+    ``$set`` (not a whole-document ``replace_one``) leaves any existing hash on the stored
+    document untouched.
+    """
+    doc: dict[str, Any] = {
+        "username": model.username,
+        "display_name": model.display_name,
+        "default_remote_user": model.default_remote_user,
+        "ssh_template": model.ssh_template,
+        "auth_source": model.auth_source,
+        "disabled": model.disabled,
+        "permissions": list(model.permissions),
+        "team_ids": list(model.team_ids),
+        "pinned_dashboard_ids": list(model.pinned_dashboard_ids),
+        "default_dashboard_id": model.default_dashboard_id,
+        "prefs": {
+            "density": model.density,
+            "theme": model.theme,
+            "unreachable_policy": model.unreachable_policy,
+        },
+        "search_keys": list(model.search_keys),
+        "updated_at": from_iso_z(model.updated_at),
+        "version": model.version,
+    }
+    db[COLLECTION].update_one({"_id": model.id}, {"$set": doc}, upsert=True)
+    return model
+
+
+def delete_all_users(db: Database[dict[str, Any]]) -> int:
+    """Wipe every user (``panic_seed --reset``). Returns the number deleted."""
+    return db[COLLECTION].delete_many({}).deleted_count

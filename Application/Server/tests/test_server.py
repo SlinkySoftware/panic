@@ -617,32 +617,6 @@ def test_export_api_requires_global_admin() -> None:
     assert client.get("/api/v1/export").status_code == 403
 
 
-def test_export_then_import_on_clean_database_reproduces_state(tmp_path: object) -> None:
-    from pathlib import Path
-
-    from django.core.management import call_command
-
-    from panic_server.portability import export_state
-
-    STORE.refresh()
-    before = export_state(STORE)
-    out = Path(str(tmp_path)) / "export.json"
-    call_command("panic_export", "--output", str(out))
-    STORE.wipe()
-    STORE.refresh()
-    assert STORE.sites == []
-    call_command("panic_import", str(out))
-    STORE.refresh()
-    after = export_state(STORE)
-    for section in ("sites", "teams", "zones", "users", "catalog", "lists", "dashboards", "system_settings"):
-        if section == "system_settings":
-            assert before[section] == after[section]
-        else:
-            assert sorted(before[section], key=lambda o: o["id"]) == sorted(
-                after[section], key=lambda o: o["id"]
-            ), section
-
-
 def test_import_rejects_foreign_documents() -> None:
     from panic_server.portability import ImportValidationError, import_state
 

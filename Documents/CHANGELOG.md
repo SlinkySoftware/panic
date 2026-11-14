@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-11-14 — T-S6-03: Seed, export and import on Mongo
+- New `panic_server.fixtures` (`demo`: a small hand-built dataset; `loadtest`: a deterministic,
+  index-derived generator producing exactly 5,000 catalog items / 50 users / 12 teams / 20 zones
+  / 200 lists / 60 dashboards, RFC 5737/3849/`example.com` only) and `panic_server.services.portability`
+  (`schema_version: 2`, built only on `panic_server.store.repos.*`, sections sorted by `id` for
+  byte-stable round-trips).
+- `panic_seed`/`panic_export`/`panic_import` management commands rewritten to be Mongo/v2-only
+  (same CLI shape as before: `--profile demo|loadtest`, `--reset`/`--if-empty`, `--output`/
+  `--shared-only`, `--replace`), reaching Mongo only through `panic_server.store` (AR-4.1 green).
+  Added small, additive `upsert_<x>`/`delete_all_<x>`/`list_all_<x>` primitives to the T-S6-02
+  repos where portability needed them.
+- **Deviation:** `test_store_db.py::test_panic_seed_is_idempotent` and
+  `test_server.py::test_export_then_import_on_clean_database_reproduces_state` pinned the old
+  SQL/v1 CLI behaviour this task replaces, so they were deleted; equivalent (and broader) coverage
+  now lives in the new `tests/test_portability.py`. The old SQL-backed `panic_server/portability.py`,
+  `views.py`'s `/api/v1/export`, `state.py` and `store_db.py` are untouched (reserved for `T-S6-04`).
+- `./panic test`: 197 passed; ruff, mypy, import-linter (AR-4.1 kept) all clean.
+
 ## 2026-11-14 — T-S6-02: MongoDB repository layer, indexes, sessions, rate limits
 - New `panic_server.store` package (the only importer of `pymongo`/`bson`, AR-4.1): lazy
   per-process client, named `IndexSpec`-based `ensure_indexes` (idempotent, conflict detection,

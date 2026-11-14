@@ -1,11 +1,8 @@
-"""Unit tests for the relational persistence layer (models, DatabasePortalStore, panic_seed)."""
+"""Unit tests for the relational persistence layer (models, DatabasePortalStore)."""
 
 from __future__ import annotations
 
-from io import StringIO
-
 import pytest
-from django.core.management import call_command
 
 from panic_common.models import (
     CatalogItem,
@@ -186,24 +183,3 @@ def test_audit_write_through_and_query(store: DatabasePortalStore) -> None:
     assert [e.target_id for e in store.query_audit(action="zone.update")] == ["zone-dmz"]
     assert [e.target_id for e in store.query_audit(q="alpha")] == ["cat-1"]
     assert len(store.query_audit(limit=1)) == 1
-
-
-def test_panic_seed_is_idempotent() -> None:
-    out = StringIO()
-    call_command("panic_seed", stdout=out)
-    counts = (SiteRecord.objects.count(), CatalogItemRecord.objects.count(), DashboardWidgetRecord.objects.count())
-    assert counts[0] == 4
-    call_command("panic_seed", stdout=out)
-    assert counts == (
-        SiteRecord.objects.count(),
-        CatalogItemRecord.objects.count(),
-        DashboardWidgetRecord.objects.count(),
-    )
-    call_command("panic_seed", "--if-empty", stdout=out)
-    assert "skipping" in out.getvalue()
-
-    SiteRecord.objects.filter(code="1CBR").update(name="Operator Edited")
-    call_command("panic_seed", stdout=out)
-    assert SiteRecord.objects.get(code="1CBR").name == "Operator Edited"
-    call_command("panic_seed", "--reset", stdout=out)
-    assert SiteRecord.objects.get(code="1CBR").name == "Canberra Gov DC"

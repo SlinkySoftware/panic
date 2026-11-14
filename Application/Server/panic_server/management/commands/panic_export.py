@@ -1,4 +1,4 @@
-"""``manage.py panic_export`` — write portal state as a portable JSON document."""
+"""``manage.py panic_export`` -- write Mongo-backed portal state as a portable JSON document."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from typing import Any
 
 from django.core.management.base import BaseCommand, CommandParser
 
-from panic_server.portability import export_state
-from panic_server.store_db import DatabasePortalStore
+from panic_server.services.portability import export_state
+from panic_server.store.client import get_db
 
 
 class Command(BaseCommand):
@@ -23,7 +23,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args: Any, **options: Any) -> None:
-        doc = export_state(DatabasePortalStore(), shared_only=bool(options["shared_only"]))
+        doc = export_state(get_db(), shared_only=bool(options["shared_only"]))
         text = json.dumps(doc, indent=2, sort_keys=True) + "\n"
         if options["output"] == "-":
             sys.stdout.write(text)

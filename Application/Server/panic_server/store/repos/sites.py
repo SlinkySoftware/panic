@@ -11,6 +11,7 @@ from panic_server.store.cas import (
     base_kwargs,
     cas_update,
     delete_versioned,
+    from_iso_z,
     get_or_404,
     insert_versioned,
     new_id,
@@ -73,3 +74,22 @@ def update_site(
 
 def delete_site(db: Database[dict[str, Any]], site_id: str, expected_version: int) -> None:
     delete_versioned(db[COLLECTION], site_id, expected_version)
+
+
+def upsert_site(db: Database[dict[str, Any]], model: SiteDefinition) -> SiteDefinition:
+    """Insert-or-fully-replace a site by ``model.id`` (T-S6-03: portable import, byte-stable)."""
+    doc = {
+        "code": model.code,
+        "name": model.name,
+        "description": model.description,
+        "created_at": from_iso_z(model.created_at),
+        "updated_at": from_iso_z(model.updated_at),
+        "version": model.version,
+    }
+    db[COLLECTION].update_one({"_id": model.id}, {"$set": doc}, upsert=True)
+    return model
+
+
+def delete_all_sites(db: Database[dict[str, Any]]) -> int:
+    """Wipe every site (``panic_seed --reset``). Returns the number deleted."""
+    return db[COLLECTION].delete_many({}).deleted_count

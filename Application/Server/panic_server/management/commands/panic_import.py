@@ -1,4 +1,5 @@
-"""``manage.py panic_import`` — load a ``panic_export`` JSON document (upsert by id)."""
+"""``manage.py panic_import`` -- load a ``panic-export`` (schema_version 2) JSON document into
+MongoDB. Entities are upserted by id."""
 
 from __future__ import annotations
 
@@ -9,12 +10,12 @@ from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 
-from panic_server.portability import ImportValidationError, import_state
-from panic_server.store_db import DatabasePortalStore
+from panic_server.services.portability import ImportValidationError, import_state
+from panic_server.store.client import get_db
 
 
 class Command(BaseCommand):
-    help = "Import a panic_export JSON document. Entities are upserted by id."
+    help = "Import a panic-export (schema_version 2) JSON document. Entities are upserted by id."
 
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument("input", help="Input file ('-' for stdin).")
@@ -23,7 +24,7 @@ class Command(BaseCommand):
     def handle(self, *args: Any, **options: Any) -> None:
         raw = sys.stdin.read() if options["input"] == "-" else Path(options["input"]).read_text(encoding="utf-8")
         try:
-            counts = import_state(DatabasePortalStore(), json.loads(raw), replace=bool(options["replace"]))
+            counts = import_state(get_db(), json.loads(raw), replace=bool(options["replace"]))
         except (ValueError, ImportValidationError) as e:
             raise CommandError(f"panic_import: {e}") from e
         summary = ", ".join(f"{k}={v}" for k, v in counts.items())

@@ -40,6 +40,15 @@ def iso_z(value: dt.datetime) -> str:
     return value.astimezone(dt.UTC).isoformat().replace("+00:00", "Z")
 
 
+def from_iso_z(value: str) -> dt.datetime:
+    """The inverse of :func:`iso_z`: parse an RFC 3339 ``...Z`` string back into a BSON date.
+
+    Used by every repo's ``upsert_*`` primitive (T-S6-03) to translate an already-validated
+    ``panic_common.models`` instance (e.g. from a portable export) back into Mongo's storage shape.
+    """
+    return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
 def base_kwargs(doc: dict[str, Any]) -> dict[str, Any]:
     """``_id`` -> ``id``, dates -> RFC 3339 strings, ``ObjectId`` -> ``str``; ready for a pydantic model.
 

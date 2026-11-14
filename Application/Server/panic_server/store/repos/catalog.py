@@ -12,6 +12,7 @@ from panic_server.store.cas import (
     base_kwargs,
     cas_update,
     delete_versioned,
+    from_iso_z,
     get_or_404,
     insert_versioned,
     new_id,
@@ -118,3 +119,48 @@ def delete_catalog_item(db: Database[dict[str, Any]], item_id: str, expected_ver
         {"item_ids": item_id},
         {"$pull": {"item_ids": item_id}, "$inc": {"version": 1}, "$set": {"updated_at": now}},
     )
+
+
+def list_all_catalog_items(db: Database[dict[str, Any]]) -> list[CatalogItem]:
+    """Every catalog item regardless of visibility/orphan status (T-S6-03: admin export only)."""
+    return [_to_model(d) for d in db[COLLECTION].find().sort("_id", 1)]
+
+
+def upsert_catalog_item(db: Database[dict[str, Any]], model: CatalogItem) -> CatalogItem:
+    """Insert-or-fully-replace a catalog item by ``model.id`` (T-S6-03: portable import)."""
+    doc: dict[str, Any] = {
+        "title": model.title,
+        "description": model.description,
+        "protocol": model.protocol,
+        "host": model.host,
+        "site": model.site,
+        "path_or_args": model.path_or_args,
+        "custom_uri": model.custom_uri,
+        "account_override": model.account_override,
+        "tags": list(model.tags),
+        "normalized_key": model.normalized_key,
+        "scope": model.scope,
+        "team_ids": list(model.team_ids),
+        "owner_usernames": list(model.owner_usernames),
+        "zone_ids": list(model.zone_ids),
+        "search_keys": list(model.search_keys),
+        "orphaned": model.orphaned,
+        "created_by": model.created_by,
+        "created_at": from_iso_z(model.created_at),
+        "updated_by": model.updated_by,
+        "updated_at": from_iso_z(model.updated_at),
+        "version": model.version,
+    }
+    update: dict[str, Any] = {"$set": doc}
+    if model.port is not None:
+        doc["port"] = model.port
+    else:
+        # Clear a previously-set port rather than leaving it stale (an existing doc may have one).
+        update["$unset"] = {"port": ""}
+    db[COLLECTION].update_one({"_id": model.id}, update, upsert=True)
+    return model
+
+
+def delete_all_catalog_items(db: Database[dict[str, Any]]) -> int:
+    """Wipe every catalog item (``panic_seed --reset``). Returns the number deleted."""
+    return db[COLLECTION].delete_many({}).deleted_count

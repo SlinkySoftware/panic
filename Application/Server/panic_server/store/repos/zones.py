@@ -20,6 +20,7 @@ from panic_server.store.cas import (
     base_kwargs,
     cas_update,
     delete_versioned,
+    from_iso_z,
     get_or_404,
     insert_versioned,
     new_id,
@@ -157,11 +158,39 @@ def delete_zone(db: Database[dict[str, Any]], zone_id: str, expected_version: in
     db["catalog_items"].update_many({"zone_ids": zone_id}, {"$pull": {"zone_ids": zone_id}})
 
 
+def upsert_zone(db: Database[dict[str, Any]], model: SecurityZone) -> SecurityZone:
+    """Insert-or-fully-replace a zone by ``model.id`` (T-S6-03), including the builtin Default zone."""
+    doc = {
+        "name": model.name,
+        "description": model.description,
+        "priority": model.priority,
+        "cidrs": model.cidrs,
+        "builtin": model.builtin,
+        "created_at": from_iso_z(model.created_at),
+        "updated_at": from_iso_z(model.updated_at),
+        "version": model.version,
+    }
+    db[COLLECTION].update_one({"_id": model.id}, {"$set": doc}, upsert=True)
+    invalidate_cache(db)
+    return model
+
+
+def delete_all_zones(db: Database[dict[str, Any]]) -> int:
+    """Wipe every zone, including the builtin Default zone (``panic_seed --reset``).
+
+    Callers must re-create the Default zone afterwards (``ensure_default_zone``).
+    """
+    count = db[COLLECTION].delete_many({}).deleted_count
+    invalidate_cache(db)
+    return count
+
+
 __all__ = [
     "DEFAULT_ZONE_ID",
     "DEFAULT_ZONE_NAME",
     "NotFound",
     "create_zone",
+    "delete_all_zones",
     "delete_zone",
     "ensure_default_zone",
     "get_zone",
@@ -169,4 +198,5 @@ __all__ = [
     "invalidate_cache",
     "list_zones",
     "update_zone",
+    "upsert_zone",
 ]
