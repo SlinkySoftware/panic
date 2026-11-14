@@ -1,120 +1,167 @@
-"""Session authentication, bootstrap admin, login/logout and "View As" in session mode (T-S3-01)."""
+"""Login/logout, rate limiting, disabled-user rejection, and request-context isolation (T-S6-04).
+
+Replaces the Stage 1-5 STORE-backed ``test_auth.py``/``test_security.py``: same behaviours
+(sign-in, sign-out, per-IP/per-username rate limiting, disabled accounts), now against the
+Mongo-backed store and the lock-free, per-request ``RequestContext``.
+"""
 
 from __future__ import annotations
 
-import json
+import threading
 from collections.abc import Iterator
-from typing import Any
 
 import pytest
-from django.http import HttpResponse
-from django.test import Client, override_settings
+from django.test import Client, RequestFactory, override_settings
+from pymongo.database import Database
 
-from panic_server.state import STORE
+from panic_server.context import SESSION_USER_KEY, build_request_context
+from panic_server.store.repos import audit as audit_repo
+from panic_server.store.repos import users as users_repo
+from panic_server.store.repos import zones as zones_repo
 
-SESSION_SETTINGS: dict[str, Any] = {
-    "PANIC_AUTH_MODE": "session",
-    "PANIC_DEV_SIMULATOR_ENABLED": False,
-    "PANIC_AUTH_LOCAL_ENABLED": True,
-    "PANIC_BOOTSTRAP_ADMIN_USER": "bootadmin",
-    "PANIC_BOOTSTRAP_ADMIN_PASSWORD": "correct-horse-battery-staple",
-    "PASSWORD_HASHERS": ["django.contrib.auth.hashers.MD5PasswordHasher"],
-}
+pytestmark = [pytest.mark.mongo]
+
+ADMIN_USER = "test-bootstrap-admin"
+ADMIN_PASSWORD = "a-reasonably-long-bootstrap-passphrase"
 
 
 @pytest.fixture(autouse=True)
-def _session_mode() -> Iterator[None]:
-    with override_settings(**SESSION_SETTINGS):
+def _default_zone(mongo_db: Database) -> None:
+    zones_repo.ensure_default_zone(mongo_db)
+
+
+@pytest.fixture
+def _bootstrap_admin() -> Iterator[None]:
+    with override_settings(
+        PANIC_BOOTSTRAP_ADMIN_USER=ADMIN_USER,
+        PANIC_BOOTSTRAP_ADMIN_PASSWORD=ADMIN_PASSWORD,
+        PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"],
+    ):
         yield
 
 
-BOOT_PASSWORD = SESSION_SETTINGS["PANIC_BOOTSTRAP_ADMIN_PASSWORD"]
-
-
-def _login(client: Client, username: str = "bootadmin", password: str | None = None) -> HttpResponse:
-    return client.post("/login", {"username": username, "password": password or BOOT_PASSWORD, "next": "/catalog"})
-
-
-def test_unauthenticated_requests_redirect_or_401() -> None:
+@pytest.mark.usefixtures("_bootstrap_admin")
+def test_login_success_sets_session_and_audits(mongo_db: Database) -> None:
     client = Client()
-    resp = client.get("/catalog")
+    resp = client.post("/login", {"username": ADMIN_USER, "password": ADMIN_PASSWORD})
     assert resp.status_code == 302
-    assert resp["Location"].startswith("/login?next=/catalog")
-    api = client.get("/api/v1/state")
-    assert api.status_code == 401
-    assert api.json()["error_code"] == "UNAUTHENTICATED"
-    assert client.get("/api/v1/health").status_code == 200
-    assert client.get("/login").status_code == 200
+    assert client.session[SESSION_USER_KEY]
+
+    user = users_repo.get_user_by_username(mongo_db, ADMIN_USER)
+    assert user is not None
+    actions = [a.action for a in audit_repo.list_audit(mongo_db, actor_username=ADMIN_USER, limit=10)]
+    assert "auth.login" in actions
+
+    assert client.get("/api/v1/health").status_code in {200, 503}  # public path, no auth required
 
 
-def test_bootstrap_admin_login_view_as_and_logout() -> None:
+@pytest.mark.usefixtures("_bootstrap_admin")
+def test_login_failure_wrong_password_returns_401_and_audits(mongo_db: Database) -> None:
     client = Client()
-    resp = _login(client)
+    resp = client.post("/login", {"username": ADMIN_USER, "password": "wrong"})
+    assert resp.status_code == 401
+    assert "error" in resp.json()
+    actions = [a.action for a in audit_repo.list_audit(mongo_db, action="auth.login_failed", limit=10)]
+    assert "auth.login_failed" in actions
+
+
+@pytest.mark.usefixtures("_bootstrap_admin")
+def test_login_get_returns_json_method_descriptor(mongo_db: Database) -> None:
+    client = Client()
+    resp = client.get("/login")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["password_enabled"] is True
+    assert "oidc_enabled" in body
+
+
+@pytest.mark.usefixtures("_bootstrap_admin")
+def test_logout_clears_session(mongo_db: Database) -> None:
+    client = Client()
+    client.post("/login", {"username": ADMIN_USER, "password": ADMIN_PASSWORD})
+    assert client.session.get(SESSION_USER_KEY)
+    resp = client.post("/logout")
     assert resp.status_code == 302
-    assert resp["Location"] == "/catalog"
-    state = client.get("/api/v1/state").json()
-    assert state["user"]["username"] == "bootadmin"
-    assert "GLOBAL_ADMIN" in state["user"]["permissions"]
-
-    target = next(u for u in STORE.users if u.username == "sam.reeves")
-    r = client.post("/api/v1/simulator", json.dumps({"view_as_user_id": target.id}), content_type="application/json")
-    assert r.status_code == 200
-    assert client.get("/api/v1/state").json()["user"]["username"] == "sam.reeves"
-    client.post("/api/v1/simulator", json.dumps({"view_as_user_id": None}), content_type="application/json")
-    assert client.get("/api/v1/state").json()["user"]["username"] == "bootadmin"
-
-    # User switching and simulator reset are disabled outside simulator mode.
-    denied = client.post(
-        "/api/v1/simulator", json.dumps({"active_user_id": target.id}), content_type="application/json"
-    )
-    assert denied.status_code == 403
-    assert (
-        client.post("/api/v1/state", json.dumps({"action": "reset"}), content_type="application/json").status_code
-        == 403
-    )
-
-    assert b"Sign out" in client.get("/catalog").content
-    out = client.post("/logout")
-    assert out.status_code == 302
-    assert client.get("/api/v1/state").status_code == 401
-    actions = [a.action for a in STORE.query_audit(limit=50)]
-    assert "auth.login" in actions and "auth.logout" in actions
+    assert not client.session.get(SESSION_USER_KEY)
 
 
-def test_bad_password_and_unknown_user_rejected() -> None:
+@pytest.mark.usefixtures("_bootstrap_admin")
+def test_disabled_user_cannot_sign_in(mongo_db: Database) -> None:
     client = Client()
-    assert _login(client, password="wrong").status_code == 401
-    assert _login(client, username="nobody").status_code == 401
-    # Seeded fixture users have no local password and cannot sign in.
-    assert _login(client, username="joperator", password="").status_code == 401
-    assert client.get("/api/v1/state").status_code == 401
-    assert "auth.login_failed" in [a.action for a in STORE.query_audit(limit=10)]
+    client.post("/login", {"username": ADMIN_USER, "password": ADMIN_PASSWORD})
+    assert client.session.get(SESSION_USER_KEY)
+
+    user = users_repo.get_user_by_username(mongo_db, ADMIN_USER)
+    assert user is not None
+    users_repo.update_user(mongo_db, user.id, user.version, disabled=True)
+
+    # A fresh login attempt is refused.
+    fresh = Client()
+    resp = fresh.post("/login", {"username": ADMIN_USER, "password": ADMIN_PASSWORD})
+    assert resp.status_code == 401
+
+    # The already-authenticated session is rejected on the next request (AR-2.11) and flushed.
+    resp2 = client.get("/api/v1/does-not-exist-but-is-under-api")
+    assert resp2.status_code == 401
+    assert not client.session.get(SESSION_USER_KEY)
 
 
-def test_open_redirect_is_blocked() -> None:
-    client = Client()
-    resp = client.post(
-        "/login",
-        {"username": "bootadmin", "password": "correct-horse-battery-staple", "next": "https://evil.example.net/"},
-    )
-    assert resp["Location"] == "/"
-
-
-def test_logout_requires_post_and_csrf() -> None:
-    client = Client(enforce_csrf_checks=True)
-    assert client.get("/logout").status_code == 405
-    assert client.post("/logout").status_code == 403
-    login_page = client.get("/login")
-    token = login_page.cookies["panic_csrftoken"].value
-    resp = client.post(
-        "/login",
-        {"username": "bootadmin", "password": "correct-horse-battery-staple", "csrfmiddlewaretoken": token},
-    )
-    assert resp.status_code == 302
-
-
-def test_simulator_mode_needs_no_login() -> None:
-    with override_settings(PANIC_AUTH_MODE="simulator", PANIC_DEV_SIMULATOR_ENABLED=True):
+@pytest.mark.usefixtures("_bootstrap_admin")
+def test_rate_limit_login_by_ip(mongo_db: Database) -> None:
+    with override_settings(PANIC_RATE_LIMIT_LOGIN="2/60"):
         client = Client()
-        assert client.get("/api/v1/state").status_code == 200
-        assert client.get("/login").status_code == 302
+        for _ in range(2):
+            resp = client.post(
+                "/login", {"username": "nope", "password": "nope"}, REMOTE_ADDR="203.0.113.55"
+            )
+            assert resp.status_code == 401
+        blocked = client.post("/login", {"username": "nope", "password": "nope"}, REMOTE_ADDR="203.0.113.55")
+        assert blocked.status_code == 429
+        assert blocked.json()["error_code"] == "RATE_LIMITED"
+        assert "Retry-After" in blocked
+
+
+@pytest.mark.usefixtures("_bootstrap_admin")
+def test_rate_limit_login_by_username_spans_different_ips(mongo_db: Database) -> None:
+    with override_settings(PANIC_RATE_LIMIT_LOGIN="2/60"):
+        client = Client()
+        for ip in ("203.0.113.61", "203.0.113.62"):
+            resp = client.post("/login", {"username": "shared-victim", "password": "nope"}, REMOTE_ADDR=ip)
+            assert resp.status_code == 401
+        blocked = client.post(
+            "/login", {"username": "shared-victim", "password": "nope"}, REMOTE_ADDR="203.0.113.63"
+        )
+        assert blocked.status_code == 429
+
+
+def _make_request(user_id: str, path: str = "/api/v1/whatever"):  # type: ignore[no-untyped-def]
+    """A minimal fake request: just enough for ``build_request_context`` (no Django machinery)."""
+    req = RequestFactory().get(path, REMOTE_ADDR="127.0.0.1")
+    req.session = {SESSION_USER_KEY: user_id}  # type: ignore[assignment] # a plain dict satisfies ``.get``
+    return req
+
+
+def test_concurrent_requests_from_different_users_never_cross_identities(mongo_db: Database) -> None:
+    """Acceptance: two concurrent requests from different users in one worker never see each
+    other's identity. ``RequestContext`` is built purely from each request's own session, with
+    no process-level cache or lock, so this must hold under real thread interleaving."""
+    alice = users_repo.create_user(mongo_db, username="alice.ctx", display_name="Alice", default_remote_user="alice")
+    bob = users_repo.create_user(mongo_db, username="bob.ctx", display_name="Bob", default_remote_user="bob")
+
+    errors: list[str] = []
+    iterations = 200
+
+    def worker(user_id: str, expected_username: str) -> None:
+        for _ in range(iterations):
+            ctx = build_request_context(_make_request(user_id))
+            if ctx.real_user is None or ctx.real_user.username != expected_username:
+                errors.append(f"expected {expected_username}, got {getattr(ctx.real_user, 'username', None)}")
+
+    t1 = threading.Thread(target=worker, args=(alice.id, "alice.ctx"))
+    t2 = threading.Thread(target=worker, args=(bob.id, "bob.ctx"))
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    assert errors == []

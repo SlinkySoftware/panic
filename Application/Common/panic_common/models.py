@@ -187,13 +187,6 @@ class SystemSettings(BaseModel):
     version: int = 1
 
 
-class SimulationState(BaseModel):
-    simulated_ip: str = "10.10.50.14"
-    override_zone_id: str | None = None
-    active_user_id: str = "usr-admin"
-    view_as_user_id: str | None = None
-
-
 class AuditLogEntry(BaseModel):
     id: str
     actor_username: str

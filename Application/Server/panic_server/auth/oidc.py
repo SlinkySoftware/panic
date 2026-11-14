@@ -159,11 +159,21 @@ def complete_flow(session: Any, params: dict[str, str]) -> tuple[dict[str, Any],
     return claims, str(flow.get("next") or "/")
 
 
+#: Claim holding group/role names, read for the IdP adapter's own convenience only -- T-S6-04
+#: deletes every setting that would map it to PANIC RBAC/teams (ADR-0001 decision 11), so this
+#: is no longer configurable, just the conventional OIDC claim name.
+_GROUPS_CLAIM = "groups"
+
+
 def identity_from_claims(claims: dict[str, Any]) -> tuple[str, str, list[str]]:
-    """Return ``(username, display_name, groups)`` using the configured claim names."""
+    """Return ``(username, display_name, groups)`` using the configured claim names.
+
+    ``groups`` is returned for API/adapter symmetry with LDAP but is never mapped to PANIC
+    permissions or teams (ADR-0001 decision 11): external identity is for authentication only.
+    """
     username = str(claims.get(settings.PANIC_OIDC_USERNAME_CLAIM) or "")
     display = str(claims.get(settings.PANIC_OIDC_DISPLAY_NAME_CLAIM) or username)
-    raw_groups = claims.get(settings.PANIC_OIDC_GROUPS_CLAIM) or []
+    raw_groups = claims.get(_GROUPS_CLAIM) or []
     if isinstance(raw_groups, str):
         raw_groups = [g for g in raw_groups.replace(",", " ").split() if g]
     groups = [str(g) for g in raw_groups] if isinstance(raw_groups, list) else []

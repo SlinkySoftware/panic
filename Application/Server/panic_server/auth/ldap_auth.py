@@ -91,21 +91,9 @@ def authenticate(username: str, password: str) -> LdapIdentity | None:
             svc.unbind()
             return None
 
+        # T-S6-04: no group search -- external identity is for authentication only (ADR-0001
+        # decision 11), so PANIC no longer reads or maps directory groups at all.
         groups: list[str] = []
-        if settings.PANIC_LDAP_GROUP_BASE_DN:
-            group_filter = settings.PANIC_LDAP_GROUP_FILTER.format(
-                user_dn=escape_filter_chars(user_dn), username=escape_filter_chars(username)
-            )
-            svc.search(
-                settings.PANIC_LDAP_GROUP_BASE_DN,
-                group_filter,
-                SUBTREE,
-                attributes=[settings.PANIC_LDAP_GROUP_NAME_ATTR],
-            )
-            for g in svc.response or []:
-                if g.get("type") == "searchResEntry":
-                    name = _first(dict(g.get("attributes") or {}), settings.PANIC_LDAP_GROUP_NAME_ATTR)
-                    groups.append(name or str(g["dn"]))
         svc.unbind()
     except LDAPException as e:
         raise LdapError(type(e).__name__) from e

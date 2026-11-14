@@ -56,10 +56,6 @@ module = ["panic_common.*"]
 strict = true
 
 [[tool.mypy.overrides]]
-module = ["panic_server.migrations.*"]
-ignore_errors = true
-
-[[tool.mypy.overrides]]
 module = ["panic_server.*"]
 disallow_subclassing_any = false
 disallow_untyped_decorators = false
@@ -75,7 +71,7 @@ markers = ["mongo: requires a MongoDB connection"]
 
 # ---------------------------------------------------------------- import-linter
 [tool.importlinter]
-root_packages = ["panic_common", "panic_server"]
+root_packages = ["panic_common", "panic_server", "django"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
@@ -107,4 +103,16 @@ ignore_imports = [
     "panic_server.store.** -> pymongo",
     "panic_server.store.** -> bson",
 ]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "AR-4.2: No SQL / Django ORM for domain data"
+type = "forbidden"
+source_modules = ["panic_server"]
+forbidden_modules = ["django.db.models"]
+# Direct imports only: Django itself transitively touches django.db.models from almost every
+# subsystem (urls, http, auth hashers, management commands, ...), so a transitive check would be
+# unsatisfiable. AR-4.2 is about panic_server code never writing its own ORM models, i.e. never
+# directly importing django.db.models (requires "django" in root_packages above, since the
+# forbidden contract otherwise refuses a dotted path into an external package).
 allow_indirect_imports = true

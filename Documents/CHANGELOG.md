@@ -1,5 +1,43 @@
 # Changelog
 
+## 2026-11-14 — T-S6-04: Stateless request context, removal of simulator / SQL / snapshot store
+- New `panic_server.context.RequestContext` (frozen dataclass; `build_request_context(request)`):
+  real user, effective user, View As flag, client IP, `ChainResolution` and resolved zone —
+  resolved fresh per request from the request's own session/headers, no process globals or lock.
+  `middleware.RequestContextMiddleware` (renamed from `ClientIpZoneMiddleware`) builds it and
+  enforces `PANIC_UNTRUSTED_PEER_POLICY=reject` (403 `UNTRUSTED_PEER`, loopback health/version
+  exempt, AR-5.3 point 3) — the cutover from the old `resolve_client_ip` to T-S6-05's
+  `resolve_client_chain` that T-S6-05 deferred to this task.
+- Sessions switched to `panic_server.store.sessions.SessionStore` (AR-4.7); rate limiting moved
+  to Mongo (`login:ip`/`login:user`/`api:ip` fixed-window buckets via `store.rate_limits`).
+  Auth backends (local/OIDC/LDAP) ported to `store.repos.users`; external sign-in no longer maps
+  IdP groups to permissions/teams (`panic_common.claim_mapping` deleted, decision 11): first
+  sign-in gets no permissions/teams, later sign-ins only update `display_name`/`last_login_at`.
+  Disabled users cannot sign in and their sessions are rejected.
+- Deleted the entire Stage 1-4 SQL/simulator stack: `state.py`, `store_db.py`, `models.py`,
+  `migrations/`, the old `portability.py`, `templates/`, `static/`, `SimulationState`, and every
+  STORE-coupled view (the server-rendered UI shell and the whole `/api/v1/*` CRUD surface for
+  dashboards/catalog/lists/sites/teams/zones/rbac/audit/export/the `.rdp` launcher) — rebuilt
+  against the new DRF/Mongo stack by `T-S6-06`/`T-S6-07`. `views.py`/`urls.py` now carry only
+  health (Mongo-ping-backed)/version/metrics plus auth. Removed ~20 settings (`PANIC_DB_*`,
+  `PANIC_AUTO_SEED`, `PANIC_AUTH_MODE`, `PANIC_DEV_SIMULATOR_ENABLED`, `PANIC_CACHE_URL`,
+  `PANIC_STATIC_ROOT`/`SERVE_STATIC`, `PANIC_RBAC_*`, OIDC groups claim, LDAP group search);
+  added `PANIC_UNTRUSTED_PEER_POLICY`/`PANIC_XFF_MAX_HOPS`/`PANIC_XFF_MAX_BYTES`. `DATABASES` and
+  `django.contrib.sessions`/`staticfiles` dropped from `INSTALLED_APPS` entirely (nothing needs
+  them). AR-4.2 (no Django ORM) added and green alongside AR-1.1/AR-4.1.
+- **Transition (expected, per task spec):** the old `panic.js` UI no longer works on `main`.
+  `main` has no working interactive UI until the web rewrite (`T-S6-08`-`T-S6-11`) lands.
+- **Deviation:** kept the `X-Client-IP`/`X-Security-Zone` response headers rather than removing
+  them (ARCHITECTURE.md's aspirational note that S6 drops them in favour of the access log) —
+  harmless, backward-compatible, and the admin diagnostics endpoint that formally replaces them
+  is a later task. AR-4.2's import-linter contract needed `"django"` added to `root_packages`
+  (a `forbidden` contract can't target a dotted path inside an external package otherwise) and
+  `allow_indirect_imports = true` (Django's own internals transitively touch `django.db.models`
+  from nearly everywhere; only *direct* imports in `panic_server` should trip the contract).
+- `./panic test`: 161 passed; ruff, mypy, import-linter (AR-1.1/AR-4.1/AR-4.2 all kept) clean.
+  Acceptance grep for `STORE`/`MockPortalStore`/`SimulationState`/`simulator` across
+  `Application/` finds only historical comments explaining the removal, no live references.
+
 ## 2026-11-14 — T-S6-03: Seed, export and import on Mongo
 - New `panic_server.fixtures` (`demo`: a small hand-built dataset; `loadtest`: a deterministic,
   index-derived generator producing exactly 5,000 catalog items / 50 users / 12 teams / 20 zones

@@ -1,15 +1,15 @@
-"""Security headers, rate limiting, and JSON-aware CSRF failure handling (T-S3-04)."""
+"""Security headers, Mongo-backed rate limiting, and JSON-aware CSRF failure handling (T-S3-04, T-S6-04)."""
 
 from __future__ import annotations
 
-import time
+import datetime as dt
 from collections.abc import Callable
 
 from django.conf import settings
-from django.core.cache import cache
 from django.http import HttpRequest, HttpResponse, JsonResponse
 
 from panic_common.errors import ErrorCode
+from panic_server.store.rate_limits import increment
 
 DEFAULT_CSP = (
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
@@ -52,32 +52,36 @@ def _bucket(request: HttpRequest) -> str | None:
     return None
 
 
-def hit(bucket: str, key: str, rate: str) -> tuple[bool, int]:
-    """Count one request in a window that starts at the client's first request.
+def _client_ip(request: HttpRequest) -> str:
+    return getattr(request, "client_ip", None) or request.META.get("REMOTE_ADDR", "unknown")
 
-    Returns ``(allowed, retry_after_seconds)``. ``incr`` keeps the key's original expiry, so the
-    window is not extended by further requests.
-    """
-    limit, window = parse_rate(rate)
-    now = int(time.time())
-    cache_key = f"panic:rl:{bucket}:{key}"
-    cache.add(cache_key, now, timeout=window)  # value = window start
-    count_key = cache_key + ":n"
-    cache.add(count_key, 0, timeout=window)
-    try:
-        count = cache.incr(count_key)
-    except ValueError:  # evicted between add() and incr()
-        cache.set(count_key, 1, timeout=window)
-        count = 1
-    started = cache.get(cache_key, now)
-    return count <= limit, max(1, int(started) + window - now)
+
+def _login_username(request: HttpRequest) -> str | None:
+    """Best-effort submitted username, for the ``login:user`` bucket (DATA_MODEL.md §4.12)."""
+    username = request.POST.get("username", "").strip()
+    return username or None
+
+
+def _retry_after(window_s: int) -> int:
+    """Seconds remaining in the current fixed window starting now (``rate_limits.increment``'s window)."""
+    epoch = int(dt.datetime.now(dt.UTC).timestamp())
+    remaining = window_s - (epoch % window_s)
+    return remaining if remaining > 0 else window_s
+
+
+def _rate_limited(window_s: int) -> JsonResponse:
+    response = JsonResponse(
+        {"error_code": ErrorCode.RATE_LIMITED, "detail": "Too many requests; slow down."}, status=429
+    )
+    response["Retry-After"] = str(_retry_after(window_s))
+    return response
 
 
 class RateLimitMiddleware:
-    """Per-client-IP fixed-window limits on ``/login`` and state-changing ``/api/*`` requests.
+    """Per-client-IP (and, for ``/login``, per-username) fixed-window limits (DATA_MODEL.md §4.12).
 
-    Counters live in the Django cache (local memory per process by default; configure a shared
-    cache via ``PANIC_CACHE_URL`` for multi-worker deployments).
+    Counters live in Mongo's ``rate_limits`` collection (``panic_server.store.rate_limits``), so
+    every worker/node shares the same counts -- no local-memory cache, no ``PANIC_CACHE_URL``.
     """
 
     def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
@@ -85,16 +89,22 @@ class RateLimitMiddleware:
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
         bucket = _bucket(request) if settings.PANIC_RATE_LIMIT_ENABLED else None
-        if bucket is not None:
-            rate = settings.PANIC_RATE_LIMIT_LOGIN if bucket == "login" else settings.PANIC_RATE_LIMIT_API
-            client = getattr(request, "client_ip", None) or request.META.get("REMOTE_ADDR", "unknown")
-            allowed, retry_after = hit(bucket, str(client), rate)
-            if not allowed:
-                response = JsonResponse(
-                    {"error_code": ErrorCode.RATE_LIMITED, "detail": "Too many requests; slow down."}, status=429
-                )
-                response["Retry-After"] = str(max(1, retry_after))
-                return response
+        if bucket is None:
+            return self.get_response(request)
+
+        client = _client_ip(request)
+        if bucket == "login":
+            limit, window = parse_rate(settings.PANIC_RATE_LIMIT_LOGIN)
+            over = increment("login:ip", client, window) > limit
+            username = _login_username(request)
+            if username:
+                over = increment("login:user", username, window) > limit or over
+        else:
+            limit, window = parse_rate(settings.PANIC_RATE_LIMIT_API)
+            over = increment("api:ip", client, window) > limit
+
+        if over:
+            return _rate_limited(window)
         return self.get_response(request)
 
 

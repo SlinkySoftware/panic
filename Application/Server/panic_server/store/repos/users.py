@@ -81,6 +81,36 @@ def get_password_hash(db: Database[dict[str, Any]], username: str) -> str | None
     return doc.get("password_hash") if doc else None
 
 
+def set_password_hash(
+    db: Database[dict[str, Any]],
+    username: str,
+    password_hash: str,
+    *,
+    auth_source: str | None = None,
+) -> None:
+    """Set the raw LOCAL-auth password hash for ``username`` (T-S6-04).
+
+    Not CAS-protected: ``password_hash`` is never exposed on :class:`UserAccount`, so there is no
+    client-visible ``version`` for a concurrent editor to race against.
+    """
+    fields: dict[str, Any] = {"password_hash": password_hash, "updated_at": utcnow()}
+    if auth_source is not None:
+        fields["auth_source"] = auth_source
+    db[COLLECTION].update_one({"username": username}, {"$set": fields})
+
+
+def touch_last_login(db: Database[dict[str, Any]], user_id: str, *, display_name: str | None = None) -> None:
+    """Record a successful sign-in: ``last_login_at`` (DATA_MODEL.md §4.1) and, optionally, ``display_name``.
+
+    Used on every successful local/OIDC/LDAP sign-in. Deliberately not CAS-protected and never
+    touches ``permissions``/``team_ids`` (ADR-0001 decision 11: re-sign-in never re-syncs RBAC).
+    """
+    fields: dict[str, Any] = {"last_login_at": utcnow()}
+    if display_name is not None:
+        fields["display_name"] = display_name
+    db[COLLECTION].update_one({"_id": user_id}, {"$set": fields})
+
+
 def list_users(
     db: Database[dict[str, Any]],
     *,

@@ -12,7 +12,7 @@ All examples use reserved documentation names and addresses (`example.com`, RFC 
 
 | Variable | Default | Description |
 |---|---|---|
-| `PANIC_ENV` | `dev` | `dev`, `test` or `prod`. `prod` enforces a strong secret key, `session` auth, secure cookies, and disables auto-seeding. |
+| `PANIC_ENV` | `dev` | `dev`, `test` or `prod`. `prod` enforces a strong secret key and secure cookies. |
 | `PANIC_DJANGO_SECRET_KEY` | dev placeholder | Django signing key. **Required in prod** (≥ 32 chars, not the placeholder). Prefer `PANIC_DJANGO_SECRET_KEY_FILE`. |
 | `PANIC_DEBUG` | `true` unless prod | Django debug mode. Never enable in production. |
 | `PANIC_ALLOWED_HOSTS` | `127.0.0.1,localhost,testserver,*` | Accepted `Host` headers. Set explicitly in prod, e.g. `panic.example.com`. |
@@ -25,26 +25,19 @@ All examples use reserved documentation names and addresses (`example.com`, RFC 
 
 ## Database
 
+PANIC has no relational database (T-S6-04 removed the Django ORM / SQLite-or-PostgreSQL store
+entirely; see [`DATA_MODEL.md`](../Architecture/DATA_MODEL.md)). All domain data, sessions and
+rate limits live in MongoDB -- see the "MongoDB" section below.
+
 | Variable | Default | Description |
 |---|---|---|
-| `PANIC_DB_ENGINE` | `sqlite` | `sqlite` (single node) or `postgresql` (HA; install the `postgres` extra). |
-| `PANIC_SQLITE_PATH` | `.run/panic.sqlite3` (container: `/data/panic.sqlite3`) | SQLite file (`:memory:` for throwaway runs). |
-| `PANIC_DB_HOST` | `127.0.0.1` | PostgreSQL host. |
-| `PANIC_DB_PORT` | `5432` | PostgreSQL port. |
-| `PANIC_DB_NAME` | `panic` | PostgreSQL database. |
-| `PANIC_DB_USER` | `panic` | PostgreSQL role. |
-| `PANIC_DB_PASSWORD` | *(empty)* | PostgreSQL password (use `PANIC_DB_PASSWORD_FILE`). |
-| `PANIC_DB_CONN_MAX_AGE` | `60` | Persistent connection lifetime in seconds. |
-| `PANIC_AUTO_SEED` | `true` unless prod | Seed canonical demo fixtures on the first request when the database is empty. |
-| `PANIC_MIGRATE_ON_START` | `true` | Container entrypoint runs `migrate --noinput`. |
+| `PANIC_MIGRATE_ON_START` | `true` | Container entrypoint runs `migrate --noinput` (a no-op: there are no Django-ORM migrations left). |
 | `PANIC_SEED_ON_START` | `never` in prod, else `if-empty` | Container entrypoint seeding of the demo fixtures: `if-empty` or `never`. |
 
-## Static assets & Gunicorn (container)
+## Gunicorn (container)
 
 | Variable | Default | Description |
 |---|---|---|
-| `PANIC_STATIC_ROOT` | `Application/Server/staticfiles` (container: `/app/staticfiles`) | `collectstatic` target. |
-| `PANIC_SERVE_STATIC` | `true` | Serve `/static/` from `PANIC_STATIC_ROOT` when `DEBUG` is off. Set `false` if the reverse proxy serves it. |
 | `PANIC_GUNICORN_WORKERS` | `2` | Worker processes. |
 | `PANIC_GUNICORN_THREADS` | `4` | Threads per worker. |
 | `PANIC_GUNICORN_TIMEOUT` | `30` | Worker timeout (s). |
@@ -56,7 +49,10 @@ All examples use reserved documentation names and addresses (`example.com`, RFC 
 |---|---|---|
 | `PANIC_TRUST_PROXY_HEADERS` | `true` | Honour the client-IP header **only** from `PANIC_TRUSTED_PROXY_CIDRS` peers. |
 | `PANIC_TRUSTED_PROXY_CIDRS` | `127.0.0.1/32,::1/128` | Reverse proxies allowed to set the client-IP header, e.g. `192.0.2.10/32,2001:db8::10/128`. |
-| `PANIC_PROXY_IP_HEADER` | `X-Forwarded-For` | `X-Forwarded-For` (right-most untrusted hop wins) or `X-Real-IP`. |
+| `PANIC_PROXY_IP_HEADER` | `X-Forwarded-For` | `X-Forwarded-For` (right-most untrusted hop wins) or `Forwarded`. The `X-Real-IP` option is removed (T-S6-04): panic-web never sets it and the hop-chain resolver only understands the two forms above. |
+| `PANIC_UNTRUSTED_PEER_POLICY` | `default` | `default` (unknown-location, Default zone) or `reject` (`403 UNTRUSTED_PEER`, except loopback `health`/`version`) when the direct peer is not a trusted proxy (AR-5.3). |
+| `PANIC_XFF_MAX_HOPS` | `16` | Only the right-most this-many hops of the proxy header are considered. |
+| `PANIC_XFF_MAX_BYTES` | `4096` | A proxy header longer than this is truncated from the left. |
 | `PANIC_SECURE_PROXY_SSL_HEADER` | `false` | Trust `X-Forwarded-Proto: https` from the proxy. |
 | `PANIC_SECURE_SSL_REDIRECT` | `false` | Redirect HTTP to HTTPS in Django. |
 | `PANIC_HSTS_SECONDS` | `0` | `Strict-Transport-Security` max-age (enable once TLS is permanent). |
@@ -65,8 +61,6 @@ All examples use reserved documentation names and addresses (`example.com`, RFC 
 
 | Variable | Default | Description |
 |---|---|---|
-| `PANIC_AUTH_MODE` | `simulator` (dev/test), `session` (prod) | `simulator` (no login, RBAC simulator) or `session` (real sign-in). `simulator` is rejected in prod. |
-| `PANIC_DEV_SIMULATOR_ENABLED` | `true` in simulator mode | Allows the Source IP / Zone / active-user simulator. When `false`, user switching and reset return `403`. |
 | `PANIC_SESSION_AGE_S` | `28800` | Session lifetime (s). |
 | `PANIC_SESSION_COOKIE_SECURE` | `true` in prod | `Secure` flag on session and CSRF cookies. |
 | `PANIC_AUTH_LOCAL_ENABLED` | `true` | Allow local password sign-in (bootstrap admin). |
@@ -89,7 +83,6 @@ All examples use reserved documentation names and addresses (`example.com`, RFC 
 | `PANIC_OIDC_SCOPES` | `openid profile email groups` | Requested scopes. |
 | `PANIC_OIDC_USERNAME_CLAIM` | `preferred_username` | Claim used as PANIC username. |
 | `PANIC_OIDC_DISPLAY_NAME_CLAIM` | `name` | Claim used as display name. |
-| `PANIC_OIDC_GROUPS_CLAIM` | `groups` | Claim holding group / role names (list or space/comma-separated string). |
 | `PANIC_OIDC_TIMEOUT_S` | `5` | HTTP timeout to the IdP. |
 
 ### LDAP / LDAPS
@@ -106,23 +99,12 @@ All examples use reserved documentation names and addresses (`example.com`, RFC 
 | `PANIC_LDAP_USER_FILTER` | `(uid={username})` | `{username}` is RFC 4515-escaped. AD: `(sAMAccountName={username})`. |
 | `PANIC_LDAP_USERNAME_ATTR` | `uid` | Attribute used as PANIC username. |
 | `PANIC_LDAP_DISPLAY_NAME_ATTR` | `displayName` | Display name attribute. |
-| `PANIC_LDAP_GROUP_BASE_DN` | *(empty)* | Group search base (empty = no group lookup). |
-| `PANIC_LDAP_GROUP_FILTER` | `(member={user_dn})` | `{user_dn}` / `{username}` are escaped. |
-| `PANIC_LDAP_GROUP_NAME_ATTR` | `cn` | Group name attribute. |
 | `PANIC_LDAP_TIMEOUT_S` | `5` | Connect/receive timeout. |
 
-### Group → RBAC / Team mapping (OIDC and LDAP)
-
-Group names are compared case-insensitively; an LDAP DN matches on its first RDN value.
-Permissions and team memberships are re-synchronised on every external sign-in.
-
-| Variable | Default | Description |
-|---|---|---|
-| `PANIC_RBAC_ADMIN_GROUPS` | *(empty)* | Groups granted `GLOBAL_ADMIN` (+ both contributor flags). |
-| `PANIC_RBAC_GLOBAL_CONTRIB_GROUPS` | *(empty)* | Groups granted `CAN_ADD_GLOBAL`. |
-| `PANIC_RBAC_TEAM_CONTRIB_GROUPS` | *(empty)* | Groups granted `CAN_ADD_TEAM`. |
-| `PANIC_RBAC_TEAM_GROUP_MAP` | *(empty)* | `external-group=TEAMCODE` pairs, e.g. `network-engineers=NETOPS`. |
-| `PANIC_RBAC_TEAM_GROUP_PREFIX` | *(empty)* | Groups named `<prefix><teamcode>` join that team, e.g. prefix `panic-team-`. |
+External identity (OIDC and LDAP) is for authentication only (T-S6-04, ADR-0001 decision 11):
+there is no group -> RBAC/team mapping. A first external sign-in creates the user with no
+permissions and no teams; a later sign-in only refreshes `display_name` and `last_login_at`.
+Permissions and team membership are granted solely on the `/settings/users` page.
 
 ## Security hardening
 
@@ -132,7 +114,9 @@ Permissions and team memberships are re-synchronised on every external sign-in.
 | `PANIC_RATE_LIMIT_ENABLED` | `true` | Per-client-IP limits (`429` + `Retry-After`). |
 | `PANIC_RATE_LIMIT_LOGIN` | `10/60` | `count/seconds` for `POST /login`. |
 | `PANIC_RATE_LIMIT_API` | `300/60` | `count/seconds` for state-changing `/api/*` requests. |
-| `PANIC_CACHE_URL` | *(local memory)* | `redis://…` shared cache for rate limits across workers/nodes (install the `redis` extra). |
+
+Rate-limit counters live in MongoDB's `rate_limits` collection (T-S6-04), shared by every
+worker/node automatically -- there is no separate cache setting.
 
 ## MongoDB (Stage 6)
 

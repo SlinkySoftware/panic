@@ -1,4 +1,4 @@
-"""Server test configuration: every test runs against a fresh, seeded relational database."""
+"""Server test configuration: a real MongoDB-backed test database per session (T-S6-02/04)."""
 
 from __future__ import annotations
 
@@ -8,23 +8,13 @@ from urllib.parse import urlsplit, urlunsplit
 
 import pytest
 from django.conf import settings
-from django.core.cache import cache
 from pymongo import MongoClient
 from pymongo.database import Database
 from pymongo.errors import PyMongoError
 
 from panic_server.conf import env
-from panic_server.state import STORE
 
 MONGO_PROBE_TIMEOUT_MS = 2000
-
-
-@pytest.fixture(autouse=True)
-def _db_backed_store(db: None) -> None:
-    cache.clear()  # rate-limit counters
-    STORE.simulation.active_user_id = "usr-admin"
-    STORE.simulation.view_as_user_id = None
-    STORE.reset()
 
 
 def _base_test_mongo_uri() -> str:

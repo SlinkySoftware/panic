@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
 
 from panic_server.conf import env_bool, env_int, env_list, env_str
 from panic_server.logging import logging_config
-
-BASE_DIR = Path(__file__).resolve().parent
 
 PANIC_ENV = env_str("PANIC_ENV", "dev")
 if PANIC_ENV not in {"dev", "test", "prod"}:
@@ -29,19 +26,26 @@ ALLOWED_HOSTS = env_list("PANIC_ALLOWED_HOSTS", "127.0.0.1,localhost,testserver,
 CSRF_TRUSTED_ORIGINS = env_list("PANIC_CSRF_TRUSTED_ORIGINS")
 
 PANIC_INSTANCE_NAME = env_str("PANIC_INSTANCE_NAME", "PANIC")
+
+# ---------------------------------------------------------------- Reverse proxy / Security Zones (AR-5)
 PANIC_TRUST_PROXY_HEADERS = env_bool("PANIC_TRUST_PROXY_HEADERS", True)
+_PANIC_PROXY_IP_HEADER_CHOICES = {"X-Forwarded-For", "Forwarded"}
 PANIC_PROXY_IP_HEADER = env_str("PANIC_PROXY_IP_HEADER", "X-Forwarded-For")
+if PANIC_PROXY_IP_HEADER not in _PANIC_PROXY_IP_HEADER_CHOICES:
+    # T-S6-04 removes the "X-Real-IP" option (AR-5.1: panic-web never sets it; the design has no
+    # use for it, dev or prod) -- only the two hop-chain-aware forms below remain valid.
+    raise ImproperlyConfigured("PANIC_PROXY_IP_HEADER must be X-Forwarded-For or Forwarded")
 PANIC_TRUSTED_PROXY_CIDRS = env_list("PANIC_TRUSTED_PROXY_CIDRS", "127.0.0.1/32,::1/128")
+PANIC_UNTRUSTED_PEER_POLICY = env_str("PANIC_UNTRUSTED_PEER_POLICY", "default")
+if PANIC_UNTRUSTED_PEER_POLICY not in {"default", "reject"}:
+    raise ImproperlyConfigured("PANIC_UNTRUSTED_PEER_POLICY must be default|reject")
+PANIC_XFF_MAX_HOPS = env_int("PANIC_XFF_MAX_HOPS", 16)
+PANIC_XFF_MAX_BYTES = env_int("PANIC_XFF_MAX_BYTES", 4096)
 
 
-# ---------------------------------------------------------------- Authentication (Stage 3)
-# simulator: dev/test RBAC simulator (no login). session: real login (local bootstrap admin, OIDC, LDAP).
-PANIC_AUTH_MODE = env_str("PANIC_AUTH_MODE", "session" if IS_PROD else "simulator").lower()
-if PANIC_AUTH_MODE not in {"simulator", "session"}:
-    raise ImproperlyConfigured("PANIC_AUTH_MODE must be simulator|session")
-if IS_PROD and PANIC_AUTH_MODE == "simulator":
-    raise ImproperlyConfigured("PANIC_AUTH_MODE=simulator is not permitted when PANIC_ENV=prod")
-PANIC_DEV_SIMULATOR_ENABLED = env_bool("PANIC_DEV_SIMULATOR_ENABLED", PANIC_AUTH_MODE == "simulator")
+# ---------------------------------------------------------------- Authentication (Stage 3, hardened T-S6-04)
+# There is no simulator left (ADR-0001 decision 6): identity always comes from a real sign-in
+# (local bootstrap admin, OIDC, LDAP) and the session engine below.
 PANIC_AUTH_LOCAL_ENABLED = env_bool("PANIC_AUTH_LOCAL_ENABLED", True)
 PANIC_BOOTSTRAP_ADMIN_USER = env_str("PANIC_BOOTSTRAP_ADMIN_USER", "")
 PANIC_BOOTSTRAP_ADMIN_PASSWORD = env_str("PANIC_BOOTSTRAP_ADMIN_PASSWORD", "")
@@ -58,7 +62,6 @@ PANIC_OIDC_REDIRECT_URI = env_str("PANIC_OIDC_REDIRECT_URI", "")
 PANIC_OIDC_SCOPES = env_str("PANIC_OIDC_SCOPES", "openid profile email groups")
 PANIC_OIDC_USERNAME_CLAIM = env_str("PANIC_OIDC_USERNAME_CLAIM", "preferred_username")
 PANIC_OIDC_DISPLAY_NAME_CLAIM = env_str("PANIC_OIDC_DISPLAY_NAME_CLAIM", "name")
-PANIC_OIDC_GROUPS_CLAIM = env_str("PANIC_OIDC_GROUPS_CLAIM", "groups")
 PANIC_OIDC_TIMEOUT_S = env_int("PANIC_OIDC_TIMEOUT_S", 5)
 
 PANIC_LDAP_ENABLED = env_bool("PANIC_LDAP_ENABLED", False)
@@ -71,27 +74,17 @@ PANIC_LDAP_USER_BASE_DN = env_str("PANIC_LDAP_USER_BASE_DN", "")
 PANIC_LDAP_USER_FILTER = env_str("PANIC_LDAP_USER_FILTER", "(uid={username})")
 PANIC_LDAP_USERNAME_ATTR = env_str("PANIC_LDAP_USERNAME_ATTR", "uid")
 PANIC_LDAP_DISPLAY_NAME_ATTR = env_str("PANIC_LDAP_DISPLAY_NAME_ATTR", "displayName")
-PANIC_LDAP_GROUP_BASE_DN = env_str("PANIC_LDAP_GROUP_BASE_DN", "")
-PANIC_LDAP_GROUP_FILTER = env_str("PANIC_LDAP_GROUP_FILTER", "(member={user_dn})")
-PANIC_LDAP_GROUP_NAME_ATTR = env_str("PANIC_LDAP_GROUP_NAME_ATTR", "cn")
 PANIC_LDAP_TIMEOUT_S = env_int("PANIC_LDAP_TIMEOUT_S", 5)
 
-# External group -> PANIC RBAC / Team mapping (panic_common.claim_mapping)
-PANIC_RBAC_ADMIN_GROUPS = env_list("PANIC_RBAC_ADMIN_GROUPS")
-PANIC_RBAC_GLOBAL_CONTRIB_GROUPS = env_list("PANIC_RBAC_GLOBAL_CONTRIB_GROUPS")
-PANIC_RBAC_TEAM_CONTRIB_GROUPS = env_list("PANIC_RBAC_TEAM_CONTRIB_GROUPS")
-# Comma-separated "external-group=TEAMCODE" pairs, plus an optional prefix ("panic-team-netops" -> NETOPS).
-PANIC_RBAC_TEAM_GROUP_MAP = env_list("PANIC_RBAC_TEAM_GROUP_MAP")
-PANIC_RBAC_TEAM_GROUP_PREFIX = env_str("PANIC_RBAC_TEAM_GROUP_PREFIX", "")
+# T-S6-04: external identity is authentication only. panic_common.claim_mapping, the OIDC groups
+# claim setting, the LDAP group-search settings, and every PANIC_RBAC_* group-mapping setting are
+# gone -- permissions and team membership only ever come from the users pages (ADR-0001 decision 11).
 
 ROOT_URLCONF = "panic_server.urls"
 WSGI_APPLICATION = "panic_server.wsgi.application"
 APPEND_SLASH = False
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 INSTALLED_APPS = [
-    "django.contrib.sessions",
-    "django.contrib.staticfiles",
     "rest_framework",
     "panic_server",
 ]
@@ -103,71 +96,26 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
-    # Loads relational state per request and persists mutations (Stage 2).
-    "panic_server.middleware.PortalStoreMiddleware",
-    "panic_server.middleware.ClientIpZoneMiddleware",
-    # Per-client-IP limits on /login and state-changing /api/* (T-S3-04).
+    # Resolves request.context: real/effective identity, client IP and Security Zone (T-S6-04).
+    "panic_server.middleware.RequestContextMiddleware",
+    # Per-client-IP (and per-username, for /login) limits, backed by Mongo (T-S3-04, T-S6-04).
     "panic_server.security.RateLimitMiddleware",
-    # Binds the authenticated session user to the store (Stage 3, T-S3-01).
+    # Binds the authenticated session user to the request (Stage 3, T-S6-04).
     "panic_server.auth.middleware.PanicAuthMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-SESSION_ENGINE = "django.contrib.sessions.backends.db"
+# T-S6-04: Mongo-backed sessions (DATA_MODEL.md §4.11, AR-4.7) -- there is no relational DATABASES
+# left, so the db-backed django.contrib.sessions.backends.db engine is not an option, and
+# "django.contrib.sessions" need not be an installed app either (its app only supplies the
+# django_session model/migration used by that db backend, and the clearsessions command -- a
+# no-op here, since the sessions collection's TTL index on expire_at reclaims expired rows).
+SESSION_ENGINE = "panic_server.store.sessions"
 SESSION_COOKIE_NAME = "panic_sessionid"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_SECURE = env_bool("PANIC_SESSION_COOKIE_SECURE", IS_PROD)
 SESSION_COOKIE_AGE = env_int("PANIC_SESSION_AGE_S", 8 * 3600)
-
-# Seed canonical demo fixtures automatically when the database is empty (dev/test only by default).
-PANIC_AUTO_SEED = env_bool("PANIC_AUTO_SEED", not IS_PROD)
-
-PANIC_DB_ENGINE = env_str("PANIC_DB_ENGINE", "sqlite").lower()
-if PANIC_DB_ENGINE == "sqlite":
-    PANIC_SQLITE_PATH = env_str("PANIC_SQLITE_PATH", str(BASE_DIR.parent.parent.parent / ".run" / "panic.sqlite3"))
-    if PANIC_SQLITE_PATH != ":memory:":
-        Path(PANIC_SQLITE_PATH).parent.mkdir(parents=True, exist_ok=True)
-    DATABASES: dict[str, dict[str, Any]] = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": PANIC_SQLITE_PATH,
-        }
-    }
-elif PANIC_DB_ENGINE in {"postgresql", "postgres"}:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": env_str("PANIC_DB_NAME", "panic"),
-            "USER": env_str("PANIC_DB_USER", "panic"),
-            "PASSWORD": env_str("PANIC_DB_PASSWORD", ""),
-            "HOST": env_str("PANIC_DB_HOST", "127.0.0.1"),
-            "PORT": env_int("PANIC_DB_PORT", 5432),
-            "CONN_MAX_AGE": env_int("PANIC_DB_CONN_MAX_AGE", 60),
-        }
-    }
-else:
-    raise ImproperlyConfigured(f"PANIC_DB_ENGINE must be sqlite or postgresql, got {PANIC_DB_ENGINE!r}")
-
-TEMPLATES = [
-    {
-        "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],
-        "APP_DIRS": True,
-        "OPTIONS": {
-            "context_processors": [
-                "django.template.context_processors.request",
-            ],
-        },
-    }
-]
-
-STATIC_URL = "/static/"
-STATICFILES_DIRS = [BASE_DIR / "static"]
-# ``manage.py collectstatic`` target. When PANIC_SERVE_STATIC is true and DEBUG is off, Django
-# serves this directory itself (suitable behind a caching reverse proxy); otherwise let the proxy serve it.
-STATIC_ROOT = env_str("PANIC_STATIC_ROOT", str(BASE_DIR.parent / "staticfiles"))
-PANIC_SERVE_STATIC = env_bool("PANIC_SERVE_STATIC", True)
 
 LANGUAGE_CODE = "en-au"
 TIME_ZONE = "UTC"
@@ -190,14 +138,6 @@ PANIC_CSP = env_str("PANIC_CSP", "")
 PANIC_RATE_LIMIT_ENABLED = env_bool("PANIC_RATE_LIMIT_ENABLED", True)
 PANIC_RATE_LIMIT_LOGIN = env_str("PANIC_RATE_LIMIT_LOGIN", "10/60")
 PANIC_RATE_LIMIT_API = env_str("PANIC_RATE_LIMIT_API", "300/60")
-_CACHE_URL = env_str("PANIC_CACHE_URL", "")
-CACHES: dict[str, dict[str, Any]] = {
-    "default": (
-        {"BACKEND": "django.core.cache.backends.redis.RedisCache", "LOCATION": _CACHE_URL}
-        if _CACHE_URL
-        else {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "panic"}
-    )
-}
 X_FRAME_OPTIONS = "DENY"
 
 REST_FRAMEWORK: dict[str, Any] = {
