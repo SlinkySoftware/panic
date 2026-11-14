@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-15 — Fix: `./panic start` used a relational `migrate` command that no longer exists
+- `cmd_start` in the `panic` script still ran `manage.py migrate --noinput` before serving.
+  `T-S6-04` removed `DATABASES` entirely (Mongo-only since then), so this has silently crashed
+  `./panic start` on `main` since that commit. Replaced with `manage.py panic_ensure_indexes` +
+  `manage.py panic_migrate` (the Mongo-era equivalents, `T-S6-02`). Verified live: clean start,
+  `/api/v1/health`/`/api/v1/auth/providers` respond, `./panic test` still 222/222.
+- **Deviation note:** `Build/Containers/server/entrypoint.sh` has the identical stale
+  `manage.py migrate` call — left untouched since it's owned by the not-yet-run `T-S6-12`, which
+  must fix it too (see `Documents/SESSION_STATUS.md`).
+- Found while implementing `T-S6-08`, which is otherwise blocked on an unrelated environment
+  issue (see `Documents/SESSION_STATUS.md` §0a) and not committed with this fix.
+
 ## 2026-11-15 — T-S6-07: Scoped API part 2 — resources, mutations, concurrency, admin, diagnostics
 - Built the rest of the API.md §4.3–§4.7 surface: `/me`, catalog/lists/dashboards CRUD (`If-Match`
   required on dashboards and lists, `428`/`409 VERSION_CONFLICT` with `current_version`),
