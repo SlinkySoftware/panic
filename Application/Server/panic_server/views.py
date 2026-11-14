@@ -1032,35 +1032,6 @@ def lists_api_view(request: HttpRequest) -> JsonResponse:
             STORE.record_audit("list.delete", "endpoint_list", list_id, f"Deleted list '{lst.title}'")
             return JsonResponse(STORE.build_snapshot())
 
-        if action == "reorder":
-            list_id = str(body.get("id", ""))
-            lst = next((item for item in STORE.lists if item.id == list_id), None)
-            if lst is None:
-                return JsonResponse({"error_code": ErrorCode.NOT_FOUND, "detail": "List not found"}, status=404)
-            allowed, reason = can_create_or_edit_scope(user, lst.scope)
-            if not allowed:
-                return JsonResponse({"error_code": ErrorCode.PERMISSION_DENIED, "detail": reason}, status=403)
-            item_ids = [str(iid) for iid in body.get("item_ids", []) if str(iid).strip()]
-            valid_scopes, scope_errors = validate_list_item_scopes(lst.scope, item_ids, STORE.catalog)
-            if not valid_scopes:
-                return JsonResponse(
-                    {
-                        "error_code": ErrorCode.SCOPE_MISMATCH,
-                        "detail": scope_errors[0],
-                        "errors": scope_errors,
-                    },
-                    status=400,
-                )
-            lst.item_ids = item_ids
-            STORE.record_audit(
-                "list.reorder",
-                "endpoint_list",
-                list_id,
-                f"Reordered items in {lst.scope.value} list '{lst.title}' ({len(item_ids)} items)",
-                {"item_ids": item_ids},
-            )
-            return JsonResponse(STORE.build_snapshot())
-
         scope_str = str(body.get("scope", "GLOBAL")).upper()
         scope = ScopeType(scope_str if scope_str in {"GLOBAL", "TEAM", "PERSONAL"} else "GLOBAL")
         allowed, reason = can_create_or_edit_scope(user, scope)

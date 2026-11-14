@@ -210,12 +210,8 @@ def test_list_order_and_widget_layout_persist_across_reload() -> None:
     b = Browser()
     b.login()
     order = ["cat-rtr-3mel-02", "cat-rtr-2sya-01"]
-    assert (
-        b.api(
-            "post", "/api/v1/lists", {"action": "reorder", "id": "list-global-routers", "item_ids": order}
-        ).status_code
-        == 200
-    )
+    save = {"action": "save", "id": "list-global-routers", "title": "Routers", "scope": "GLOBAL", "item_ids": order}
+    assert b.api("post", "/api/v1/lists", save).status_code == 200
     assert next(lst for lst in _fresh().lists if lst.id == "list-global-routers").item_ids[:2] == order
 
     dash_id = b.api("post", "/api/v1/dashboards", {"action": "create", "title": "E2E Grid", "scope": "GLOBAL"}).json()[

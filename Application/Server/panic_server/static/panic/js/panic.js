@@ -530,22 +530,9 @@
         : items
             .map(
               (item, idx) => `
-          <tr class="${canEditList ? "draggable-row" : ""}" ${
-                canEditList
-                  ? `draggable="true" data-list-drag-row="${esc(
-                      endpointList.id
-                    )}" data-item-id="${esc(item.id)}" data-item-idx="${idx}"`
-                  : ""
-              }>
+          <tr>
             <td style="white-space:nowrap;">
               <div style="display:inline-flex; align-items:center; gap:6px;">
-                ${
-                  canEditList
-                    ? `<span class="drag-handle" title="Drag row to reorder items in ${esc(
-                        displayTitle
-                      )}">&#10495;</span>`
-                    : ""
-                }
                 ${renderProtocolBadge(item.protocol)}
               </div>
             </td>
@@ -575,11 +562,6 @@
             <span class="ws-badge tone-offline tabular">${items.length} ${
       items.length === 1 ? "item" : "items"
     }</span>
-            ${
-              canEditList && items.length > 1
-                ? `<span class="text-muted" style="font-size:11px; font-weight:400;" title="Drag and drop rows to change list order">&#10495; Drag rows to reorder</span>`
-                : ""
-            }
           </h3>
           ${
             endpointList.description
@@ -1486,7 +1468,6 @@
       let draggedWidgetIdx = null;
       container.querySelectorAll(".page-card[data-widget-idx]").forEach((cardEl) => {
         cardEl.addEventListener("dragstart", (ev) => {
-          if (ev.target.closest("[data-list-drag-row]")) return;
           draggedWidgetIdx = Number(cardEl.getAttribute("data-widget-idx"));
           cardEl.classList.add("draggable-row--dragging");
           if (ev.dataTransfer) {
@@ -1531,7 +1512,6 @@
       });
     }
 
-    bindListTableDragAndDrop(container);
   }
 
   function openAddWidgetModal() {
@@ -2120,94 +2100,6 @@
 
   /* ------------------------------------------------------------------ Endpoint Lists Screen (/lists) — 2 Cards (Global/Team & Personal) */
 
-  function bindListTableDragAndDrop(rootEl) {
-    if (!rootEl) return;
-    let dragState = null;
-
-    rootEl.querySelectorAll("tr[data-list-drag-row]").forEach((rowEl) => {
-      rowEl.addEventListener("dragstart", (ev) => {
-        ev.stopPropagation();
-        const listId = rowEl.getAttribute("data-list-drag-row");
-        const itemId = rowEl.getAttribute("data-item-id");
-        const itemIdx = Number(rowEl.getAttribute("data-item-idx"));
-        dragState = { listId, itemId, itemIdx };
-        rowEl.classList.add("draggable-row--dragging");
-        if (ev.dataTransfer) {
-          ev.dataTransfer.effectAllowed = "move";
-          ev.dataTransfer.setData("text/plain", `${listId}:${itemId}`);
-        }
-      });
-
-      rowEl.addEventListener("dragend", () => {
-        dragState = null;
-        rowEl.classList.remove("draggable-row--dragging");
-        rootEl.querySelectorAll(".draggable-row--over").forEach((el) => {
-          el.classList.remove("draggable-row--over");
-        });
-      });
-
-      rowEl.addEventListener("dragover", (ev) => {
-        if (!dragState) return;
-        const targetListId = rowEl.getAttribute("data-list-drag-row");
-        const targetIdx = Number(rowEl.getAttribute("data-item-idx"));
-        if (targetListId !== dragState.listId || targetIdx === dragState.itemIdx) return;
-        ev.preventDefault();
-        ev.stopPropagation();
-        rowEl.classList.add("draggable-row--over");
-      });
-
-      rowEl.addEventListener("dragleave", () => {
-        rowEl.classList.remove("draggable-row--over");
-      });
-
-      rowEl.addEventListener("drop", async (ev) => {
-        if (!dragState) return;
-        const targetListId = rowEl.getAttribute("data-list-drag-row");
-        const targetIdx = Number(rowEl.getAttribute("data-item-idx"));
-        rowEl.classList.remove("draggable-row--over");
-        if (targetListId !== dragState.listId || targetIdx === dragState.itemIdx) return;
-        ev.preventDefault();
-        ev.stopPropagation();
-
-        const fromIdx = dragState.itemIdx;
-        dragState = null;
-        const lst = (appState.snapshot.lists || []).find((l) => l.id === targetListId);
-        if (!lst) return;
-
-        const currentIds = Array.isArray(lst.item_ids)
-          ? [...lst.item_ids]
-          : (lst.items || []).map((it) => it.id);
-        if (fromIdx < 0 || fromIdx >= currentIds.length || targetIdx < 0 || targetIdx >= currentIds.length) {
-          return;
-        }
-        const [movedId] = currentIds.splice(fromIdx, 1);
-        currentIds.splice(targetIdx, 0, movedId);
-
-        try {
-          appState.snapshot = await apiRequest("/api/v1/lists", "POST", {
-            action: "reorder",
-            id: targetListId,
-            item_ids: currentIds,
-          });
-          if (appState.editMode && appState.workingDashboard) {
-            const updatedList = (appState.snapshot.lists || []).find((l) => l.id === targetListId);
-            if (updatedList) {
-              for (const w of appState.workingDashboard.widgets || []) {
-                if (w.list_id === targetListId) {
-                  w.resolved_list = updatedList;
-                }
-              }
-            }
-          }
-          renderAll();
-          showToast("List Order Updated", `Reordered items in '${lst.title}'`, "ok");
-        } catch (err) {
-          showToast("Reorder Failed", err.message, "error");
-        }
-      });
-    });
-  }
-
   function renderListsView(container) {
     const allLists = appState.snapshot.lists || [];
     const visibleLists = allLists.filter((l) => {
@@ -2355,7 +2247,6 @@
       createPersBtn.addEventListener("click", () => openListModal(null, "PERSONAL"));
     }
 
-    bindListTableDragAndDrop(container);
   }
 
   function openListModal(existingList = null, preferredScope = null) {

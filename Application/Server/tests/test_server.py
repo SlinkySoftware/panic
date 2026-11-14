@@ -408,8 +408,10 @@ def test_list_item_reorder_and_sites_crud_and_protocol_specific_items() -> None:
         "/api/v1/lists",
         data=json.dumps(
             {
-                "action": "reorder",
+                "action": "save",
                 "id": "list-global-routers",
+                "title": "Routers",
+                "scope": "GLOBAL",
                 "item_ids": ["cat-rtr-3mel-02", "cat-rtr-2sya-01"],
             }
         ),

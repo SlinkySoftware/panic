@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="csrf-token" content="{{ csrf_token }}" />
   <title>{{ instance_name }} — Portal for Accessing Networks, Infrastructure, and Compute</title>
-  <link rel="stylesheet" href="{% static 'panic/css/app.css' %}?v=6" />
+  <link rel="stylesheet" href="{% static 'panic/css/app.css' %}?v=7" />
 </head>
 <body class="{% if snapshot.user.theme == 'DARK' %}body--dark{% endif %} {% if snapshot.user.density == 'COMPACT' %}density--compact{% endif %}" data-initial-view="{{ initial_view }}" data-initial-dashboard-id="{{ initial_dashboard_id|default:'' }}" data-initial-edit="{% if initial_edit %}true{% else %}false{% endif %}">
   <div class="shell" id="panic-app">
@@ -147,6 +147,6 @@
 
   <!-- Hydrated Stage 1 State Snapshot -->
   <script id="panic-initial-state" type="application/json">{{ initial_state_json|safe }}</script>
-  <script src="{% static 'panic/js/panic.js' %}?v=6"></script>
+  <script src="{% static 'panic/js/panic.js' %}?v=7"></script>
 </body>
 </html>

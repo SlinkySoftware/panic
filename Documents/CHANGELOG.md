@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-14 — List reordering only in the Edit List modal
+- Removed drag-to-reorder rows from Endpoint List cards on dashboards (LIST widgets) and on `/lists`; item order now changes only in the Edit List modal (saved with `action: "save"`).
+- Removed the `/api/v1/lists` `action: "reorder"` endpoint. Static asset version bumped to `v=7`.
+
 ## 2026-11-14 — JIT entitlements removed from scope
 - Removed live JIT entitlement providers (former Stage 5 / `T-S5-01`): `panic_common.entitlements`, `panic_server.entitlements_service`, `/api/v1/entitlements`, `.rdp` entitlement gating, `ENTITLEMENT_DENIED`, and all `PANIC_JIT_*` / `PANIC_ENTITLEMENT_*` settings. Stage 5 dropped from `SPEC.md` and `TASKS.md`.
 
