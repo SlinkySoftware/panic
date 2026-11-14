@@ -17,9 +17,7 @@ IS_PROD = PANIC_ENV == "prod"
 
 _PLACEHOLDER_SECRET = "change-me-to-a-long-random-string"  # noqa: S105
 SECRET_KEY = env_str("PANIC_DJANGO_SECRET_KEY", "dev-insecure-" + "0" * 40)
-if IS_PROD and (
-    SECRET_KEY == _PLACEHOLDER_SECRET or SECRET_KEY.startswith("dev-insecure-") or len(SECRET_KEY) < 32
-):
+if IS_PROD and (SECRET_KEY == _PLACEHOLDER_SECRET or SECRET_KEY.startswith("dev-insecure-") or len(SECRET_KEY) < 32):
     raise ImproperlyConfigured("PANIC_DJANGO_SECRET_KEY must be set to a long random value in prod")
 
 DEBUG = env_bool("PANIC_DEBUG", not IS_PROD)
@@ -196,3 +194,7 @@ PANIC_NAV_MAX_DASHBOARDS = env_int("PANIC_NAV_MAX_DASHBOARDS", 100)
 #: Per-LIST-widget item cap on a dashboard view (API.md §4.2); a list's own "Show all" page uses
 #: the larger PANIC_LIST_MAX_ITEMS instead (T-S6-07's /api/v1/lists/{id}).
 PANIC_LIST_WIDGET_MAX_ITEMS = env_int("PANIC_LIST_WIDGET_MAX_ITEMS", 200)
+
+# ---------------------------------------------------------------- resources/mutations (T-S6-07)
+#: Hard cap on an endpoint list's item_ids (DATA_MODEL.md §3); PUT/GET /api/v1/lists/{id} enforce this.
+PANIC_LIST_MAX_ITEMS = env_int("PANIC_LIST_MAX_ITEMS", 500)

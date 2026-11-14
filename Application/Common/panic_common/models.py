@@ -176,6 +176,7 @@ class UserAccount(BaseModel):
     theme: ThemeMode = ThemeMode.DARK
     unreachable_policy: UnreachablePolicy = UnreachablePolicy.DIM
     search_keys: list[str] = Field(default_factory=list)
+    last_login_at: str | None = None
     updated_at: str = "2026-11-01T00:00:00Z"
     version: int = 1
 
@@ -190,9 +191,13 @@ class SystemSettings(BaseModel):
 class AuditLogEntry(BaseModel):
     id: str
     actor_username: str
+    view_as_username: str | None = None
     action: str
     target_type: str
     target_id: str
     summary: str
     details: dict[str, Any] = Field(default_factory=dict)
+    client_ip: str = ""
+    zone_id: str | None = None
+    request_id: str | None = None
     created_at: str

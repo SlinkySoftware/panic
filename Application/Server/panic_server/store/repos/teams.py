@@ -80,13 +80,14 @@ def update_team(
 def delete_team(db: Database[dict[str, Any]], team_id: str, expected_version: int) -> dict[str, int]:
     """Delete a team, ``$pull`` its id from every reference, and orphan TEAM resources left bare.
 
-    Returns the number of documents touched in each affected collection, for the caller to report.
+    Returns the number of documents touched in each affected collection (``users``, and
+    ``<collection>``/``<collection>_orphaned`` for each of the three scoped collections), for the
+    caller to report (API.md §4.7: ``200 {orphaned: {catalog, lists, dashboards}}``).
     """
     delete_versioned(db[COLLECTION], team_id, expected_version)
     counts: dict[str, int] = {}
     users_result = db["users"].update_many({"team_ids": team_id}, {"$pull": {"team_ids": team_id}})
     counts["users"] = users_result.modified_count
-    orphaned_total = 0
     for collection in ("catalog_items", "endpoint_lists", "dashboards"):
         pulled = db[collection].update_many(
             {"team_ids": team_id},
@@ -97,8 +98,7 @@ def delete_team(db: Database[dict[str, Any]], team_id: str, expected_version: in
             {"scope": "TEAM", "team_ids": [], "orphaned": {"$ne": True}},
             {"$set": {"orphaned": True}, "$inc": {"version": 1}},
         )
-        orphaned_total += orphaned.modified_count
-    counts["orphaned"] = orphaned_total
+        counts[f"{collection}_orphaned"] = orphaned.modified_count
     return counts
 
 

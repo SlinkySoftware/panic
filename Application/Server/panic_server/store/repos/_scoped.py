@@ -11,6 +11,13 @@ from panic_common.visibility import VisibilitySpec
 from panic_server.store.filters import visibility_filter
 
 
+def count_owned_by(db: Database[dict[str, Any]], collection: str, username: str) -> int:
+    """How many documents in ``collection`` list ``username`` among their ``owner_usernames``
+    (T-S6-07: ``GET /api/v1/users/{id}``'s ``owned_counts``). Regardless of current ``scope`` --
+    a resource keeps its creator/owner history even if later re-scoped."""
+    return db[collection].count_documents({"owner_usernames": username})
+
+
 def find_visible(
     db: Database[dict[str, Any]],
     collection: str,

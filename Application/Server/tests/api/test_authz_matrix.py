@@ -22,7 +22,14 @@ from pymongo.database import Database
 
 from panic_common.models import PermissionFlag
 from panic_server.api import urls as api_urls
-from panic_server.api.permissions import TIERS, DenyAll, IsAuthenticated, IsGlobalAdmin, IsPublic, tier_of
+from panic_server.api.permissions import (
+    TIERS,
+    DenyAll,
+    IsAuthenticated,
+    IsGlobalAdmin,
+    IsPublic,
+    tier_of_method,
+)
 from panic_server.context import SESSION_USER_KEY
 from panic_server.store.repos import users as users_repo
 from panic_server.store.repos import zones as zones_repo
@@ -33,6 +40,17 @@ pytestmark = [pytest.mark.mongo]
 _SAMPLE_KWARGS: dict[str, dict[str, str]] = {
     "ui-dashboard": {"dashboard_id": "does-not-exist"},
     "launch-rdp": {"item_id": "does-not-exist"},
+    "dashboard-detail": {"dashboard_id": "does-not-exist"},
+    "dashboard-layout": {"dashboard_id": "does-not-exist"},
+    "me-menu": {"dashboard_id": "does-not-exist"},
+    "catalog-detail": {"item_id": "does-not-exist"},
+    "list-detail": {"list_id": "does-not-exist"},
+    "site-detail": {"site_id": "does-not-exist"},
+    "team-detail": {"team_id": "does-not-exist"},
+    "team-members": {"team_id": "does-not-exist"},
+    "zone-detail": {"zone_id": "does-not-exist"},
+    "user-detail": {"user_id": "does-not-exist"},
+    "orphan-assign": {"kind": "catalog", "item_id": "does-not-exist"},
 }
 
 
@@ -81,16 +99,19 @@ def _client_as(user_id: str | None) -> Client:
 
 
 def _routes() -> list[tuple[str, str, str | None]]:
-    """``(url_path, http_method, tier)`` for every pattern in ``panic_server.api.urls``."""
+    """``(url_path, http_method, tier)`` for every ``(route, method)`` pair in
+    ``panic_server.api.urls`` -- every declared method, not just one arbitrary one: T-S6-07
+    introduced mixed-tier routes (e.g. ``GET /sites`` is "A", ``POST /sites`` is "G", same path),
+    so the tier can depend on the method (:func:`tier_of_method`)."""
     routes = []
     for pattern in api_urls.urlpatterns:
         view = pattern.callback
         cls = view.cls
         methods = [m for m in cls.http_method_names if m != "options"]
-        method = methods[0] if methods else "get"
         name = pattern.name
         path = reverse(name, kwargs=_SAMPLE_KWARGS.get(name, {}))
-        routes.append((path, method, tier_of(cls.permission_classes)))
+        for method in methods:
+            routes.append((path, method, tier_of_method(cls.permission_classes, method)))
     return routes
 
 

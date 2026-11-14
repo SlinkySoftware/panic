@@ -176,10 +176,30 @@ def upsert_user(db: Database[dict[str, Any]], model: UserAccount) -> UserAccount
         "updated_at": from_iso_z(model.updated_at),
         "version": model.version,
     }
-    db[COLLECTION].update_one({"_id": model.id}, {"$set": doc}, upsert=True)
+    update: dict[str, Any] = {"$set": doc}
+    if model.last_login_at is not None:
+        doc["last_login_at"] = from_iso_z(model.last_login_at)
+    else:
+        update["$unset"] = {"last_login_at": ""}
+    db[COLLECTION].update_one({"_id": model.id}, update, upsert=True)
     return model
 
 
 def delete_all_users(db: Database[dict[str, Any]]) -> int:
     """Wipe every user (``panic_seed --reset``). Returns the number deleted."""
     return db[COLLECTION].delete_many({}).deleted_count
+
+
+def remove_dashboard_references(db: Database[dict[str, Any]], dashboard_id: str) -> int:
+    """``$pull`` ``dashboard_id`` from every user's pins and clear it as their default (T-S6-07).
+
+    Called by the dashboard-delete cascade (API.md §4.3: "removes it from users' pins/defaults").
+    Not CAS-protected: like ``touch_last_login``, this never touches a field a concurrent editor
+    of the *user* document would race on (``permissions``/``team_ids``/etc.), only the two
+    dashboard-reference fields, so a plain ``update_many`` is safe and avoids a per-user CAS loop.
+    """
+    pulled = db[COLLECTION].update_many(
+        {"pinned_dashboard_ids": dashboard_id}, {"$pull": {"pinned_dashboard_ids": dashboard_id}}
+    )
+    unset = db[COLLECTION].update_many({"default_dashboard_id": dashboard_id}, {"$set": {"default_dashboard_id": None}})
+    return pulled.modified_count + unset.modified_count

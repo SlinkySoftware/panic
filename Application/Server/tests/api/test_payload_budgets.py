@@ -29,6 +29,7 @@ separate reasons:
 from __future__ import annotations
 
 import io
+import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
@@ -135,6 +136,21 @@ def plain_user_id(loadtest_db: Database) -> str:
 
 
 @pytest.fixture(scope="module")
+def admin_user_id(loadtest_db: Database) -> str:
+    """A fresh ``GLOBAL_ADMIN`` (T-S6-07's mutation budget tests need ``CAN_ADD_GLOBAL`` rights
+    to edit the loadtest dataset's ``GLOBAL``-scope dashboards/catalog items/lists; ``plain_user_id``
+    deliberately has no permissions, API.md §4.7's read-side budgets only)."""
+    user = users_repo.create_user(
+        loadtest_db,
+        username="budget-admin",
+        display_name="Budget Admin",
+        default_remote_user="budget-admin",
+        permissions=["GLOBAL_ADMIN"],
+    )
+    return user.id
+
+
+@pytest.fixture(scope="module")
 def typical_dashboard_id(loadtest_db: Database) -> str:
     # Every loadtest dashboard has exactly 3 widgets (fixtures/loadtest.py) -- well inside the
     # "typical" band (<=12 widgets, <=150 items). GLOBAL, so visible to any user.
@@ -167,8 +183,7 @@ def largest_dashboard_id(loadtest_db: Database) -> str:
         {"id": f"bt-list-{n}", "widget_type": "LIST", "list_id": lid} for n, lid in enumerate(list_ids)
     ]
     widgets += [
-        {"id": f"bt-host-{n}", "widget_type": "HOST", "catalog_item_id": iid}
-        for n, iid in enumerate(host_item_ids)
+        {"id": f"bt-host-{n}", "widget_type": "HOST", "catalog_item_id": iid} for n, iid in enumerate(host_item_ids)
     ]
 
     dashboard = dashboards_repo.create_dashboard(
@@ -266,3 +281,61 @@ def test_search_payload_budget(plain_user_id: str) -> None:
     with _count_mongo_roundtrips() as (counter, db):
         run_search(db, context, "budgetsearch", 20)
     assert counter.count <= SEARCH_MAX_ROUNDTRIPS, f"search took {counter.commands}"
+
+
+# ---------------------------------------------------------------- T-S6-07 mutation budgets
+#
+# API.md §8: "Any mutation response <= 32 KB (dashboard layout <= 48 KB)". These extend this same
+# file/pattern (not a parallel one) for the write endpoints T-S6-07 adds, reusing the loadtest
+# dataset's catalog items so the dashboard-layout case is a realistic, non-trivial payload (close
+# to the 100-widget cap), not a one-widget toy.
+
+MUTATION_MAX_BYTES = 32 * 1024
+DASHBOARD_LAYOUT_MUTATION_MAX_BYTES = 48 * 1024
+
+
+def test_dashboard_layout_mutation_payload_budget(loadtest_db: Database, admin_user_id: str) -> None:
+    item_ids = [i.id for i in catalog_repo.list_all_catalog_items(loadtest_db) if i.scope == "GLOBAL"][:100]
+    dashboard = dashboards_repo.create_dashboard(loadtest_db, title="Mutation Budget Dashboard", created_by="system")
+    widgets = [
+        {
+            "widget_type": "HOST",
+            "catalog_item_id": iid,
+            "grid_x": (n % 3) * 4 + 1,
+            "grid_y": n // 3 + 1,
+            "grid_w": 4,
+            "grid_h": 1,
+        }
+        for n, iid in enumerate(item_ids)
+    ]
+    resp = _client_as(admin_user_id).put(
+        f"/api/v1/dashboards/{dashboard.id}/layout",
+        data=json.dumps({"widgets": widgets}),
+        content_type="application/json",
+        HTTP_IF_MATCH=str(dashboard.version),
+    )
+    assert resp.status_code == 200, resp.content
+    assert len(resp.json()["widgets"]) == len(item_ids)
+    assert len(resp.content) <= DASHBOARD_LAYOUT_MUTATION_MAX_BYTES, f"layout mutation body {len(resp.content)}B"
+
+
+def test_catalog_mutation_payload_budget(loadtest_db: Database, admin_user_id: str) -> None:
+    item = next(i for i in catalog_repo.list_all_catalog_items(loadtest_db) if i.scope == "GLOBAL")
+    resp = _client_as(admin_user_id).patch(
+        f"/api/v1/catalog/{item.id}", data=json.dumps({"description": "budget check"}), content_type="application/json"
+    )
+    assert resp.status_code == 200, resp.content
+    assert len(resp.content) <= MUTATION_MAX_BYTES, f"catalog mutation body {len(resp.content)}B"
+
+
+def test_list_mutation_payload_budget(loadtest_db: Database, admin_user_id: str) -> None:
+    item_ids = [i.id for i in catalog_repo.list_all_catalog_items(loadtest_db) if i.scope == "GLOBAL"][:50]
+    lst = lists_repo.create_list(loadtest_db, title="Mutation Budget List", created_by="system", item_ids=item_ids)
+    resp = _client_as(admin_user_id).put(
+        f"/api/v1/lists/{lst.id}",
+        data=json.dumps({"title": "Mutation Budget List", "scope": "GLOBAL", "item_ids": list(reversed(item_ids))}),
+        content_type="application/json",
+        HTTP_IF_MATCH=str(lst.version),
+    )
+    assert resp.status_code == 200, resp.content
+    assert len(resp.content) <= MUTATION_MAX_BYTES, f"list mutation body {len(resp.content)}B"

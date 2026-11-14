@@ -176,3 +176,12 @@ def upsert_catalog_item(db: Database[dict[str, Any]], model: CatalogItem) -> Cat
 def delete_all_catalog_items(db: Database[dict[str, Any]]) -> int:
     """Wipe every catalog item (``panic_seed --reset``). Returns the number deleted."""
     return db[COLLECTION].delete_many({}).deleted_count
+
+
+def rename_site_code(db: Database[dict[str, Any]], old_code: str, new_code: str) -> int:
+    """``$set`` every item's ``site`` from ``old_code`` to ``new_code`` in one ``update_many``
+    (DATA_MODEL.md §4.2: "renaming a code updates referencing items"). Returns the count touched."""
+    if old_code == new_code:
+        return 0
+    result = db[COLLECTION].update_many({"site": old_code}, {"$set": {"site": new_code}})
+    return result.modified_count

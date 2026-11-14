@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-11-15 — T-S6-07: Scoped API part 2 — resources, mutations, concurrency, admin, diagnostics
+- Built the rest of the API.md §4.3–§4.7 surface: `/me`, catalog/lists/dashboards CRUD (`If-Match`
+  required on dashboards and lists, `428`/`409 VERSION_CONFLICT` with `current_version`),
+  admin (sites/teams/zones/users/orphans/view-as/settings), audit, export, and
+  `GET /api/v1/admin/client-ip` diagnostics. New `services/{dashboards,catalog,lists,admin,
+  profile,audit,view_as}.py`, `api/concurrency.py` (If-Match parsing/428/409 shaping),
+  `api/validation.py`.
+- Closed F1–F6 (ADR-0001): F1 user-permission/team mutations and audit (F2) are
+  `GLOBAL_ADMIN`-only; duplicate-catalog and `zones/test-ip` (F5) report only what the caller can
+  see; list saves (F6) reject invisible or wrong-scope item ids without mutating; edit/delete
+  (F4) enforce ownership/team membership via `panic_common.visibility.matches`/`can_edit`
+  exclusively (never the older `rbac.is_visible_in_scope`, which DATA_MODEL.md §5 keeps only as
+  the parity-test baseline). Orphan lifecycle (team delete -> orphan -> admin-only visible,
+  `403 ORPHANED_RESOURCE` on edit, assign-to-user, admin-only delete) and default-zone/last-site/
+  last-admin/app-wide-default protected-resource rules all have regression tests. A real
+  2-thread concurrent-edit test confirms exactly one winner.
+- **Deviations:** found and fixed a real bug in `auth/middleware.py` (View As was popping its own
+  session key on the request that started it, reading a stale `context` snapshot) and a round-trip
+  gap in `panic_common.models` (`UserAccount.last_login_at`, `AuditLogEntry.{view_as_username,
+  client_ip,zone_id,request_id}` were written but silently dropped on read). Both narrow,
+  necessary fixes to already-merged files, not design changes. New `ReadAuthenticatedWriteAdmin`/
+  `IsRealGlobalAdmin` permission classes for routes where `GET` is any-signed-in-user but the
+  write is admin-only (sites/teams/zones/settings), and for View-As exit needing the *real* user.
+- `./panic test`: 222 passed; ruff, mypy, import-linter (AR-1.1/4.1/4.2) clean.
+  `./panic contracts --check`: clean.
+
 ## 2026-11-15 — T-S6-06: Scoped API part 1 — DRF scaffold, auth, UI read endpoints, OpenAPI
 - New `panic_server.api` package: error envelope (`api/errors.py`, every DRF/domain exception ->
   API.md §3 shape), `RequestContextAuthentication` (bridges T-S6-04's `request.context` into

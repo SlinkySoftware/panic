@@ -68,7 +68,7 @@ def test_delete_team_pulls_references_and_orphans_bare_team_resources(mongo_db: 
     counts = teams.delete_team(mongo_db, team.id, team.version)
     assert counts["users"] == 1
     assert counts["catalog_items"] == 1
-    assert counts["orphaned"] >= 1
+    assert counts["catalog_items_orphaned"] >= 1
 
     user_after = mongo_db["users"].find_one({"_id": user_doc_id})
     assert user_after is not None

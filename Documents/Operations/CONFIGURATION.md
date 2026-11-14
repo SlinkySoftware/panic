@@ -138,6 +138,7 @@ See [`API.md`](../Architecture/API.md) §4.2 and [`DATA_MODEL.md`](../Architectu
 |---|---|---|
 | `PANIC_NAV_MAX_DASHBOARDS` | `100` | Cap on `GET /api/v1/ui/bootstrap`'s `nav.dashboards`. |
 | `PANIC_LIST_WIDGET_MAX_ITEMS` | `200` | Cap on a LIST widget's `item_ids` on `GET /api/v1/ui/dashboards/{id}`; `truncated: true` past this. |
+| `PANIC_LIST_MAX_ITEMS` | `500` | Hard cap on an endpoint list's `item_ids` (DATA_MODEL.md §3); enforced by `PUT /api/v1/lists/{id}` and `GET /api/v1/lists/{id}`'s resolved `items`. |
 
 ## Reserved
 

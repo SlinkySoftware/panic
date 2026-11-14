@@ -58,6 +58,14 @@ class PanicAuthMiddleware:
 
         response = self.get_response(request)
 
-        if not context.view_as_active:
+        # Re-read ``request.context``, not the ``context`` captured above: T-S6-07's View As
+        # start/exit views (``services.view_as``) deliberately swap ``request.context`` for a
+        # freshly rebuilt one *during* the view, after mutating the session's View As key. Using
+        # the pre-view snapshot here would see the *old* (necessarily ``view_as_active=False``)
+        # state on the very request that starts View As, and immediately pop the key straight
+        # back out of the session this middleware is supposed to only be tidying up after the
+        # fact (e.g. a View As target that went stale/disabled mid-session elsewhere).
+        current_context = getattr(request, "context", context)
+        if not current_context.view_as_active:
             request.session.pop(SESSION_VIEW_AS_KEY, None)
         return response
