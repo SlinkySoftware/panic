@@ -31,7 +31,7 @@ panic-server = { workspace = true }
 [tool.ruff]
 target-version = "py313"
 line-length = 120
-extend-exclude = ["Build/Work", ".tools", ".venv", "*.md"]
+extend-exclude = ["Build/Work", ".tools", ".venv", "*.md", "**/migrations/*.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "RUF", "S", "PT", "DTZ"]
@@ -54,6 +54,10 @@ check_untyped_defs = true
 [[tool.mypy.overrides]]
 module = ["panic_common.*"]
 strict = true
+
+[[tool.mypy.overrides]]
+module = ["panic_server.migrations.*"]
+ignore_errors = true
 
 [[tool.mypy.overrides]]
 module = ["panic_server.*"]

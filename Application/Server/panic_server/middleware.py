@@ -1,4 +1,4 @@
-"""Request-ID propagation, access log, and Prometheus request metrics (mirroring reference_server.middleware)."""
+"""Request-ID propagation, access log, Prometheus metrics, and Client-IP / Security Zone middleware."""
 
 from __future__ import annotations
 
@@ -8,12 +8,18 @@ import time
 import uuid
 from collections.abc import Callable
 
+from django.conf import settings
 from django.http import HttpRequest, HttpResponse
 from prometheus_client import Counter, Histogram
 
+from panic_common.proxy import resolve_client_ip
+from panic_common.zones import resolve_ip_zone
 from panic_server.logging import request_id_var
+from panic_server.state import STORE
 
 REQUEST_ID_HEADER = "X-Request-ID"
+CLIENT_IP_HEADER = "X-Client-IP"
+SECURITY_ZONE_HEADER = "X-Security-Zone"
 _VALID_REQUEST_ID = re.compile(r"^[A-Za-z0-9._:\-]{1,128}$")
 
 access_log = logging.getLogger("panic_server.access")
@@ -68,3 +74,35 @@ class RequestIdMiddleware:
             return response
         finally:
             request_id_var.reset(token)
+
+
+class ClientIpZoneMiddleware:
+    """Resolve effective client IP (trusted reverse-proxy aware) and Security Zone on every request."""
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        remote_addr = request.META.get("REMOTE_ADDR", "127.0.0.1")
+        trust_proxy_headers = bool(getattr(settings, "PANIC_TRUST_PROXY_HEADERS", True))
+        trusted_proxy_cidrs = getattr(settings, "PANIC_TRUSTED_PROXY_CIDRS", ["127.0.0.1/32", "::1/128"])
+        proxy_ip_header = str(getattr(settings, "PANIC_PROXY_IP_HEADER", "X-Forwarded-For"))
+
+        ip_res = resolve_client_ip(
+            remote_addr=remote_addr,
+            headers=request.headers,
+            trust_proxy_headers=trust_proxy_headers,
+            trusted_proxy_cidrs=trusted_proxy_cidrs,
+            proxy_ip_header=proxy_ip_header,
+        )
+        zone_res = resolve_ip_zone(ip_res.client_ip, STORE.zones)
+
+        request.client_ip = ip_res.client_ip
+        request.client_ip_resolution = ip_res
+        request.resolved_zone = zone_res.winning_zone
+        request.zone_resolution = zone_res
+
+        response = self.get_response(request)
+        response[CLIENT_IP_HEADER] = ip_res.client_ip
+        response[SECURITY_ZONE_HEADER] = zone_res.winning_zone.id if zone_res.winning_zone else "UNZONED"
+        return response
