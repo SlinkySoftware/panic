@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-14 — Security hotfix: ADR-0001 findings F1–F3
+- F1: `POST /api/v1/rbac` (`update_user`, `create_user`) now requires `GLOBAL_ADMIN` on the signed-in user. Before this fix, any user could grant themselves Global Admin.
+- F2: `GET /api/v1/audit` is Global Admin only (otherwise `403`), and the portal snapshot's `audit_logs` is empty for non-admins.
+- F3: `GET /api/v1/launch/rdp/<id>.rdp` returns `404` for items the effective user cannot see.
+- Regression tests are in `Application/Server/tests/test_authz_hotfix.py`.
+
 ## 2026-11-14 — Stage 6 Phase A: design for the web/server split, MongoDB and scoped API (docs only)
 - `Documents/Architecture/adr/0001-web-server-mongo-split.md`: the owner's decisions 1–9, the rejected alternatives, authorization findings F1–F6 in the current API, and open questions.
 - `ARCHITECTURE.md` is rewritten for the Stage 6 target:

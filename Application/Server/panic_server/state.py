@@ -1102,7 +1102,11 @@ class MockPortalStore:
                 "dashboards": menu_dashboards,
                 "accessible_dashboards": all_visible_dashboards,
                 "available_dashboards": available_shared_dashboards,
-                "audit_logs": [a.model_dump() for a in self.audit_logs[:100]],
+                "audit_logs": (
+                    [a.model_dump() for a in self.audit_logs[:100]]
+                    if has_permission(auth, PermissionFlag.GLOBAL_ADMIN)
+                    else []
+                ),
             }
 
     def find_launch_target(self, target_id: str) -> tuple[str, int, str, str] | None:
@@ -1111,6 +1115,8 @@ class MockPortalStore:
             user = self.active_user
             for cat in self.catalog:
                 if cat.id == target_id:
+                    if not is_visible_in_scope(user, cat.scope, cat.team_ids, cat.owner_usernames):
+                        return None
                     _, clean_host, port = normalize_target(cat.protocol, cat.host, cat.port, cat.path_or_args)
                     username = cat.account_override or user.default_remote_user
                     return clean_host, port, username, cat.title

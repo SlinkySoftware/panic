@@ -110,7 +110,11 @@ def version_view(request: HttpRequest) -> JsonResponse:
 
 
 def audit_api_view(request: HttpRequest) -> JsonResponse:
-    """Filtered audit log (``actor``, ``action`` prefix, ``target_type``, free-text ``q``, ``limit``)."""
+    """Filtered audit log (``actor``, ``action`` prefix, ``target_type``, free-text ``q``, ``limit``) (Global Admin)."""
+    if not has_permission(STORE.auth_user, PermissionFlag.GLOBAL_ADMIN):
+        return JsonResponse(
+            {"error_code": ErrorCode.PERMISSION_DENIED, "detail": "The audit log requires Global Admin"}, status=403
+        )
     try:
         limit = int(request.GET.get("limit", "100"))
     except ValueError:
@@ -1332,6 +1336,15 @@ def rbac_api_view(request: HttpRequest) -> JsonResponse:
     """Manage in-app RBAC permissions (Global Admin, Can Add to Global Scope Items, Can Add Team Scope Items)."""
     if request.method != "POST":
         return JsonResponse({"error_code": ErrorCode.VALIDATION_ERROR, "detail": "POST required"}, status=405)
+
+    if not has_permission(STORE.auth_user, PermissionFlag.GLOBAL_ADMIN):
+        return JsonResponse(
+            {
+                "error_code": ErrorCode.PERMISSION_DENIED,
+                "detail": "RBAC Denied: Managing users and permissions requires 'Global Admin' permission.",
+            },
+            status=403,
+        )
 
     body = _json_body(request)
     action = str(body.get("action", "update_user"))
