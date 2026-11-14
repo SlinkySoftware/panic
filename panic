@@ -64,6 +64,9 @@ cmd_start() {
         ok "panic-server" "already running (pid $(cat "$PIDS/server.pid"), http://$SERVER_BIND)"
         return
     fi
+    # Stage 2+: apply relational migrations before serving (idempotent).
+    (cd "$SERVER_DIR" && "$VENV/bin/python" manage.py migrate --noinput >"$LOGS/migrate.log" 2>&1) \
+        || { cat "$LOGS/migrate.log" >&2; die "panic-server migrations failed"; }
     (
         cd "$SERVER_DIR"
         nohup "$VENV/bin/python" manage.py runserver "$SERVER_BIND" --noreload >"$LOGS/server.log" 2>&1 &
