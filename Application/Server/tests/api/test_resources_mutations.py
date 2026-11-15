@@ -379,6 +379,26 @@ def test_dashboard_patch_requires_if_match(mongo_db: Any, plain: Any) -> None:
     assert resp.json()["error_code"] == "PRECONDITION_REQUIRED"
 
 
+def test_dashboard_icon_create_patch_and_menu(mongo_db: Any, plain: Any) -> None:
+    client = _client_as(plain.id)
+    bad = _json(client, "post", "/api/v1/dashboards", {"title": "Bad Icon", "scope": "PERSONAL", "icon": "x y"})
+    assert bad.status_code == 400 and "icon" in bad.json()["fields"]
+    plain_default = _json(client, "post", "/api/v1/dashboards", {"title": "No Icon", "scope": "PERSONAL"})
+    assert plain_default.json()["icon"] == "dashboard"
+    made = _json(client, "post", "/api/v1/dashboards", {"title": "Routers", "scope": "PERSONAL", "icon": "router"})
+    assert made.status_code == 201 and made.json()["icon"] == "router"
+    patched = _json(
+        client,
+        "patch",
+        f"/api/v1/dashboards/{made.json()['id']}",
+        {"icon": "dns"},
+        HTTP_IF_MATCH=str(made.json()["version"]),
+    )
+    assert patched.status_code == 200
+    nav = client.get("/api/v1/ui/bootstrap").json()["nav"]["dashboards"]
+    assert {d["id"]: d["icon"] for d in nav}[made.json()["id"]] == "dns"
+
+
 def test_dashboard_layout_rejects_duplicate_targets(mongo_db: Any, plain: Any) -> None:
     dashboard = dashboards_repo.create_dashboard(
         mongo_db, title="Dup Dash", created_by=plain.username, scope="PERSONAL", owner_usernames=[plain.username]

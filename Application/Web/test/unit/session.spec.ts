@@ -18,7 +18,7 @@ function bootstrap(overrides: Partial<BootstrapResponse> = {}): BootstrapRespons
     view_as: null,
     permissions: { global_admin: true, can_add_global: true, can_add_team: true, can_view_as: true },
     client: { ip: '198.51.100.23', zone: { id: 'zone-1', name: 'Jump Hosts' }, zone_source: 'CIDR' },
-    nav: { dashboards: [{ id: 'dash-1', title: 'Network Ops', default: true, locked: true }] },
+    nav: { dashboards: [{ id: 'dash-1', title: 'Network Ops', icon: 'router', default: true, locked: true }] },
     default_dashboard: { id: 'dash-1', source: 'USER' },
     ...overrides,
   };
@@ -63,7 +63,9 @@ describe('session store', () => {
 
     expect(session.isAuthenticated).toBe(true);
     expect(session.isAdmin).toBe(true);
-    expect(session.navDashboards).toEqual([{ id: 'dash-1', title: 'Network Ops', default: true, locked: true }]);
+    expect(session.navDashboards).toEqual([
+      { id: 'dash-1', title: 'Network Ops', icon: 'router', default: true, locked: true },
+    ]);
     expect(session.defaultDashboard).toEqual({ id: 'dash-1', source: 'USER' });
     expect(session.zone).toEqual({ id: 'zone-1', name: 'Jump Hosts' });
 

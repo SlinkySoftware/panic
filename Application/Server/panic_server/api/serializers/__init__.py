@@ -104,6 +104,7 @@ class ClientSerializer(serializers.Serializer):
 class NavDashboardSerializer(serializers.Serializer):
     id = serializers.CharField()
     title = serializers.CharField()
+    icon = serializers.CharField()
     default = serializers.BooleanField()
     locked = serializers.BooleanField()
 
@@ -156,6 +157,7 @@ class DashboardPropsSerializer(serializers.Serializer):
     team_ids = serializers.ListField(child=serializers.CharField())
     owner_usernames = serializers.ListField(child=serializers.CharField())
     always_display = serializers.BooleanField()
+    icon = serializers.CharField()
     version = serializers.IntegerField()
     can_edit = serializers.BooleanField()
     is_user_default = serializers.BooleanField()

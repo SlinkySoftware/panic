@@ -31,6 +31,7 @@ export interface DashboardView {
     scope: Scope;
     team_ids: string[];
     always_display: boolean;
+    icon: string;
     version: number;
     can_edit: boolean;
     is_user_default: boolean;
@@ -48,6 +49,7 @@ export interface DashboardInput {
   scope: Scope;
   team_ids: string[];
   always_display?: boolean;
+  icon?: string;
   set_as_user_default?: boolean;
 }
 
@@ -85,6 +87,7 @@ export interface DashboardSummary {
   always_display: boolean;
   sort_order: number;
   in_menu: boolean;
+  icon: string;
 }
 
 export function listDashboards(query: {
@@ -105,6 +108,7 @@ export interface DashboardResource {
   scope: Scope;
   team_ids: string[];
   always_display: boolean;
+  icon: string;
   widgets: Widget[];
   version: number;
   can_edit: boolean;

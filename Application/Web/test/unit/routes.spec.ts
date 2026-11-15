@@ -23,7 +23,7 @@ function bootstrapPayload(overrides: Partial<BootstrapResponse> = {}): Bootstrap
     view_as: null,
     permissions: { global_admin: false, can_add_global: false, can_add_team: true, can_view_as: false },
     client: { ip: '198.51.100.23', zone: { id: 'zone-default', name: 'Default' }, zone_source: 'DEFAULT' },
-    nav: { dashboards: [{ id: 'dash-xyz', title: 'Network Ops', default: true, locked: true }] },
+    nav: { dashboards: [{ id: 'dash-xyz', title: 'Network Ops', icon: 'router', default: true, locked: true }] },
     default_dashboard: { id: 'dash-xyz', source: 'USER' },
     ...overrides,
   };

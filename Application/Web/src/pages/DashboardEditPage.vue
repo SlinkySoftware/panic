@@ -106,6 +106,10 @@
         <q-card-section class="text-h6">Dashboard details</q-card-section>
         <q-card-section class="row q-col-gutter-md">
           <q-input v-model="details.title" class="col-12" label="Title" v-bind="field" />
+          <div class="col-12 row items-center q-gutter-sm">
+            <span class="text-body2 text-grey-8">Menu icon</span>
+            <IconPicker v-model="details.icon" :label="details.icon.replace(/_/g, ' ')" />
+          </div>
           <q-input
             v-model="details.description"
             class="col-12"
@@ -137,6 +141,7 @@ import { computed, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import AddWidgetDialog, { type Picked } from '@/components/dashboard/AddWidgetDialog.vue';
+import IconPicker from '@/components/dashboard/IconPicker.vue';
 import { clampBox, COLS, nextFreeRow, settle } from '@/components/dashboard/grid';
 import {
   deleteDashboard,
@@ -346,13 +351,14 @@ onBeforeRouteLeave(
 
 // ---- dashboard details (PATCH) and delete
 const detailsOpen = ref(false);
-const details = reactive({ title: '', description: '', always_display: false });
+const details = reactive({ title: '', description: '', always_display: false, icon: 'dashboard' });
 watch(detailsOpen, (open) => {
   if (open && dash.value)
     Object.assign(details, {
       title: dash.value.title,
       description: dash.value.description,
       always_display: dash.value.always_display,
+      icon: dash.value.icon || 'dashboard',
     });
 });
 async function saveDetails() {
@@ -361,12 +367,14 @@ async function saveDetails() {
     const d = await patchDashboard(dash.value.id, dash.value.version, {
       title: details.title.trim(),
       description: details.description.trim(),
+      icon: details.icon,
       ...(session.isAdmin ? { always_display: details.always_display } : {}),
     });
     Object.assign(dash.value, {
       title: d.title,
       description: d.description,
       always_display: d.always_display,
+      icon: d.icon,
       version: d.version,
     });
     detailsOpen.value = false;

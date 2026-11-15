@@ -12,7 +12,7 @@ import uuid
 from typing import Any
 
 from panic_common.errors import ErrorCode
-from panic_common.models import Dashboard, PermissionFlag, ScopeType, UserAccount, WidgetType
+from panic_common.models import DASHBOARD_ICON_RE, Dashboard, PermissionFlag, ScopeType, UserAccount, WidgetType
 from panic_common.rbac import has_permission
 from panic_common.search_keys import search_keys as compute_search_keys
 from panic_common.visibility import Decision, can_create, can_edit, matches, visibility_spec
@@ -69,6 +69,7 @@ def list_dashboard_summaries(
             "scope": str(d.scope),
             "team_ids": list(d.team_ids),
             "always_display": d.always_display,
+            "icon": d.icon,
             "sort_order": d.sort_order,
             "in_menu": d.always_display or d.id in pinned,
         }
@@ -93,6 +94,7 @@ def _props(dashboard: Dashboard, user: UserAccount) -> dict[str, Any]:
         "team_ids": list(dashboard.team_ids),
         "owner_usernames": list(dashboard.owner_usernames),
         "always_display": dashboard.always_display,
+        "icon": dashboard.icon,
         "sort_order": dashboard.sort_order,
         "orphaned": dashboard.orphaned,
         "version": dashboard.version,
@@ -114,6 +116,18 @@ def _props(dashboard: Dashboard, user: UserAccount) -> dict[str, Any]:
     }
 
 
+def _check_icon(icon: Any) -> str:
+    """A Material icon name for the menu; anything else is a 400 on the ``icon`` field."""
+    if not isinstance(icon, str) or not re.match(DASHBOARD_ICON_RE, icon):
+        raise ApiError(
+            ErrorCode.VALIDATION_ERROR,
+            "Icon must be a Material icon name (lowercase letters, digits, underscores).",
+            status_code=400,
+            fields={"icon": ["Lowercase letters, digits and underscores only."]},
+        )
+    return icon
+
+
 def create_dashboard(
     db: Any,
     real_user: UserAccount,
@@ -124,6 +138,7 @@ def create_dashboard(
     team_ids: list[str] | None = None,
     owner_usernames: list[str] | None = None,
     always_display: bool = False,
+    icon: str = "dashboard",
     set_as_user_default: bool = False,
     set_as_global_default: bool = False,
 ) -> Dashboard:
@@ -155,6 +170,7 @@ def create_dashboard(
         team_ids=list(team_ids or []),
         owner_usernames=owners,
         always_display=always_display,
+        icon=_check_icon(icon),
         search_keys=keys,
     )
 
@@ -176,7 +192,7 @@ def create_dashboard(
 
 
 _PATCH_FIELDS = frozenset(
-    {"title", "description", "scope", "team_ids", "owner_usernames", "always_display", "sort_order"}
+    {"title", "description", "scope", "team_ids", "owner_usernames", "always_display", "sort_order", "icon"}
 )
 
 
@@ -205,6 +221,8 @@ def update_dashboard_properties(
     fields = dict(fields)
     if "scope" in fields:
         fields["scope"] = str(new_scope)
+    if "icon" in fields:
+        fields["icon"] = _check_icon(fields["icon"])
     return dashboards_repo.update_dashboard(db, dashboard_id, expected_version, updated_by=real_user.username, **fields)
 
 

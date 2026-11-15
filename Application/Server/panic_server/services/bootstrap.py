@@ -110,6 +110,7 @@ def build_bootstrap(db: Any, context: RequestContext) -> dict[str, Any]:
                 {
                     "id": d.id,
                     "title": d.title,
+                    "icon": d.icon,
                     "default": d.id == default_id,
                     "locked": d.always_display or d.id == default_id,
                 }

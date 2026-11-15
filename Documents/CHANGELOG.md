@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-15 — Dashboard icons in the menu
+- Dashboards carry an `icon` (Material icon name, default `dashboard`, validated server-side), set on
+  create (`POST /dashboards`) and in edit mode's Dashboard details (`PATCH`), returned in
+  `ui/bootstrap` `nav.dashboards`, dashboard summaries and views. The left menu and the Add dashboard
+  list show it. `IconPicker.vue`: curated operations icons with search, or any valid icon name.
+
 ## 2026-11-15 — T-S6-13: operations and user documentation
 - `CONFIGURATION.md`: container init, gunicorn, panic-web, compose/dev variables and a "Removed in
   Stage 6" table; the coverage test now scans all server modules, both images and the compose files,

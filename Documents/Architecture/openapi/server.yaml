@@ -1241,6 +1241,8 @@ components:
             type: string
         always_display:
           type: boolean
+        icon:
+          type: string
         version:
           type: integer
         can_edit:
@@ -1253,6 +1255,7 @@ components:
       - always_display
       - can_edit
       - description
+      - icon
       - id
       - is_global_default
       - is_user_default
@@ -1434,12 +1437,15 @@ components:
           type: string
         title:
           type: string
+        icon:
+          type: string
         default:
           type: boolean
         locked:
           type: boolean
       required:
       - default
+      - icon
       - id
       - locked
       - title

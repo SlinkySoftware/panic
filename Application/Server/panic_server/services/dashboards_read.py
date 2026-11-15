@@ -127,6 +127,7 @@ def build_dashboard_view(db: Any, context: RequestContext, dashboard_id: str) ->
             "team_ids": list(dashboard.team_ids),
             "owner_usernames": list(dashboard.owner_usernames),
             "always_display": dashboard.always_display,
+            "icon": dashboard.icon,
             "version": dashboard.version,
             "can_edit": decision.allowed,
             "is_user_default": is_user_default,

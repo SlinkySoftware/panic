@@ -142,6 +142,10 @@ class DashboardWidget(BaseModel):
     list_id: str | None = None
 
 
+#: A Material icon ligature name: lowercase letters, digits and underscores (e.g. ``router``).
+DASHBOARD_ICON_RE = r"^[a-z0-9_]{1,40}$"
+
+
 class Dashboard(BaseModel):
     id: str
     title: str
@@ -151,6 +155,7 @@ class Dashboard(BaseModel):
     owner_usernames: list[str] = Field(default_factory=list)
     always_display: bool = False
     sort_order: int = 0
+    icon: str = "dashboard"  # Material icon name shown in the menu (validated by DASHBOARD_ICON_RE)
     widgets: list[DashboardWidget] = Field(default_factory=list)
     search_keys: list[str] = Field(default_factory=list)
     orphaned: bool = False

@@ -122,7 +122,7 @@
           active-class="text-primary"
           :data-testid="`nav-dashboard-${d.id}`"
         >
-          <q-item-section avatar><q-icon name="dashboard" /></q-item-section>
+          <q-item-section avatar><q-icon :name="d.icon || 'dashboard'" /></q-item-section>
           <q-item-section>{{ d.title }}</q-item-section>
           <q-item-section v-if="d.default" side>
             <q-icon name="star" size="16px" color="amber">

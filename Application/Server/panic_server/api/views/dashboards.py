@@ -56,6 +56,7 @@ def dashboards_view(request: Request) -> Response:
         team_ids=body.get("team_ids"),
         owner_usernames=body.get("owner_usernames"),
         always_display=bool(body.get("always_display", False)),
+        icon=body.get("icon") or "dashboard",
         set_as_user_default=bool(body.get("set_as_user_default", False)),
         set_as_global_default=bool(body.get("set_as_global_default", False)),
     )

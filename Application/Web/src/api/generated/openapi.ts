@@ -634,6 +634,7 @@ export interface components {
             team_ids: string[];
             owner_usernames: string[];
             always_display: boolean;
+            icon: string;
             version: number;
             can_edit: boolean;
             is_user_default: boolean;
@@ -706,6 +707,7 @@ export interface components {
         NavDashboard: {
             id: string;
             title: string;
+            icon: string;
             default: boolean;
             locked: boolean;
         };

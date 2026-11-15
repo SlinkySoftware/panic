@@ -43,7 +43,7 @@
               >
             </q-item>
             <q-item v-for="d in available" :key="d.id" clickable @click="addExisting(d.id)">
-              <q-item-section avatar><q-icon name="dashboard" /></q-item-section>
+              <q-item-section avatar><q-icon :name="d.icon || 'dashboard'" /></q-item-section>
               <q-item-section>{{ d.title }}</q-item-section>
               <q-item-section side><q-badge :color="scopeColor[d.scope]" :label="d.scope" /></q-item-section>
             </q-item>
@@ -65,6 +65,10 @@
             map-options
             v-bind="field"
           />
+          <div class="col-12 row items-center q-gutter-sm">
+            <span class="text-body2 text-grey-8">Menu icon</span>
+            <IconPicker v-model="form.icon" :label="form.icon.replace(/_/g, ' ')" />
+          </div>
           <q-input
             v-model="form.description"
             class="col-12"
@@ -94,6 +98,7 @@ import { listCodeNamed, type CodeNamed } from '@/api/admin';
 import type { Scope } from '@/api/catalog';
 import { createDashboard, listDashboards, pinDashboard, type DashboardSummary } from '@/api/dashboards';
 import { useSessionStore } from '@/stores/session';
+import IconPicker from './IconPicker.vue';
 
 const props = defineProps<{ modelValue: boolean }>();
 const emit = defineEmits<{ 'update:modelValue': [open: boolean] }>();
@@ -121,7 +126,8 @@ const form = reactive<{
   scope: Scope;
   team_ids: string[];
   set_as_user_default: boolean;
-}>({ title: '', description: '', scope: 'PERSONAL', team_ids: [], set_as_user_default: false });
+  icon: string;
+}>({ title: '', description: '', scope: 'PERSONAL', team_ids: [], set_as_user_default: false, icon: 'dashboard' });
 const saving = ref(false);
 const saveError = ref('');
 
@@ -162,7 +168,14 @@ watch(
   () => props.modelValue,
   async (open) => {
     if (!open) return;
-    Object.assign(form, { title: '', description: '', scope: 'PERSONAL', team_ids: [], set_as_user_default: false });
+    Object.assign(form, {
+      title: '',
+      description: '',
+      scope: 'PERSONAL',
+      team_ids: [],
+      set_as_user_default: false,
+      icon: 'dashboard',
+    });
     saveError.value = '';
     search.value = '';
     scopeFilter.value = null;

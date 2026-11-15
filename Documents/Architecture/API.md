@@ -95,7 +95,7 @@ Called once per page load (and after sign-in / View As changes).
   "view_as": null,                       // or {"id","username","display_name"} of the subject
   "permissions": {"global_admin": false, "can_add_global": false, "can_add_team": true, "can_view_as": false},
   "client": {"ip": "198.51.100.23", "zone": {"id": "zone-…", "name": "Jump Hosts"}, "zone_source": "CIDR"},
-  "nav": {"dashboards": [{"id": "uuid", "title": "Network Ops", "default": true, "locked": true}]},
+  "nav": {"dashboards": [{"id": "uuid", "title": "Network Ops", "icon": "router", "default": true, "locked": true}]},
   "default_dashboard": {"id": "uuid", "source": "USER | SYSTEM_GLOBAL | FALLBACK"}
 }
 ```
@@ -158,9 +158,9 @@ title-prefix > token-prefix, then type order. `q` shorter than 2 characters → 
 | Method & path | Access | Notes |
 |---|---|---|
 | `GET /api/v1/dashboards?scope=&q=&page=` | A | Summaries `{id, title, scope, team_ids, always_display, sort_order, in_menu}` for the "Add existing" and default-dashboard pickers |
-| `POST /api/v1/dashboards` | A + scope rights | `{title, description, scope, team_ids?, owner_usernames?, always_display?, set_as_user_default?, set_as_global_default?}` → `201` dashboard resource; pinned to creator's menu. Starts empty (no hard-coded "Routers" widget) |
+| `POST /api/v1/dashboards` | A + scope rights | `{title, description, scope, team_ids?, owner_usernames?, always_display?, icon?, set_as_user_default?, set_as_global_default?}` (`icon`: Material icon name, default `dashboard`) → `201` dashboard resource; pinned to creator's menu. Starts empty (no hard-coded "Routers" widget) |
 | `GET /api/v1/dashboards/{id}` | A | Editable resource: properties + `widgets` + `version` (no resolved items) |
-| `PATCH /api/v1/dashboards/{id}` | `can_edit` · If-Match | Properties: `title, description, scope, team_ids, owner_usernames, always_display, sort_order` |
+| `PATCH /api/v1/dashboards/{id}` | `can_edit` · If-Match | Properties: `title, description, scope, team_ids, owner_usernames, always_display, sort_order, icon` |
 | `PUT /api/v1/dashboards/{id}/layout` | `can_edit` · If-Match | `{"widgets": [...]}` full replacement; server clamps grid (`x 1..12`, `w 3..12`, `h 1..6`, `x+w-1 ≤ 12`), checks each referenced item/list is visible, ≤ 100 widgets |
 | `DELETE /api/v1/dashboards/{id}` | `can_edit` · If-Match | `409 PROTECTED_RESOURCE` for the app-wide default; removes it from users' pins/defaults (`update_many`) |
 
