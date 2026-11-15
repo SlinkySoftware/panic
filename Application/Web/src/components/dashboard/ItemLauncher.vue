@@ -21,29 +21,41 @@
     <!-- Fixed-width columns so rows line up whatever each contains (zones / site / action). -->
     <q-item-section v-if="showZones" side class="panic-col-zones" data-testid="item-zones">
       <div class="row no-wrap items-center justify-end q-gutter-x-xs full-width">
-        <q-badge v-if="item.zone_names.length === 0" outline color="grey-6" label="All zones" />
+        <q-badge v-if="item.zone_names.length === 0" class="panic-badge" outline color="grey-6" label="All zones" />
         <template v-else>
           <q-badge
             v-for="z in item.zone_names.slice(0, 2)"
             :key="z"
+            class="panic-badge panic-zone-badge"
             outline
             color="teal"
-            class="panic-zone-badge"
             :label="z"
           >
             <q-tooltip>{{ z }}</q-tooltip>
           </q-badge>
-          <q-badge v-if="item.zone_names.length > 2" outline color="teal" :label="`+${item.zone_names.length - 2}`">
+          <q-badge
+            v-if="item.zone_names.length > 2"
+            class="panic-badge"
+            outline
+            color="teal"
+            :label="`+${item.zone_names.length - 2}`"
+          >
             <q-tooltip>{{ item.zone_names.join(', ') }}</q-tooltip>
           </q-badge>
         </template>
       </div>
     </q-item-section>
     <q-item-section side class="panic-col-site">
-      <q-badge v-if="item.site" outline color="grey-7" :label="item.site" />
+      <q-badge v-if="item.site" class="panic-badge" outline color="grey-7" :label="item.site" />
     </q-item-section>
     <q-item-section side class="panic-col-action">
-      <q-badge v-if="!item.reachable" outline color="negative" label="Unavailable" class="panic-unavailable" />
+      <q-badge
+        v-if="!item.reachable"
+        class="panic-badge panic-unavailable"
+        outline
+        color="negative"
+        label="Unavailable"
+      />
       <q-btn
         v-else-if="item.launch?.uri"
         flat
@@ -87,12 +99,20 @@ const icons: Record<string, string> = { SSH: 'terminal', RDP: 'desktop_windows',
   align-items: flex-end;
   overflow: hidden;
 }
+/* One badge look for the whole row (zones, All zones, site, Unavailable): same radius, padding, height. */
+.panic-badge {
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  line-height: 14px;
+  min-height: 0;
+}
 .panic-zone-badge {
+  display: inline-block;
   max-width: 48%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  display: inline-block;
 }
 .panic-col-site {
   width: 76px;
