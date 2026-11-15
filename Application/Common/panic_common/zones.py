@@ -50,7 +50,8 @@ def resolve_ip_zone(
 ) -> ZoneResolutionResult:
     """Resolve a connecting client / jump-host IP against defined Security Zone CIDRs.
 
-    Most-specific prefix length wins; ties are broken by highest Zone ``priority``.
+    Longest matching prefix wins. Ties: the zone with the smallest total address space (same IP version),
+    then the highest Zone ``priority``, then the zone name.
     """
     cleaned_ip = ip_str.strip()
     try:
@@ -78,7 +79,21 @@ def resolve_ip_zone(
                     )
                 )
 
-    candidates.sort(key=lambda c: (c.prefix_len, c.priority), reverse=True)
+    # Most specific first: longest matching prefix; on a tie, the zone covering the fewest addresses
+    # overall (a zone that is just this /22 beats one spanning several networks); then higher priority;
+    # then name, so the result never depends on input order.
+    def zone_size(zone_id: str) -> int:
+        total = 0
+        for cidr in zone_by_id[zone_id].cidrs:
+            try:
+                net = ipaddress.ip_network(cidr.strip(), strict=False)
+            except ValueError:
+                continue
+            if net.version == addr.version:
+                total += net.num_addresses
+        return total
+
+    candidates.sort(key=lambda c: (-c.prefix_len, zone_size(c.zone_id), -c.priority, c.zone_name))
 
     winning_zone: SecurityZone | None = None
     matched_cidr: str | None = None

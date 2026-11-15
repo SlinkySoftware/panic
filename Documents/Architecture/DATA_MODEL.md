@@ -98,6 +98,10 @@ Deleting a team does three things:
 ### 4.4 `zones` (Security Zones)
 
 `{_id, name, description, priority, cidrs: ["192.0.2.0/24", "2001:db8::/48"], builtin?, created_at, updated_at, version}`.
+
+Resolution (most specific wins): the longest matching prefix; on a tie, the zone with the smallest total
+address space in that IP version (a zone that is only `192.0.2.0/24` beats one spanning several
+networks); then the higher `priority`; then the name. `priority` matters only for exact ties.
 CIDRs are canonicalised by `panic_common.zones.validate_cidr_list`. Indexes: `{name: 1}` unique.
 
 **Default zone.** `{_id: "zone-default", name: "Default", builtin: true, cidrs: []}` is created by

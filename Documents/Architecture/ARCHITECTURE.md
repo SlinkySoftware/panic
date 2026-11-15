@@ -56,7 +56,7 @@ browser ──► corporate reverse proxy / LB ──► panic-web (nginx, zone 
   streamed with `Cache-Control: no-store`. They are never written to disk.
 - **AR-2.4** **Zone reachability.**
   - The caller's Security Zone comes **only** from the real client IP (§5), matched against Zone
-    CIDRs by longest prefix, then highest priority. There is no simulator or override in any
+    CIDRs by longest prefix, then the zone with the smallest total address space, then highest priority, then name. There is no simulator or override in any
     environment.
   - When the location is unknown (§5) or the IP matches no CIDR, the caller is in the built-in
     **Default** zone (`zone-default`). Every request has exactly one zone. The Default zone

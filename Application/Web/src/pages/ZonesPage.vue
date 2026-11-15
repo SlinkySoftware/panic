@@ -91,7 +91,7 @@
               class="col-12 col-sm-4"
               type="number"
               label="Priority"
-              hint="Lower wins on overlap"
+              hint="Tie-breaker only: higher wins"
               :disable="form.builtin"
               v-bind="{ ...field, ...err('priority') }"
             />

@@ -227,3 +227,32 @@ def test_launchers_sanitize_injection_and_generate_rdp() -> None:
     )
     assert "full address:s:rtr.example.netalternate shell:s:cmd.exe:3389\r\n" in rdp_body
     assert "username:s:OPS\\joperator\r\n" in rdp_body
+
+
+def test_zone_longest_prefix_wins_over_containing_zone() -> None:
+    from panic_common.models import SecurityZone
+    from panic_common.zones import resolve_ip_zone
+
+    site = SecurityZone(id="z-site", name="Site", description="", cidrs=["198.51.100.0/22"])
+    pc = SecurityZone(id="z-pc", name="Workstation", description="", cidrs=["198.51.100.41/32"])
+    for order in ([site, pc], [pc, site]):
+        r = resolve_ip_zone("198.51.100.41", order)
+        assert r.winning_zone is not None and r.winning_zone.name == "Workstation"
+        assert r.matched_cidr == "198.51.100.41/32"
+    assert resolve_ip_zone("198.51.100.42", [site, pc]).winning_zone.name == "Site"  # type: ignore[union-attr]
+
+
+def test_zone_tie_on_prefix_goes_to_the_narrower_zone_then_priority() -> None:
+    from panic_common.models import SecurityZone
+    from panic_common.zones import resolve_ip_zone
+
+    company = SecurityZone(
+        id="z-co", name="Company Addresses", description="", cidrs=["198.51.100.0/22", "203.0.113.0/22"]
+    )
+    site = SecurityZone(id="z-site", name="Site", description="", cidrs=["198.51.100.0/22"])
+    for order in ([company, site], [site, company]):
+        assert resolve_ip_zone("198.51.100.7", order).winning_zone.name == "Site"  # type: ignore[union-attr]
+    # same prefix and same size: higher priority wins
+    a = SecurityZone(id="z-a", name="A", description="", priority=100, cidrs=["192.0.2.0/24"])
+    b = SecurityZone(id="z-b", name="B", description="", priority=200, cidrs=["192.0.2.0/24"])
+    assert resolve_ip_zone("192.0.2.9", [a, b]).winning_zone.name == "B"  # type: ignore[union-attr]
