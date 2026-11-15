@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-15 — SSH client presets; full name in the header
+- Profile: "SSH client" dropdown (OpenSSH, PuTTY, Plink, Windows Terminal + OpenSSH, Custom) filling the
+  editable template; editing makes it Custom; live preview. Presets are client-side
+  (`components/profile/sshPresets.ts`, unit-tested); the server's template hygiene accepts all of them.
+- Header: "Portal for Accessing Networks, Infrastructure, and Compute" under the PANIC title.
+
 ## 2026-11-15 — Dashboard icons in the menu
 - Dashboards carry an `icon` (Material icon name, default `dashboard`, validated server-side), set on
   create (`POST /dashboards`) and in edit mode's Dashboard details (`PATCH`), returned in

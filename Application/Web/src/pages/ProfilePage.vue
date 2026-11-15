@@ -25,14 +25,7 @@
             hint="Used in SSH and RDP launches unless an item overrides it"
             v-bind="{ ...field, ...err('default_remote_user') }"
           />
-          <q-input
-            v-model="form.ssh_template"
-            class="col-12"
-            label="SSH command template"
-            hint="Placeholders: {user} {host} {port} {flags}"
-            input-style="font-family: monospace"
-            v-bind="{ ...field, ...err('ssh_template') }"
-          />
+          <SshTemplateField v-model="form.ssh_template" class="col-12" :error="fieldErrors.ssh_template?.join(' ')" />
           <q-select
             v-model="defaultDashboard"
             class="col-12 col-sm-6"
@@ -87,6 +80,7 @@ import { ApiError } from '@/api/http';
 import { getMe, updateMe, type MyProfile } from '@/api/settings';
 import { useSessionStore } from '@/stores/session';
 import { useUiStore } from '@/stores/theme';
+import SshTemplateField from '@/components/profile/SshTemplateField.vue';
 
 const $q = useQuasar();
 const session = useSessionStore();

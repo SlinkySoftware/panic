@@ -4,7 +4,10 @@
       <q-toolbar>
         <q-btn flat dense round icon="menu" aria-label="Toggle navigation" @click="drawerOpen = !drawerOpen" />
         <q-icon name="shield" size="sm" class="q-ml-sm q-mr-xs" color="primary" />
-        <q-toolbar-title>PANIC</q-toolbar-title>
+        <q-toolbar-title class="column no-wrap q-py-xs" style="line-height: 1.1">
+          <div>PANIC</div>
+          <div class="panic-title-full gt-xs">Portal for Accessing Networks, Infrastructure, and Compute</div>
+        </q-toolbar-title>
         <q-btn
           flat
           dense
@@ -238,6 +241,15 @@ async function onLogout(): Promise<void> {
 </script>
 
 <style scoped>
+.panic-title-full {
+  font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .panic-unpinned {
   transform: rotate(45deg);
   opacity: 0.6;
