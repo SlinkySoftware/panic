@@ -256,6 +256,15 @@ def replace_layout(
         )
 
     clamped = [_clamp_widget(w) for w in widgets]
+    targets = [w["catalog_item_id"] or w["list_id"] for w in clamped]
+    repeated = sorted({t for t in targets if targets.count(t) > 1})
+    if repeated:
+        raise ApiError(
+            ErrorCode.VALIDATION_ERROR,
+            "Each item or list may appear on a dashboard only once.",
+            status_code=400,
+            fields={"widgets": [f"Duplicate target: {t}" for t in repeated]},
+        )
 
     spec = visibility_spec(real_user)
     item_ids = {w["catalog_item_id"] for w in clamped if w["catalog_item_id"]}

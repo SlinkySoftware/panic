@@ -97,3 +97,29 @@ export function listDashboards(query: {
   if (query.scope) params.set('scope', query.scope);
   return requestJson('GET', `/dashboards?${params.toString()}`);
 }
+
+export interface DashboardResource {
+  id: string;
+  title: string;
+  description: string;
+  scope: Scope;
+  team_ids: string[];
+  always_display: boolean;
+  widgets: Widget[];
+  version: number;
+  can_edit: boolean;
+}
+
+const ifMatch = (version: number) => ({ 'If-Match': `"${version}"` });
+
+export const getDashboard = (id: string) =>
+  requestJson<DashboardResource>('GET', `/dashboards/${encodeURIComponent(id)}`);
+
+export const putLayout = (id: string, version: number, widgets: Widget[]) =>
+  requestJson<DashboardResource>('PUT', `/dashboards/${encodeURIComponent(id)}/layout`, { widgets }, ifMatch(version));
+
+export const patchDashboard = (id: string, version: number, body: Partial<DashboardInput>) =>
+  requestJson<DashboardResource>('PATCH', `/dashboards/${encodeURIComponent(id)}`, body, ifMatch(version));
+
+export const deleteDashboard = (id: string, version: number) =>
+  requestJson<void>('DELETE', `/dashboards/${encodeURIComponent(id)}`, undefined, ifMatch(version));

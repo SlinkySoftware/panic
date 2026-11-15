@@ -379,6 +379,39 @@ def test_dashboard_patch_requires_if_match(mongo_db: Any, plain: Any) -> None:
     assert resp.json()["error_code"] == "PRECONDITION_REQUIRED"
 
 
+def test_dashboard_layout_rejects_duplicate_targets(mongo_db: Any, plain: Any) -> None:
+    dashboard = dashboards_repo.create_dashboard(
+        mongo_db, title="Dup Dash", created_by=plain.username, scope="PERSONAL", owner_usernames=[plain.username]
+    )
+    lst = lists_repo.create_list(
+        mongo_db,
+        title="Dup List",
+        created_by=plain.username,
+        scope="PERSONAL",
+        owner_usernames=[plain.username],
+        item_ids=[],
+    )
+    widget = {"widget_type": "LIST", "list_id": lst.id, "grid_x": 1, "grid_y": 1, "grid_w": 6, "grid_h": 2}
+    client = _client_as(plain.id)
+    resp = _json(
+        client,
+        "put",
+        f"/api/v1/dashboards/{dashboard.id}/layout",
+        {"widgets": [widget, {**widget, "grid_y": 3}]},
+        HTTP_IF_MATCH=str(dashboard.version),
+    )
+    assert resp.status_code == 400
+    assert resp.json()["error_code"] == "VALIDATION_ERROR"
+    once = _json(
+        client,
+        "put",
+        f"/api/v1/dashboards/{dashboard.id}/layout",
+        {"widgets": [widget]},
+        HTTP_IF_MATCH=str(dashboard.version),
+    )
+    assert once.status_code == 200
+
+
 def test_list_put_stale_if_match_returns_409_with_current_version(mongo_db: Any, plain: Any) -> None:
     lst = lists_repo.create_list(
         mongo_db,

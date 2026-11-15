@@ -94,12 +94,12 @@
       bordered
       :width="232"
       :mini-width="64"
-      :mini="!railExpanded"
+      :mini="!railPinned && !railExpanded"
       class="panic-rail"
       @mouseenter="railExpanded = true"
       @mouseleave="railExpanded = false"
     >
-      <q-list padding data-testid="nav">
+      <q-list padding data-testid="nav" style="padding-bottom: 64px">
         <q-item-label header class="panic-nav-heading">Dashboards</q-item-label>
         <q-item
           v-for="d in session.navDashboards"
@@ -145,6 +145,19 @@
           </q-item>
         </template>
       </q-list>
+      <q-list class="absolute-bottom q-pb-sm">
+        <q-item clickable data-testid="nav-pin" @click="toggleRailPinned">
+          <q-item-section avatar>
+            <q-icon
+              name="push_pin"
+              :color="railPinned ? 'primary' : undefined"
+              :class="{ 'panic-unpinned': !railPinned }"
+            />
+          </q-item-section>
+          <q-item-section>{{ railPinned ? 'Unpin menu' : 'Keep menu open' }}</q-item-section>
+          <q-tooltip v-if="!railPinned" anchor="center right" self="center left">Keep menu open</q-tooltip>
+        </q-item>
+      </q-list>
     </q-drawer>
 
     <AddDashboardDialog v-model="newDashboard" />
@@ -157,7 +170,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { Dialog } from 'quasar';
+import { Dialog, LocalStorage } from 'quasar';
 import { useRouter } from 'vue-router';
 import { navGroupsFor } from '@/router/nav';
 import AddDashboardDialog from '@/components/dashboard/AddDashboardDialog.vue';
@@ -171,6 +184,13 @@ const router = useRouter();
 const drawerOpen = ref(true);
 const newDashboard = ref(false);
 const railExpanded = ref(true);
+// Pinned = the rail stays expanded instead of collapsing to icons when the pointer leaves; remembered per browser.
+const NAV_PINNED_KEY = 'panic.navPinned';
+const railPinned = ref(LocalStorage.getItem(NAV_PINNED_KEY) === true);
+function toggleRailPinned(): void {
+  railPinned.value = !railPinned.value;
+  LocalStorage.set(NAV_PINNED_KEY, railPinned.value);
+}
 
 const displayName = computed(() => session.me?.display_name ?? session.me?.username ?? '');
 const isDefaultZone = computed(() => session.zoneSource === 'DEFAULT');
@@ -201,3 +221,10 @@ async function onLogout(): Promise<void> {
   }
 }
 </script>
+
+<style scoped>
+.panic-unpinned {
+  transform: rotate(45deg);
+  opacity: 0.6;
+}
+</style>

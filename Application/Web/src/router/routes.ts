@@ -67,13 +67,8 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'dashboard/:id/edit',
         name: 'dashboard-edit',
-        component: PlaceholderPage,
-        props: (route) => ({
-          title: 'Dashboard (edit)',
-          caption: 'Unlocked edit mode (drag/resize widgets) is built in a later task.',
-          task: 'T-S6-09/10/11',
-          id: route.params.id,
-        }),
+        component: () => import('@/pages/DashboardEditPage.vue'),
+        props: (route) => ({ id: String(route.params.id) }),
         meta: { title: 'Edit dashboard' },
       },
       {

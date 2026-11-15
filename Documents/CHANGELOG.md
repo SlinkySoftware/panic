@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-15 — T-S6-09 (part 2): dashboard edit mode
+- `/dashboard/<id>/edit`: 12-column grid editor (drag header to move, corner to resize, overlaps pushed down;
+  `components/dashboard/grid.ts` mirrors the server clamp, with unit tests), Add Widget (HOST / LIST pickers
+  that skip targets already on the dashboard), widget properties, dashboard details and delete, Save with
+  `If-Match` and a conflict banner (discard / overwrite), unsaved-changes guard.
+- Server: `PUT /dashboards/{id}/layout` rejects the same item or list twice (`400 VALIDATION_ERROR`).
+- Nav rail can be pinned open (remembered per browser).
+
 ## 2026-11-15 — T-S6-09 (part 1): dashboard view, launch, add-dashboard menu
 - `/dashboard/<id>` locked view: HOST and LIST widgets on a 12-column CSS grid, launch actions (open URL,
   copy command, `.rdp` download, optional system URI), DIM of unreachable items, placeholders for unavailable
