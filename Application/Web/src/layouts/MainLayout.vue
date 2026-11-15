@@ -5,6 +5,18 @@
         <q-btn flat dense round icon="menu" aria-label="Toggle navigation" @click="drawerOpen = !drawerOpen" />
         <q-icon name="shield" size="sm" class="q-ml-sm q-mr-xs" color="primary" />
         <q-toolbar-title>PANIC</q-toolbar-title>
+        <q-btn
+          flat
+          dense
+          no-caps
+          icon="search"
+          label="Search"
+          class="q-mr-sm"
+          data-testid="open-palette"
+          @click="palette?.show()"
+        >
+          <q-tooltip>Search and launch (Ctrl+K or /)</q-tooltip>
+        </q-btn>
 
         <div
           v-if="session.zone"
@@ -161,6 +173,7 @@
     </q-drawer>
 
     <AddDashboardDialog v-model="newDashboard" />
+    <CommandPalette ref="palette" />
 
     <q-page-container>
       <router-view />
@@ -174,6 +187,7 @@ import { Dialog, LocalStorage } from 'quasar';
 import { useRouter } from 'vue-router';
 import { navGroupsFor } from '@/router/nav';
 import AddDashboardDialog from '@/components/dashboard/AddDashboardDialog.vue';
+import CommandPalette from '@/components/palette/CommandPalette.vue';
 import { useSessionStore } from '@/stores/session';
 import { useUiStore } from '@/stores/theme';
 
@@ -183,6 +197,7 @@ const router = useRouter();
 
 const drawerOpen = ref(true);
 const newDashboard = ref(false);
+const palette = ref<InstanceType<typeof CommandPalette> | null>(null);
 const railExpanded = ref(true);
 // Pinned = the rail stays expanded instead of collapsing to icons when the pointer leaves; remembered per browser.
 const NAV_PINNED_KEY = 'panic.navPinned';

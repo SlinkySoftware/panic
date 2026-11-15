@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-15 — T-S6-09 (part 3): Command Palette — T-S6-09 done
+- Ctrl/Cmd+K, `/` outside text fields, or the top-bar Search button: debounced `/ui/search`, arrow keys,
+  Enter launches an item from its `launch` or opens a dashboard / list. Shortcut handling unit-tested.
+- Not done from the T-S6-09 acceptance: the manual payload-budget check against the loadtest dataset.
+
 ## 2026-11-15 — T-S6-09 (part 2): dashboard edit mode
 - `/dashboard/<id>/edit`: 12-column grid editor (drag header to move, corner to resize, overlaps pushed down;
   `components/dashboard/grid.ts` mirrors the server clamp, with unit tests), Add Widget (HOST / LIST pickers
