@@ -20,7 +20,7 @@
     </q-item-section>
     <!-- Fixed-width columns so rows line up whatever each contains (zones / site / action). -->
     <q-item-section v-if="showZones" side class="panic-col-zones" data-testid="item-zones">
-      <div class="row no-wrap items-center q-gutter-x-xs full-width">
+      <div class="row no-wrap items-center justify-end q-gutter-x-xs full-width">
         <q-badge v-if="item.zone_names.length === 0" outline color="grey-6" label="All zones" />
         <template v-else>
           <q-badge
@@ -84,7 +84,7 @@ const icons: Record<string, string> = { SSH: 'terminal', RDP: 'desktop_windows',
 .panic-col-zones {
   width: 36%;
   min-width: 0;
-  align-items: flex-start;
+  align-items: flex-end;
   overflow: hidden;
 }
 .panic-zone-badge {
