@@ -12,7 +12,8 @@
 #
 # Overrides:
 #   PANIC_WEB_PORT      web dev server port (default 8120; T-S6-08 moved Server off this port)
-#   PANIC_WEB_ALLOWED_HOSTS  comma-separated extra hostnames the web dev server accepts, e.g. .example.com (default: localhost only)
+#   PANIC_WEB_ALLOWED_HOSTS  extra comma-separated hostnames for the web dev server, e.g. .example.com
+#                       (this machine's own hostname and FQDN are always allowed)
 #   PANIC_SERVER_BIND   Server bind address (default 0.0.0.0:8121)
 set -euo pipefail
 
@@ -51,6 +52,13 @@ load_env() {
     SERVER_BIND="${PANIC_SERVER_BIND:-0.0.0.0:8121}"
     SERVER_PORT="${SERVER_BIND##*:}"
     WEB_PORT="${PANIC_WEB_PORT:-8120}"
+    # Vite only answers to localhost unless told otherwise: always allow this machine's own names,
+    # plus any extras from PANIC_WEB_ALLOWED_HOSTS, so access by hostname needs no per-host config.
+    local h names=() extra="${PANIC_WEB_ALLOWED_HOSTS:-}"
+    for h in "$(hostname -f 2>/dev/null)" "$(hostname -s 2>/dev/null)" ${extra//,/ }; do
+        [[ -n "$h" && " ${names[*]} " != *" $h "* ]] && names+=("$h")
+    done
+    export PANIC_WEB_ALLOWED_HOSTS="$(IFS=,; echo "${names[*]}")"
     # AR-1.6: only quasar.config.ts (the dev proxy) reads this; the SPA itself never sees it.
     export PANIC_SERVER_URL="${PANIC_SERVER_URL:-http://127.0.0.1:$SERVER_PORT}"
 }

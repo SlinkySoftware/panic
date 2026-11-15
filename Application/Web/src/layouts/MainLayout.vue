@@ -123,7 +123,7 @@
             </q-icon>
           </q-item-section>
         </q-item>
-        <q-item clickable disabled data-testid="nav-add-dashboard">
+        <q-item clickable :disable="session.isViewingAs" data-testid="nav-add-dashboard" @click="newDashboard = true">
           <q-item-section avatar><q-icon name="add" /></q-item-section>
           <q-item-section>Add dashboard</q-item-section>
         </q-item>
@@ -147,6 +147,8 @@
       </q-list>
     </q-drawer>
 
+    <AddDashboardDialog v-model="newDashboard" />
+
     <q-page-container>
       <router-view />
     </q-page-container>
@@ -158,6 +160,7 @@ import { computed, ref } from 'vue';
 import { Dialog } from 'quasar';
 import { useRouter } from 'vue-router';
 import { navGroupsFor } from '@/router/nav';
+import AddDashboardDialog from '@/components/dashboard/AddDashboardDialog.vue';
 import { useSessionStore } from '@/stores/session';
 import { useUiStore } from '@/stores/theme';
 
@@ -166,6 +169,7 @@ const ui = useUiStore();
 const router = useRouter();
 
 const drawerOpen = ref(true);
+const newDashboard = ref(false);
 const railExpanded = ref(true);
 
 const displayName = computed(() => session.me?.display_name ?? session.me?.username ?? '');

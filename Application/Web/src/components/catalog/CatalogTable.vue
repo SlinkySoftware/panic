@@ -84,7 +84,7 @@ const emit = defineEmits<{ edit: [row: ItemView]; delete: [row: ItemView] }>();
 
 const $q = useQuasar();
 
-const teamCodes = (ids: string[]) => {
+const teamCodes = (ids: string[] = []) => {
   const byId = new Map(props.teams.map((t) => [t.id, t.code]));
   return ids.length ? ids.map((id) => byId.get(id) ?? '?').join(', ') : '—';
 };

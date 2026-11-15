@@ -9,6 +9,14 @@ export type Protocol = (typeof PROTOCOLS)[number];
 export type Scope = 'GLOBAL' | 'TEAM' | 'PERSONAL';
 export type CatalogGroup = 'shared' | 'personal';
 
+export interface Launch {
+  kind: 'OPEN' | 'COPY' | 'DOWNLOAD';
+  url?: string;
+  command?: string;
+  uri?: string;
+  href?: string;
+}
+
 export interface ItemView {
   id: string;
   title: string;
@@ -20,9 +28,11 @@ export interface ItemView {
   tags: string[];
   reachable: boolean;
   unreachable_reason: string | null;
-  can_edit: boolean;
-  version: number;
-  team_ids: string[];
+  launch?: Launch;
+  // Catalog list rows only (API.md §4.5)
+  can_edit?: boolean;
+  version?: number;
+  team_ids?: string[];
 }
 
 export interface CatalogItem {

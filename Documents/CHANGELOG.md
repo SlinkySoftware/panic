@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-15 — T-S6-09 (part 1): dashboard view, launch, add-dashboard menu
+- `/dashboard/<id>` locked view: HOST and LIST widgets on a 12-column CSS grid, launch actions (open URL,
+  copy command, `.rdp` download, optional system URI), DIM of unreachable items, placeholders for unavailable
+  targets, "Show all (N)" to `/lists?open=<id>`, ETag / `If-None-Match` revalidation, pin/unpin and
+  set/reset my default.
+- Menu "Add dashboard": pin an existing visible dashboard not yet in the menu, or create a new one.
+- `./panic`: the web dev server always allows this machine's hostname and FQDN; `PANIC_WEB_ALLOWED_HOSTS`
+  only adds extras.
+
 ## 2026-11-15 — T-S6-10 / T-S6-11 (part): Sites, Teams, Catalog and Lists screens
 - Sites and Teams admin tables (`components/admin/CodeNamedTable.vue`, one component, reloads on route
   change): search, create, edit, delete; write actions for Global Admins only.

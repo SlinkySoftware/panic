@@ -60,13 +60,8 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'dashboard/:id',
         name: 'dashboard-view',
-        component: PlaceholderPage,
-        props: (route) => ({
-          title: 'Dashboard',
-          caption: 'The dashboard grid (locked view mode) is built in a later task.',
-          task: 'T-S6-09/10/11',
-          id: route.params.id,
-        }),
+        component: () => import('@/pages/DashboardPage.vue'),
+        props: (route) => ({ id: String(route.params.id) }),
         meta: { title: 'Dashboard' },
       },
       {
