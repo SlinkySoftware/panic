@@ -104,6 +104,7 @@ def list_catalog(
         view = build_item_view(item, caller=effective_user, active_zone=active_zone, zones_by_id=zones_by_id)
         view["can_edit"] = can_edit(effective_user, item).allowed
         view["version"] = item.version
+        view["team_ids"] = list(item.team_ids)  # the shared card's Teams column
         rows.append(view)
     return rows
 

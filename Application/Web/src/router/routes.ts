@@ -12,6 +12,7 @@ declare module 'vue-router' {
 }
 
 const PlaceholderPage = () => import('@/pages/PlaceholderPage.vue');
+const CodeNamedTable = () => import('@/components/admin/CodeNamedTable.vue');
 
 /**
  * Resolve `/` and `/dashboard` to the caller's effective default dashboard, canonicalising the address bar to
@@ -83,29 +84,27 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'catalog',
         name: 'catalog',
-        component: PlaceholderPage,
-        props: { title: 'Catalog', caption: 'Shared and personal catalog items.', task: 'T-S6-09/10/11' },
+        component: () => import('@/pages/CatalogPage.vue'),
         meta: { title: 'Catalog' },
       },
       {
         path: 'lists',
         name: 'lists',
-        component: PlaceholderPage,
-        props: { title: 'Endpoint lists', caption: 'Shared and personal endpoint lists.', task: 'T-S6-09/10/11' },
+        component: () => import('@/pages/ListsPage.vue'),
         meta: { title: 'Lists' },
       },
       {
         path: 'sites',
         name: 'sites',
-        component: PlaceholderPage,
-        props: { title: 'Sites', caption: 'Pre-defined sites used by catalog items.', task: 'T-S6-09/10/11' },
+        component: CodeNamedTable,
+        props: { kind: 'sites', title: 'Sites', noun: 'site' },
         meta: { title: 'Sites' },
       },
       {
         path: 'teams',
         name: 'teams',
-        component: PlaceholderPage,
-        props: { title: 'Teams', caption: 'Teams used for TEAM-scoped resources.', task: 'T-S6-09/10/11' },
+        component: CodeNamedTable,
+        props: { kind: 'teams', title: 'Teams', noun: 'team' },
         meta: { title: 'Teams' },
       },
       {

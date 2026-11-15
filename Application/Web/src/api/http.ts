@@ -73,8 +73,18 @@ export function readCookie(name: string): string | null {
   return null;
 }
 
+/**
+ * RFC 4122 v4 UUID. `crypto.randomUUID` exists only in secure contexts (HTTPS or localhost), so
+ * plain-HTTP access by hostname (the dev server) falls back to `getRandomValues`, which is always present.
+ */
 export function newRequestId(): string {
-  return globalThis.crypto.randomUUID();
+  const c = globalThis.crypto;
+  if (typeof c.randomUUID === 'function') return c.randomUUID();
+  const b = c.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6]! & 0x0f) | 0x40; // version 4
+  b[8] = (b[8]! & 0x3f) | 0x80; // variant 10xx
+  const h = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
 // ---------------------------------------------------------------------------------------------------- CSRF token
@@ -178,9 +188,14 @@ export async function toApiError(res: Response, requestId: string | null = null)
 }
 
 /** JSON helper for hand-written calls: throws `ApiError` on non-2xx, returns `undefined` for 204. */
-export async function requestJson<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function requestJson<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  headers: Record<string, string> = {},
+): Promise<T> {
   const requestId = newRequestId();
-  const init: RequestInit = { method, headers: { [REQUEST_ID_HEADER]: requestId } };
+  const init: RequestInit = { method, headers: { ...headers, [REQUEST_ID_HEADER]: requestId } };
   if (body !== undefined) {
     init.body = JSON.stringify(body);
     init.headers = { ...init.headers, 'Content-Type': 'application/json' };

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-15 — T-S6-10 / T-S6-11 (part): Sites, Teams, Catalog and Lists screens
+- Sites and Teams admin tables (`components/admin/CodeNamedTable.vue`, one component, reloads on route
+  change): search, create, edit, delete; write actions for Global Admins only.
+- `/catalog`: Global & Team and Personal cards, server-paged with search and protocol/site filters and a
+  Teams column on the shared card; protocol-aware item modal with live preview, hygiene and field errors,
+  and a duplicate prompt that resends with `force_allow_duplicate`. Catalog list rows now carry `team_ids`.
+- `/lists`: same two cards; Edit List modal with a same-scope item picker, drag or arrow reordering, and
+  `If-Match` saves with a conflict banner; read-only for non-editors; `?open=<id>` opens a list.
+- Fixes: `newRequestId` falls back to `getRandomValues` outside secure contexts (plain-HTTP dev access by
+  hostname); the Vite dev server takes extra allowed hostnames from `PANIC_WEB_ALLOWED_HOSTS`.
+
 ## 2026-11-15 — T-S6-08: panic-web foundation — Vue 3 + Quasar + TypeScript scaffold, auth, shell, nav
 - New `Application/Web` SPA: every AR-1.4 URL routed (login + shell built; everything else a
   placeholder pending `T-S6-09`/`10`/`11`), a login page (local/LDAP form + OIDC button, driven by

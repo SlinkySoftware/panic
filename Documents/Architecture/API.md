@@ -180,7 +180,7 @@ Writes under `/me` act on the **real** signed-in user and are refused during Vie
 
 | Method & path | Access | Notes |
 |---|---|---|
-| `GET /api/v1/catalog?group=shared\|personal&protocol=&site=&zone_id=&team_id=&q=&sort=title\|-updated_at\|protocol\|site&page=&page_size=` | A | Page of `ItemView` + `{can_edit, version}` per row. `group=shared` = GLOBAL+TEAM card, `personal` = PERSONAL card |
+| `GET /api/v1/catalog?group=shared\|personal&protocol=&site=&zone_id=&team_id=&q=&sort=title\|-updated_at\|protocol\|site&page=&page_size=` | A | Page of `ItemView` + `{can_edit, version, team_ids}` per row. `group=shared` = GLOBAL+TEAM card, `personal` = PERSONAL card |
 | `GET /api/v1/catalog/{id}` | A | Full editable resource (all fields, `version`, `can_edit`) |
 | `POST /api/v1/catalog` | A + scope rights | Create; hygiene `400`; duplicate `409` unless `force_allow_duplicate` |
 | `PATCH /api/v1/catalog/{id}` | `can_edit` · If-Match optional | Same validation; recomputes `normalized_key`, `search_keys` |

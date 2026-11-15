@@ -12,6 +12,7 @@
 #
 # Overrides:
 #   PANIC_WEB_PORT      web dev server port (default 8120; T-S6-08 moved Server off this port)
+#   PANIC_WEB_ALLOWED_HOSTS  comma-separated extra hostnames the web dev server accepts, e.g. .example.com (default: localhost only)
 #   PANIC_SERVER_BIND   Server bind address (default 0.0.0.0:8121)
 set -euo pipefail
 

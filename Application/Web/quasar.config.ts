@@ -4,6 +4,13 @@ import { buildDevProxy } from './dev-proxy';
 // AR-1.6: the SPA itself never knows the Server URL. It is only read here, by the dev proxy.
 const serverUrl = process.env.PANIC_SERVER_URL ?? 'http://127.0.0.1:8121';
 
+// Vite rejects requests whose Host header is not localhost or listed here (DNS-rebinding protection).
+// Comma-separated; a leading dot allows all subdomains.
+const allowedHosts = (process.env.PANIC_WEB_ALLOWED_HOSTS ?? '')
+  .split(',')
+  .map((h) => h.trim())
+  .filter(Boolean);
+
 export default defineConfig(() => ({
   boot: ['theme', 'auth'],
   css: ['app.css'],
@@ -26,6 +33,7 @@ export default defineConfig(() => ({
     port: Number(process.env.PANIC_WEB_PORT ?? 8120),
     open: false,
     strictPort: true, // fail loudly on a port clash instead of drifting to another port
+    allowedHosts,
     proxy: buildDevProxy(serverUrl),
   },
   framework: { config: { dark: 'auto' }, plugins: ['Notify', 'Dialog', 'LocalStorage'] },

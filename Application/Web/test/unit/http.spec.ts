@@ -1,6 +1,15 @@
 /** CSRF header + one retry (this task's scope line), and the ApiError envelope shape (API.md §3). */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { apiFetch, apiUrl, ApiError, CSRF_HEADER, readCookie, resetCsrfToken, requestJson } from '@/api/http';
+import {
+  apiFetch,
+  apiUrl,
+  ApiError,
+  CSRF_HEADER,
+  newRequestId,
+  readCookie,
+  resetCsrfToken,
+  requestJson,
+} from '@/api/http';
 
 function jsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(body === undefined ? null : JSON.stringify(body), {
@@ -112,5 +121,19 @@ describe('apiFetch / CSRF retry', () => {
     document.cookie = 'other=xyz; path=/';
     expect(readCookie('panic_csrftoken')).toBe('abc');
     expect(readCookie('missing')).toBeNull();
+  });
+});
+
+describe('newRequestId', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('returns a v4 UUID without crypto.randomUUID (insecure context: plain HTTP by hostname)', () => {
+    const real = globalThis.crypto;
+    vi.stubGlobal('crypto', { getRandomValues: <T extends ArrayBufferView>(a: T) => real.getRandomValues(a) });
+    const ids = new Set(Array.from({ length: 50 }, () => newRequestId()));
+    expect(ids.size).toBe(50);
+    for (const id of ids) expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   });
 });
