@@ -290,9 +290,13 @@ cmd_test() {
         ensure_dev_tools
     fi
     if [[ "$mode" == "python" || "$mode" == "all" ]]; then
-        ensure_dev_mongo
-        export PANIC_TEST_MONGO_URI="${PANIC_TEST_MONGO_URI:-mongodb://127.0.0.1:${DEV_MONGO_PORT}/}"
-        "$VENV/bin/pytest" "$ROOT/Application/Common/tests" "$ROOT/Application/Server/tests" "$@" || rc=1
+        # CI supplies its own Mongo (Build/ci/mongo_service.sh); otherwise use the shared dev container.
+        if [[ -z "${PANIC_TEST_MONGO_URI:-}" ]]; then
+            ensure_dev_mongo
+            export PANIC_TEST_MONGO_URI="mongodb://127.0.0.1:${DEV_MONGO_PORT}/"
+        fi
+        "$VENV/bin/pytest" "$ROOT/Application/Common/tests" "$ROOT/Application/Server/tests" \
+            "$ROOT/Build/scripts/tests" "$@" || rc=1
     fi
     if [[ "$mode" == "lint" || "$mode" == "all" ]]; then
         "$VENV/bin/ruff" check "$ROOT/Application/Common" "$ROOT/Application/Server" || rc=1

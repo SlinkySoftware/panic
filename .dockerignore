@@ -11,3 +11,7 @@
 **/.ruff_cache
 **/staticfiles
 Documents
+**/node_modules
+Application/Web/dist
+Application/Web/.quasar
+.tools

@@ -1,0 +1,18 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Sourced by the nginx image entrypoint before templates are rendered: validate PANIC_SERVER_URL, the only
+# variable envsubst fills in (NGINX_ENVSUBST_FILTER). It must be a bare scheme://host[:port] origin:
+# nginx would otherwise rewrite request paths (proxy_pass with a URI part).
+. /usr/local/lib/panic/panic-env.sh
+panic_file_env PANIC_SERVER_URL || exit 1
+
+if [ -z "${PANIC_SERVER_URL:-}" ]; then
+    echo "panic-web: PANIC_SERVER_URL is required (e.g. http://panic-server:8210)" >&2
+    exit 1
+fi
+PANIC_SERVER_URL="${PANIC_SERVER_URL%/}"
+if ! printf '%s' "$PANIC_SERVER_URL" | grep -Eq '^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?$|^https?://\[[0-9A-Fa-f:.]+\](:[0-9]{1,5})?$'; then
+    echo "panic-web: PANIC_SERVER_URL must be scheme://host[:port] with no path, got: $PANIC_SERVER_URL" >&2
+    exit 1
+fi
+export PANIC_SERVER_URL

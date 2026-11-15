@@ -1,9 +1,11 @@
-# PANIC reference container stack (aligned with reference-app Build/Containers/compose.yaml)
+# SPDX-License-Identifier: GPL-3.0-or-later
+# PANIC reference stack: panic-web (SPA + allow-listed proxy) -> panic-server (API) -> MongoDB.
 #
-#   SQLite (single node):
+#   With your own MongoDB (set PANIC_MONGO_URI in the env file):
 #     docker compose --env-file /path/to/panic.env -f Build/Containers/compose.yaml up -d
-#   PostgreSQL 17 (set PANIC_DB_ENGINE=postgresql and PANIC_DB_PASSWORD in the env file):
-#     docker compose --env-file /path/to/panic.env -f Build/Containers/compose.yaml --profile postgres up -d
+#   Dev / demo, with a bundled single-node MongoDB (not for production):
+#     docker compose --env-file /path/to/panic.env -f Build/Containers/compose.yaml --profile demo-mongo up -d
+#   More server replicas: PANIC_SERVER_REPLICAS=2 (sessions live in MongoDB; any replica serves any request).
 #
 # Everything environment-specific comes from the env file (AR-3.1). See Documents/Operations/.
 
@@ -13,91 +15,112 @@ x-panic-hardening: &hardening
   restart: unless-stopped
   cap_drop: [ALL]
   security_opt: ["no-new-privileges:true"]
+  read_only: true
   logging:
     driver: json-file
     options: { max-size: "20m", max-file: "5" }
 
+x-server-env: &server-env
+  PANIC_ENV: ${PANIC_ENV:-prod}
+  PANIC_MONGO_URI: ${PANIC_MONGO_URI:-mongodb://panic-mongo:27017/panic}
+  PANIC_MONGO_URI_FILE:
+  PANIC_ALLOWED_HOSTS:
+  PANIC_CSRF_TRUSTED_ORIGINS:
+  PANIC_DJANGO_SECRET_KEY:
+  PANIC_DJANGO_SECRET_KEY_FILE:
+  PANIC_DEBUG:
+  PANIC_TZ:
+  PANIC_LOG_LEVEL:
+  PANIC_LOG_FORMAT:
+  PANIC_INSTANCE_NAME:
+  PANIC_SESSION_AGE_S:
+  PANIC_SESSION_COOKIE_SECURE:
+  PANIC_SECURE_PROXY_SSL_HEADER:
+  PANIC_SECURE_SSL_REDIRECT:
+  PANIC_HSTS_SECONDS:
+  PANIC_CSP:
+  PANIC_MIGRATE_ON_START:
+  PANIC_SEED_ON_START:
+  PANIC_GUNICORN_WORKERS:
+  PANIC_GUNICORN_THREADS:
+  PANIC_GUNICORN_TIMEOUT:
+  # Client IP and zones: trust panic-web (and any proxy in front of it) by CIDR.
+  PANIC_TRUST_PROXY_HEADERS: ${PANIC_TRUST_PROXY_HEADERS:-true}
+  PANIC_PROXY_IP_HEADER:
+  PANIC_TRUSTED_PROXY_CIDRS:
+  PANIC_UNTRUSTED_PEER_POLICY:
+  PANIC_XFF_MAX_HOPS:
+  PANIC_XFF_MAX_BYTES:
+  PANIC_ZONE_CACHE_TTL_S:
+  # Authentication
+  PANIC_AUTH_LOCAL_ENABLED:
+  PANIC_BOOTSTRAP_ADMIN_USER:
+  PANIC_BOOTSTRAP_ADMIN_PASSWORD:
+  PANIC_BOOTSTRAP_ADMIN_PASSWORD_FILE:
+  PANIC_OIDC_ENABLED:
+  PANIC_OIDC_PROVIDER_NAME:
+  PANIC_OIDC_ISSUER:
+  PANIC_OIDC_AUTHORIZE_URL:
+  PANIC_OIDC_TOKEN_URL:
+  PANIC_OIDC_USERINFO_URL:
+  PANIC_OIDC_CLIENT_ID:
+  PANIC_OIDC_CLIENT_SECRET:
+  PANIC_OIDC_CLIENT_SECRET_FILE:
+  PANIC_OIDC_REDIRECT_URI:
+  PANIC_OIDC_SCOPES:
+  PANIC_OIDC_USERNAME_CLAIM:
+  PANIC_OIDC_DISPLAY_NAME_CLAIM:
+  PANIC_OIDC_TIMEOUT_S:
+  PANIC_LDAP_ENABLED:
+  PANIC_LDAP_URI:
+  PANIC_LDAP_START_TLS:
+  PANIC_LDAP_CA_CERT_FILE:
+  PANIC_LDAP_BIND_DN:
+  PANIC_LDAP_BIND_PASSWORD:
+  PANIC_LDAP_BIND_PASSWORD_FILE:
+  PANIC_LDAP_USER_BASE_DN:
+  PANIC_LDAP_USER_FILTER:
+  PANIC_LDAP_USERNAME_ATTR:
+  PANIC_LDAP_DISPLAY_NAME_ATTR:
+  PANIC_LDAP_TIMEOUT_S:
+  # Limits and hardening
+  PANIC_RATE_LIMIT_ENABLED:
+  PANIC_RATE_LIMIT_LOGIN:
+  PANIC_RATE_LIMIT_API:
+  PANIC_LIST_MAX_ITEMS:
+  PANIC_LIST_WIDGET_MAX_ITEMS:
+  PANIC_NAV_MAX_DASHBOARDS:
+  PANIC_AUDIT_RETENTION_DAYS:
+
 services:
+  web:
+    <<: *hardening
+    image: ${PANIC_IMAGE_PREFIX:-panic-local}/panic-web:${PANIC_IMAGE_TAG:-latest}
+    build:
+      context: ../..
+      dockerfile: Build/Containers/web/Containerfile
+    tmpfs: ["/tmp"]
+    environment:
+      PANIC_SERVER_URL: ${PANIC_SERVER_URL:-http://panic-server:8210}
+    ports:
+      - "${PANIC_WEB_PUBLISH:-8080}:8080"
+    depends_on:
+      server:
+        condition: service_healthy
+    stop_grace_period: 10s
+
   server:
     <<: *hardening
     image: ${PANIC_IMAGE_PREFIX:-panic-local}/panic-server:${PANIC_IMAGE_TAG:-latest}
     build:
       context: ../..
       dockerfile: Build/Containers/server/Containerfile
-    read_only: true
     tmpfs: ["/tmp"]
-    environment:
-      PANIC_ALLOWED_HOSTS: ${PANIC_ALLOWED_HOSTS:-localhost,127.0.0.1},panic-server
-      PANIC_ENV: ${PANIC_ENV:-prod}
-      PANIC_TZ:
-      PANIC_LOG_LEVEL:
-      PANIC_LOG_FORMAT:
-      PANIC_DJANGO_SECRET_KEY:
-      PANIC_DEBUG:
-      PANIC_INSTANCE_NAME:
-      PANIC_CSRF_TRUSTED_ORIGINS:
-      PANIC_SESSION_COOKIE_SECURE:
-      PANIC_SECURE_PROXY_SSL_HEADER:
-      PANIC_HSTS_SECONDS:
-      # Database
-      PANIC_DB_ENGINE: ${PANIC_DB_ENGINE:-sqlite}
-      PANIC_DB_HOST: ${PANIC_DB_HOST:-postgres}
-      PANIC_DB_PORT:
-      PANIC_DB_NAME: ${PANIC_DB_NAME:-panic}
-      PANIC_DB_USER: ${PANIC_DB_USER:-panic}
-      PANIC_DB_PASSWORD:
-      PANIC_DB_PASSWORD_FILE:
-      PANIC_DB_CONN_MAX_AGE:
-      PANIC_MIGRATE_ON_START:
-      PANIC_SEED_ON_START:
-      PANIC_AUTO_SEED:
-      PANIC_GUNICORN_WORKERS:
-      PANIC_GUNICORN_THREADS:
-      # Reverse proxy & zones
-      PANIC_TRUST_PROXY_HEADERS:
-      PANIC_PROXY_IP_HEADER:
-      PANIC_TRUSTED_PROXY_CIDRS:
-      # Authentication
-      PANIC_AUTH_MODE:
-      PANIC_AUTH_LOCAL_ENABLED:
-      PANIC_BOOTSTRAP_ADMIN_USER:
-      PANIC_BOOTSTRAP_ADMIN_PASSWORD:
-      PANIC_BOOTSTRAP_ADMIN_PASSWORD_FILE:
-      PANIC_OIDC_ENABLED:
-      PANIC_OIDC_PROVIDER_NAME:
-      PANIC_OIDC_ISSUER:
-      PANIC_OIDC_CLIENT_ID:
-      PANIC_OIDC_CLIENT_SECRET:
-      PANIC_OIDC_CLIENT_SECRET_FILE:
-      PANIC_OIDC_REDIRECT_URI:
-      PANIC_OIDC_SCOPES:
-      PANIC_OIDC_GROUPS_CLAIM:
-      PANIC_LDAP_ENABLED:
-      PANIC_LDAP_URI:
-      PANIC_LDAP_START_TLS:
-      PANIC_LDAP_BIND_DN:
-      PANIC_LDAP_BIND_PASSWORD:
-      PANIC_LDAP_BIND_PASSWORD_FILE:
-      PANIC_LDAP_USER_BASE_DN:
-      PANIC_LDAP_USER_FILTER:
-      PANIC_LDAP_GROUP_BASE_DN:
-      PANIC_LDAP_GROUP_FILTER:
-      PANIC_RBAC_ADMIN_GROUPS:
-      PANIC_RBAC_GLOBAL_CONTRIB_GROUPS:
-      PANIC_RBAC_TEAM_CONTRIB_GROUPS:
-      PANIC_RBAC_TEAM_GROUP_MAP:
-      PANIC_RBAC_TEAM_GROUP_PREFIX:
-      # Hardening
-      PANIC_RATE_LIMIT_ENABLED:
-      PANIC_RATE_LIMIT_LOGIN:
-      PANIC_RATE_LIMIT_API:
-      PANIC_CACHE_URL:
-    volumes:
-      - panic-data:/data
-    ports:
-      - "${PANIC_WEB_PUBLISH:-8210}:8210"
+    environment: *server-env
+    deploy:
+      replicas: ${PANIC_SERVER_REPLICAS:-1}
     depends_on:
-      postgres:
+      mongo:
         condition: service_healthy
         required: false
     networks:
@@ -105,25 +128,21 @@ services:
         aliases: [panic-server]
     stop_grace_period: 20s
 
-  postgres:
-    <<: *hardening
-    profiles: [postgres]
-    image: docker.io/library/postgres:17-alpine
-    cap_drop: [ALL]
-    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
-    environment:
-      POSTGRES_DB: ${PANIC_DB_NAME:-panic}
-      POSTGRES_USER: ${PANIC_DB_USER:-panic}
-      POSTGRES_PASSWORD: ${PANIC_DB_PASSWORD:-}
+  mongo:
+    profiles: [demo-mongo]
+    image: docker.io/library/mongo:8
+    restart: unless-stopped
+    command: ["--bind_ip_all", "--quiet"]
     volumes:
-      - panic-pgdata:/var/lib/postgresql/data
+      - panic-mongo-data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand('ping').ok"]
       interval: 10s
       timeout: 5s
       retries: 10
-    stop_grace_period: 30s
+    networks:
+      default:
+        aliases: [panic-mongo]
 
 volumes:
-  panic-data:
-  panic-pgdata:
+  panic-mongo-data:

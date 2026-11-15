@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-11-15 — T-S6-12: containers, compose, CI with two images (verified locally; CI run pending push)
+- `panic-web` image: Node build stage, then `nginx-unprivileged` 1.29 on 8080 (read-only root fs works:
+  the template renders into `/tmp`). `Build/scripts/gen_nginx_conf.py` (+ tests) generates the server
+  block from `proxy-paths.json`: allow-listed paths only, `/metrics` and other API paths 404, security
+  headers and CSP, gzip, immutable `/assets/`, SPA fallback, `/healthz`. `10-panic-server-url.envsh`
+  validates `PANIC_SERVER_URL` (bare origin; `_FILE` supported via `common/panic-env.sh`).
+- `panic-server` image: API only (no static), `gthread` with `preload_app=False`
+  (`panic_server/gunicorn_conf.py`), init step (`panic_ensure_indexes`, `panic_migrate` when
+  `PANIC_MIGRATE_ON_START`), `HEALTHCHECK` on `?ready=1` sending a Host that `PANIC_ALLOWED_HOSTS` accepts.
+- `compose.yaml` (web, server with `PANIC_SERVER_REPLICAS`, `demo-mongo` profile),
+  `compose.standalone.web.yaml`, `compose.standalone.server.yaml`.
+- CI: `Build/ci/mongo_service.sh`, `contract_checks.sh`, `container_smoke.sh` (two server replicas
+  behind web; sign-in, allow-list, `FIRST_UNTRUSTED_HOP` client IP, cross-replica and post-restart
+  sessions) and a rewritten `.gitea/workflows/ci.yaml` publishing both images. `./panic test` uses an
+  externally supplied `PANIC_TEST_MONGO_URI` and runs `Build/scripts/tests`.
+- Test fix: the LDAP filter-escaping test pins `PANIC_LDAP_USER_FILTER` so a developer `.env` cannot leak in.
+
 ## 2026-11-15 — T-S6-11 done (and T-S6-10 done): admin and user screens
 - `/zones` (CIDR chips, priority, built-in Default zone description-only, Test IP), `/settings/users`
   (search; permission, team and status filters; pre-provision; disable / enable), `/settings/users/<id>`

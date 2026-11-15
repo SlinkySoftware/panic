@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# panic-web: the Vue/Quasar SPA served by unprivileged nginx (port 8080), proxying only the allow-listed
+# server paths (Application/Web/proxy-paths.json, AR-6.4) to PANIC_SERVER_URL.
+
+FROM docker.io/library/node:26-alpine AS spa
+WORKDIR /src/Application/Web
+COPY Application/Web/package.json Application/Web/package-lock.json ./
+RUN npm ci --ignore-scripts
+COPY Application/Web ./
+RUN npx quasar prepare && npm run build
+
+FROM docker.io/library/python:3.13-alpine AS conf
+COPY Application/Web/proxy-paths.json /src/Application/Web/proxy-paths.json
+COPY Build/scripts/gen_nginx_conf.py /src/Build/scripts/gen_nginx_conf.py
+RUN python /src/Build/scripts/gen_nginx_conf.py --out /default.conf.template
+
+FROM docker.io/nginxinc/nginx-unprivileged:1.29-alpine
+# Render the template into /tmp (writable on a read-only root fs) and include it from there.
+ENV NGINX_ENVSUBST_FILTER=^PANIC_SERVER_URL$ \
+    NGINX_ENVSUBST_OUTPUT_DIR=/tmp
+USER root
+RUN sed -i 's#include /etc/nginx/conf.d/\*\.conf;#include /tmp/*.conf;#' /etc/nginx/nginx.conf \
+ && grep -q 'include /tmp/\*.conf;' /etc/nginx/nginx.conf \
+ && rm -f /etc/nginx/conf.d/default.conf
+USER 101
+COPY --from=spa /src/Application/Web/dist/spa /usr/share/nginx/html
+COPY --from=conf /default.conf.template /etc/nginx/templates/default.conf.template
+COPY Build/Containers/common/panic-env.sh /usr/local/lib/panic/panic-env.sh
+COPY --chmod=0755 Build/Containers/web/10-panic-server-url.envsh /docker-entrypoint.d/10-panic-server-url.envsh
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1

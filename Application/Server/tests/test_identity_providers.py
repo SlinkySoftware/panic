@@ -189,6 +189,8 @@ LDAP = {
     "PANIC_LDAP_BIND_DN": "cn=svc,dc=example,dc=com",
     "PANIC_LDAP_BIND_PASSWORD": "svcpw",
     "PANIC_LDAP_USER_BASE_DN": "ou=people,dc=example,dc=com",
+    # Pinned: a developer .env may set its own filter, and the tests below assert on this one.
+    "PANIC_LDAP_USER_FILTER": "(uid={username})",
 }
 
 

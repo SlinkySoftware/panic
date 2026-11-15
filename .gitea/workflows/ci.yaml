@@ -1,11 +1,10 @@
-# PANIC CI: tests on every push / PR to main; the server image is built and smoke-tested on the
-# same events and published to this Gitea instance's container registry for main and v* tags.
-#   push to main  -> <registry>/<owner>/panic-server:main and :sha-<short>
-#   tag vX.Y.Z    -> <registry>/<owner>/panic-server:X.Y.Z, :X.Y and :latest
-# Registry host and owner are derived from the server URL and repository, so nothing
-# instance-specific lives in this file. Publishing needs Actions secrets REGISTRY_USER /
-# REGISTRY_TOKEN (write:package; repository or organisation level) because the built-in job
-# token cannot push packages.
+# PANIC CI (T-S6-12): Python and web checks, contract drift, Mongo-backed tests, then both images built,
+# smoke-tested together (web -> 2x server -> Mongo) and published for main and v* tags:
+#   push to main  -> <registry>/<owner>/panic-{web,server}:main and :sha-<short>
+#   tag vX.Y.Z    -> <registry>/<owner>/panic-{web,server}:X.Y.Z, :X.Y and :latest
+# Registry host and owner come from the server URL and repository, so nothing instance-specific lives
+# here. Publishing needs Actions secrets REGISTRY_USER / REGISTRY_TOKEN (write:package): the built-in
+# job token cannot push packages.
 name: ci
 
 on:
@@ -21,10 +20,10 @@ env:
   NO_COLOR: "1"
 
 jobs:
-  test:
-    name: pytest, ruff, mypy, import-linter
+  checks:
+    name: python, web, contracts
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,29 +31,53 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v6
 
-      - name: Create venv (Python 3.13, workspace + dev group)
+      - name: Python venv (3.13, workspace + dev group)
         run: uv sync --python 3.13 --group dev
 
-      - name: ./panic test
-        run: ./panic test
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: Application/Web/package-lock.json
 
-      - name: Migrations are complete
-        working-directory: Application/Server
-        env:
-          PYTHONPATH: ../Common:.
-          PANIC_SQLITE_PATH: ":memory:"
-        run: ../../.venv/bin/python manage.py makemigrations --check --dry-run
+      - name: Web dependencies
+        working-directory: Application/Web
+        run: npm ci
 
-  image:
-    name: build, smoke-test, publish image
+      - name: MongoDB for the tests (mongo:8)
+        run: Build/ci/mongo_service.sh start >> "$GITHUB_ENV"
+
+      - name: Python tests (pytest against Mongo)
+        run: ./panic test python
+
+      - name: Python lint (ruff, mypy, import-linter)
+        run: ./panic test lint
+
+      - name: Web lint, typecheck, unit tests
+        working-directory: Application/Web
+        run: |
+          npm run lint
+          npm run typecheck
+          npm test
+
+      - name: Contract drift (OpenAPI, generated types, nginx template, compose files)
+        run: Build/ci/contract_checks.sh
+
+      - name: Stop MongoDB
+        if: always()
+        run: Build/ci/mongo_service.sh stop
+
+  images:
+    name: build, smoke-test, publish images
     runs-on: ubuntu-latest
-    needs: test
-    timeout-minutes: 30
+    needs: checks
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Resolve registry, image and tags
+      - name: Resolve registry, images and tags
         id: meta
         shell: bash
         run: |
@@ -63,7 +86,7 @@ jobs:
           registry="${registry#https://}"
           registry="${registry%%/*}"
           owner="$(echo "${{ gitea.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
-          image="${registry}/${owner}/panic-server"
+          prefix="${registry}/${owner}"
           ref="${{ gitea.ref }}"
           short_sha="$(echo "${{ gitea.sha }}" | cut -c1-7)"
           if [[ "$ref" == refs/tags/v* ]]; then
@@ -72,11 +95,12 @@ jobs:
               echo "Tag must look like v1.2.3 (got ${ref#refs/tags/})" >&2
               exit 1
             fi
-            tags="${image}:${version},${image}:${version%.*},${image}:latest"
+            suffixes="${version} ${version%.*} latest"
           else
             version="main-${short_sha}"
-            tags="${image}:main,${image}:sha-${short_sha}"
+            suffixes="main sha-${short_sha}"
           fi
+          tags_for() { local t out=""; for t in $suffixes; do out+="${prefix}/$1:${t},"; done; echo "${out%,}"; }
           publish=false
           if [[ "${{ gitea.event_name }}" == "push" || "${{ gitea.event_name }}" == "workflow_dispatch" ]] \
              && [[ "$ref" == refs/heads/main || "$ref" == refs/tags/v* ]]; then
@@ -84,61 +108,36 @@ jobs:
           fi
           {
             echo "registry=${registry}"
-            echo "image=${image}"
             echo "version=${version}"
-            echo "tags=${tags}"
+            echo "web_tags=$(tags_for panic-web)"
+            echo "server_tags=$(tags_for panic-server)"
             echo "publish=${publish}"
           } >> "$GITHUB_OUTPUT"
-          echo "Image: ${image}  Version: ${version}  Tags: ${tags}  Publish: ${publish}"
+          echo "Version: ${version}  Publish: ${publish}"
 
-      - name: Build image (local, for testing)
+      - name: Build panic-server (local)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Build/Containers/server/Containerfile
           load: true
           push: false
-          tags: panic-server:ci
+          tags: panic-ci/panic-server:smoke
 
-      - name: Smoke test (prod mode, non-root, healthcheck, login, static)
-        shell: bash
-        run: |
-          cid=$(docker run -d \
-            -e PANIC_ENV=prod \
-            -e PANIC_DJANGO_SECRET_KEY="ci-$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')" \
-            -e PANIC_ALLOWED_HOSTS=127.0.0.1,localhost \
-            panic-server:ci)
-          trap 'docker logs "$cid" | tail -50; docker rm -f "$cid" >/dev/null' EXIT
-          test "$(docker inspect -f '{{.Config.User}}' "$cid")" = "panic:panic"
-          for i in $(seq 1 60); do
-            status=$(docker inspect -f '{{.State.Health.Status}}' "$cid")
-            [ "$status" = "healthy" ] && break
-            [ "$(docker inspect -f '{{.State.Running}}' "$cid")" = "true" ] || { echo "container exited" >&2; exit 1; }
-            sleep 2
-          done
-          [ "$status" = "healthy" ] || { echo "container not healthy: $status" >&2; exit 1; }
-          docker exec "$cid" python - <<'PY'
-          import urllib.request as u
-          from urllib.error import HTTPError
+      - name: Build panic-web (local)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Build/Containers/web/Containerfile
+          load: true
+          push: false
+          tags: panic-ci/panic-web:smoke
 
-          def get(path):
-              req = u.Request("http://127.0.0.1:8210" + path, headers={"Host": "localhost"})
-              class NoRedirect(u.HTTPRedirectHandler):
-                  def redirect_request(self, *a, **k):
-                      return None
-              try:
-                  return u.build_opener(NoRedirect).open(req, timeout=5)
-              except HTTPError as e:
-                  return e
-
-          assert get("/api/v1/health").status == 200
-          root = get("/")
-          assert root.status == 302 and root.headers["Location"].startswith("/login"), root.status
-          assert get("/login").status == 200
-          assert get("/static/panic/css/app.css").status == 200
-          assert get("/api/v1/state").status == 401
-          print("smoke ok")
-          PY
+      - name: Joint smoke test (web -> 2x server -> Mongo, sign-in, allow-list, XFF, replicas)
+        env:
+          PANIC_IMAGE_PREFIX: panic-ci
+          PANIC_IMAGE_TAG: smoke
+        run: Build/ci/container_smoke.sh
 
       # The built-in job token cannot push packages (see header).
       - name: Check registry credentials
@@ -149,7 +148,7 @@ jobs:
           REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
         run: |
           if [ -z "$REGISTRY_USER" ] || [ -z "$REGISTRY_TOKEN" ]; then
-            echo "::error::Set Actions secrets REGISTRY_USER and REGISTRY_TOKEN (a token with write:package) to publish the image."
+            echo "::error::Set Actions secrets REGISTRY_USER and REGISTRY_TOKEN (a token with write:package) to publish."
             exit 1
           fi
 
@@ -161,16 +160,30 @@ jobs:
           username: ${{ secrets.REGISTRY_USER }}
           password: ${{ secrets.REGISTRY_TOKEN }}
 
-      - name: Publish image
+      - name: Publish panic-server
         if: steps.meta.outputs.publish == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Build/Containers/server/Containerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.meta.outputs.server_tags }}
           labels: |
             org.opencontainers.image.title=panic-server
+            org.opencontainers.image.source=${{ gitea.server_url }}/${{ gitea.repository }}
+            org.opencontainers.image.revision=${{ gitea.sha }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+
+      - name: Publish panic-web
+        if: steps.meta.outputs.publish == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Build/Containers/web/Containerfile
+          push: true
+          tags: ${{ steps.meta.outputs.web_tags }}
+          labels: |
+            org.opencontainers.image.title=panic-web
             org.opencontainers.image.source=${{ gitea.server_url }}/${{ gitea.repository }}
             org.opencontainers.image.revision=${{ gitea.sha }}
             org.opencontainers.image.version=${{ steps.meta.outputs.version }}
