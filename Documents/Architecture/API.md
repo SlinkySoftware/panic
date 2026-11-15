@@ -137,7 +137,7 @@ default). `/` and `/dashboard` route client-side to `default_dashboard.id`.
 {"id": "cat-…", "title": "core-rtr-01", "protocol": "SSH", "target": "rtr01.example.net:22",
  "site": "2SYA", "scope": "TEAM", "zone_names": ["Core"], "tags": ["core"],
  "reachable": true, "unreachable_reason": null,
- "launch": {"kind": "COPY", "command": "ssh jdoe@rtr01.example.net -p 22", "uri": "ssh://jdoe@rtr01.example.net:22"}}
+ "launch": {"kind": "COPY", "command": "ssh jdoe@rtr01.example.net -p 22", "uri": "panic-ssh://jdoe@rtr01.example.net:22"}}
 ```
 
 `launch.kind`: `OPEN` (`url`, WEB), `COPY` (`command`, SSH/LOCAL_APP, optional `uri`),
@@ -218,8 +218,8 @@ Writes under `/me` act on the **real** signed-in user and are refused during Vie
 | `POST /api/v1/admin/orphans/{kind}/{id}/assign` | G | `{"username": "jdoe"}` (must be enabled) → the resource now `PERSONAL` for that user, plus `dropped_item_ids` for lists. Audited. Deleting an orphan uses the normal `DELETE` endpoint (allowed for admins on orphans only) |
 | `PUT /api/v1/admin/view-as` | G (real user) | `{"user_id": "usr-…"}` → `200 bootstrap` payload for the new perspective; audited |
 | `DELETE /api/v1/admin/view-as` | signed-in admin | Exit View As → `200 bootstrap`; audited. The only mutation allowed during View As |
-| `GET /api/v1/settings` | A | `{default_global_dashboard: {id, title}, version}` |
-| `PATCH /api/v1/settings` | G | `{default_global_dashboard_id}` (must be GLOBAL) |
+| `GET /api/v1/settings` | A | `{default_global_dashboard: {id, title}, ssh_uri_enabled, ssh_uri_scheme, version}` |
+| `PATCH /api/v1/settings` | G | Any of `{default_global_dashboard_id` (must be GLOBAL)`, ssh_uri_enabled, ssh_uri_scheme}`. `ssh_uri_enabled: false` removes `launch.uri` from every SSH item; `ssh_uri_scheme` (default `panic-ssh`) must be a lowercase URI scheme, not a web scheme |
 | `GET /api/v1/audit?actor=&action=&target_type=&target_id=&q=&since=&until=&limit=&cursor=` | G | Keyset-paged entries (newest first), `limit` ≤ 200 |
 | `GET /api/v1/export?shared_only=` | G | Portable JSON (`schema_version: 2`), audited; attachment |
 | `GET /api/v1/admin/client-ip` | G | Trust-chain diagnostics (§6), shown at `/settings/client-ip` |

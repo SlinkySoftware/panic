@@ -34,6 +34,38 @@
       </q-card-section>
     </q-card>
 
+    <q-card flat bordered>
+      <q-card-section class="text-subtitle1">SSH system handler</q-card-section>
+      <q-card-section class="q-pt-none">
+        <div class="text-caption text-grey-7 q-mb-sm">
+          Lets users open SSH items in PuTTY or OpenSSH with one click, through a per-user URI handler they set up on
+          their Profile page. Turned off, SSH items only offer "copy command" and the setup instructions are hidden.
+        </div>
+        <div class="row q-col-gutter-md items-center">
+          <q-toggle
+            v-model="sshEnabled"
+            class="col-12 col-sm-4"
+            label="Enabled"
+            color="positive"
+            :disable="!session.isAdmin"
+            data-testid="ssh-uri-enabled"
+          />
+          <q-input
+            v-model="sshScheme"
+            class="col-12 col-sm-4"
+            label="URI scheme"
+            hint="Changing it means users re-run the setup"
+            :disable="!session.isAdmin || !sshEnabled"
+            v-bind="field"
+          />
+          <div v-if="session.isAdmin" class="col-auto">
+            <q-btn color="primary" label="Save" :loading="savingSsh" :disable="!sshDirty" @click="saveSsh" />
+          </div>
+        </div>
+        <q-banner v-if="sshError" class="bg-negative text-white q-mt-md" rounded dense>{{ sshError }}</q-banner>
+      </q-card-section>
+    </q-card>
+
     <q-card v-if="session.isAdmin" flat bordered>
       <q-card-section class="text-subtitle1">Administration</q-card-section>
       <q-list separator>
@@ -57,7 +89,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useQuasar } from 'quasar';
 import { listDashboards } from '@/api/dashboards';
 import { getSettings, updateSettings } from '@/api/settings';
@@ -98,9 +130,35 @@ async function load() {
     current.value = s.default_global_dashboard?.id ?? null;
     dashboardId.value = current.value;
     version.value = s.version;
+    sshEnabled.value = s.ssh_uri_enabled;
+    sshScheme.value = s.ssh_uri_scheme;
+    sshSaved.value = { enabled: s.ssh_uri_enabled, scheme: s.ssh_uri_scheme };
     dashboardOptions.value = d.results.map((x) => ({ label: x.title, value: x.id }));
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e);
+  }
+}
+
+const sshEnabled = ref(true);
+const sshScheme = ref('panic-ssh');
+const sshSaved = ref({ enabled: true, scheme: 'panic-ssh' });
+const sshDirty = computed(
+  () => sshEnabled.value !== sshSaved.value.enabled || sshScheme.value.trim() !== sshSaved.value.scheme,
+);
+const savingSsh = ref(false);
+const sshError = ref('');
+
+async function saveSsh() {
+  savingSsh.value = true;
+  sshError.value = '';
+  try {
+    await updateSettings(version.value, { ssh_uri_enabled: sshEnabled.value, ssh_uri_scheme: sshScheme.value.trim() });
+    $q.notify({ type: 'positive', message: 'SSH handler setting saved' });
+    await load();
+  } catch (e) {
+    sshError.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    savingSsh.value = false;
   }
 }
 
@@ -109,7 +167,7 @@ async function save() {
   saving.value = true;
   error.value = '';
   try {
-    await updateSettings(version.value, dashboardId.value);
+    await updateSettings(version.value, { default_global_dashboard_id: dashboardId.value });
     $q.notify({ type: 'positive', message: 'Default dashboard updated' });
     await Promise.all([load(), session.fetchBootstrap()]);
   } catch (e) {

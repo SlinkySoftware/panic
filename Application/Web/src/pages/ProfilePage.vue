@@ -68,6 +68,15 @@
         </q-card-actions>
       </q-form>
     </q-card>
+    <SshHandlerSetup
+      v-if="sshScheme"
+      class="q-mt-lg"
+      style="max-width: 760px"
+      :scheme="sshScheme"
+      :preferred-client="
+        presetFor(form.ssh_template) === 'putty' || presetFor(form.ssh_template) === 'plink' ? 'putty' : 'openssh'
+      "
+    />
     <q-banner v-if="error" class="bg-negative text-white" rounded>{{ error }}</q-banner>
   </q-page>
 </template>
@@ -77,10 +86,12 @@ import { onMounted, reactive, ref } from 'vue';
 import { useQuasar } from 'quasar';
 import { listDashboards, setMyDefaultDashboard } from '@/api/dashboards';
 import { ApiError } from '@/api/http';
-import { getMe, updateMe, type MyProfile } from '@/api/settings';
+import { getMe, getSettings, updateMe, type MyProfile } from '@/api/settings';
 import { useSessionStore } from '@/stores/session';
 import { useUiStore } from '@/stores/theme';
 import SshTemplateField from '@/components/profile/SshTemplateField.vue';
+import SshHandlerSetup from '@/components/profile/SshHandlerSetup.vue';
+import { presetFor } from '@/components/profile/sshPresets';
 
 const $q = useQuasar();
 const session = useSessionStore();
@@ -110,11 +121,14 @@ const form = reactive<Form>({
   unreachable_policy: 'DIM',
 });
 const defaultDashboard = ref<string | null>(null);
+// Scheme of the admin-enabled SSH URI handler; null hides the setup section.
+const sshScheme = ref<string | null>(null);
 const dashboardOptions = ref<{ label: string; value: string }[]>([]);
 
 async function load() {
   try {
-    const [p, d] = await Promise.all([getMe(), listDashboards({})]);
+    const [p, d, st] = await Promise.all([getMe(), listDashboards({}), getSettings()]);
+    sshScheme.value = st.ssh_uri_enabled ? st.ssh_uri_scheme : null;
     profile.value = p;
     Object.assign(form, {
       display_name: p.display_name,

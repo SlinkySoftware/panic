@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-15 — Per-user SSH URI handler (one click into PuTTY / OpenSSH)
+- Settings (Global Admin): "SSH system handler" switch and scheme (default `panic-ssh`). Off removes the
+  SSH `launch.uri` everywhere; on, it is `<scheme>://user@host:port` (was `ssh://`). Cached per process
+  like zones. `PATCH /settings` takes any of the default dashboard and the two SSH fields.
+- Profile: setup section (shown when enabled) with a client choice (PuTTY / OpenSSH), a one-line
+  PowerShell install command and a remove command. It writes `%LOCALAPPDATA%\PANIC\panic-ssh.ps1` and
+  registers the scheme under `HKCU\Software\Classes` (no admin). The URL reaches the script only as a
+  `-File` argument and is validated (`user@host:port`, no leading `-`, no quotes or spaces) before
+  `Start-Process`; Constrained-Language-safe. Verified in a PowerShell container: valid links build the
+  right PuTTY / ssh command, injection and option-smuggling links exit 2.
+
 ## 2026-11-15 — SSH client presets; full name in the header
 - Profile: "SSH client" dropdown (OpenSSH, PuTTY, Plink, Windows Terminal + OpenSSH, Custom) filling the
   editable template; editing makes it Custom; live preview. Presets are client-side

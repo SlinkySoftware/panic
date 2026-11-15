@@ -186,8 +186,15 @@ class UserAccount(BaseModel):
     version: int = 1
 
 
+#: URI scheme for the SSH system handler: lowercase, RFC 3986 scheme characters.
+SSH_URI_SCHEME_RE = r"^[a-z][a-z0-9+.-]{1,31}$"
+
+
 class SystemSettings(BaseModel):
     default_global_dashboard_id: str
+    # SSH "open with system handler" (per-user URI handler): off removes the URI from every launch.
+    ssh_uri_enabled: bool = True
+    ssh_uri_scheme: str = "panic-ssh"
     updated_by: str = "joperator"
     updated_at: str = "2026-11-01T00:00:00Z"
     version: int = 1

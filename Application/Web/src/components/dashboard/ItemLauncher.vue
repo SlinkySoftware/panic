@@ -18,9 +18,13 @@
           dense
           size="sm"
           icon="open_in_new"
-          aria-label="Open with system handler"
+          :aria-label="item.protocol === 'SSH' ? 'Open in SSH client' : 'Open with system handler'"
           @click.stop="openUri(item)"
-        />
+        >
+          <q-tooltip>{{
+            item.protocol === 'SSH' ? 'Open in SSH client (set up on your Profile)' : 'Open with system handler'
+          }}</q-tooltip>
+        </q-btn>
       </div>
     </q-item-section>
     <q-tooltip v-if="!item.reachable && item.unreachable_reason">{{ item.unreachable_reason }}</q-tooltip>

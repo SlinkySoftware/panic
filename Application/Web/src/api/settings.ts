@@ -35,18 +35,18 @@ export const deleteOrphan = (kind: OrphanKind, id: string) =>
 // ---- app settings
 export interface AppSettings {
   default_global_dashboard: { id: string; title: string | null } | null;
+  ssh_uri_enabled: boolean;
+  ssh_uri_scheme: string;
   version: number;
 }
+export type SettingsPatch = Partial<{
+  default_global_dashboard_id: string;
+  ssh_uri_enabled: boolean;
+  ssh_uri_scheme: string;
+}>;
 export const getSettings = () => requestJson<AppSettings>('GET', '/settings');
-export const updateSettings = (version: number, defaultGlobalDashboardId: string) =>
-  requestJson<AppSettings>(
-    'PATCH',
-    '/settings',
-    { default_global_dashboard_id: defaultGlobalDashboardId },
-    {
-      'If-Match': `"${version}"`,
-    },
-  );
+export const updateSettings = (version: number, body: SettingsPatch) =>
+  requestJson<AppSettings>('PATCH', '/settings', body, { 'If-Match': `"${version}"` });
 
 // ---- my profile
 export interface MyProfile {

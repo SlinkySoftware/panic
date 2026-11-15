@@ -34,9 +34,11 @@ from panic_common.launchers import (
 from panic_common.models import CatalogItem, Protocol, SecurityZone, UnreachablePolicy, UserAccount
 from panic_common.visibility import matches, visibility_spec
 from panic_common.zones import check_item_reachability
+from panic_server.store.client import get_db
 from panic_server.store.errors import NotFound
 from panic_server.store.repos import audit as audit_repo
 from panic_server.store.repos import catalog as catalog_repo
+from panic_server.store.repos import settings as settings_repo
 
 _FILENAME_UNSAFE_RE = re.compile(r"[^a-zA-Z0-9._-]+")
 
@@ -62,8 +64,11 @@ def _web_url(item: CatalogItem) -> str:
 def _ssh_launch(item: CatalogItem, caller: UserAccount) -> dict[str, Any]:
     remote_user = _remote_user(item, caller)
     command = interpolate_ssh_command(caller.ssh_template, item.host, item.port, remote_user, item.path_or_args)
-    uri = f"ssh://{remote_user}@{item.host}:{item.port or 22}"
-    return {"kind": "COPY", "command": command, "uri": uri}
+    launch: dict[str, Any] = {"kind": "COPY", "command": command}
+    scheme = settings_repo.ssh_uri_scheme(get_db())  # None when the admin turned the handler off
+    if scheme:
+        launch["uri"] = f"{scheme}://{remote_user}@{item.host}:{item.port or 22}"
+    return launch
 
 
 def _local_app_launch(item: CatalogItem, caller: UserAccount) -> dict[str, Any]:

@@ -434,9 +434,8 @@ def settings_view(request: Request) -> Response:
     current_version = current_doc.version if current_doc is not None else 1
     version = expected_version(request, current_version, required=False)
     body: dict[str, Any] = request.data
-    require(body, "default_global_dashboard_id")
     try:
-        updated = admin_service.update_settings(db, real, version, body["default_global_dashboard_id"])
+        updated = admin_service.update_settings(db, real, version, **body)
     except VersionConflict:
         refreshed = settings_repo.get_system_settings(db)
         raise version_conflict(refreshed.version if refreshed is not None else version) from None
@@ -446,7 +445,14 @@ def settings_view(request: Request) -> Response:
         action="admin.settings.update",
         target_type="system_settings",
         target_id="system",
-        summary=f"Set the app-wide default dashboard to {updated.default_global_dashboard_id}",
+        summary="Updated settings: "
+        + ", ".join(
+            f"default dashboard {updated.default_global_dashboard_id}"
+            if k == "default_global_dashboard_id"
+            else f"{k}={getattr(updated, k)}"
+            for k in sorted(body)
+        ),
+        details={"fields": sorted(body.keys())},
     )
     return Response(admin_service.get_settings(db))
 

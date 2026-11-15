@@ -6,10 +6,19 @@ settings. Global Admin unless noted; the admin-only gate itself is the view laye
 from __future__ import annotations
 
 import contextlib
+import re
 from typing import Any
 
 from panic_common.errors import ErrorCode
-from panic_common.models import CatalogItem, Dashboard, EndpointList, PermissionFlag, ScopeType, UserAccount
+from panic_common.models import (
+    SSH_URI_SCHEME_RE,
+    CatalogItem,
+    Dashboard,
+    EndpointList,
+    PermissionFlag,
+    ScopeType,
+    UserAccount,
+)
 from panic_common.rbac import has_permission
 from panic_common.search_keys import search_keys as compute_search_keys
 from panic_common.visibility import assign_orphan_to_user, visibility_spec
@@ -406,23 +415,62 @@ def assign_orphan(db: Any, real_user: UserAccount, kind: str, item_id: str, targ
 
 def get_settings(db: Any) -> dict[str, Any]:
     doc = settings_repo.get_system_settings(db)
+    ssh = {
+        "ssh_uri_enabled": doc.ssh_uri_enabled if doc else True,
+        "ssh_uri_scheme": doc.ssh_uri_scheme if doc else "panic-ssh",
+    }
     if doc is None or not doc.default_global_dashboard_id:
-        return {"default_global_dashboard": None, "version": doc.version if doc else 0}
+        return {"default_global_dashboard": None, "version": doc.version if doc else 0, **ssh}
     title = None
     with contextlib.suppress(NotFound):
         title = dashboards_repo.get_dashboard(db, doc.default_global_dashboard_id).title
-    return {"default_global_dashboard": {"id": doc.default_global_dashboard_id, "title": title}, "version": doc.version}
+    return {
+        "default_global_dashboard": {"id": doc.default_global_dashboard_id, "title": title},
+        "version": doc.version,
+        **ssh,
+    }
 
 
-def update_settings(db: Any, real_user: UserAccount, expected_version: int, default_global_dashboard_id: str) -> Any:
-    dashboard = dashboards_repo.get_dashboard(db, default_global_dashboard_id)
-    if dashboard.scope != ScopeType.GLOBAL:
+_RESERVED_SCHEMES = frozenset({"http", "https", "file", "ftp", "data", "javascript", "mailto", "about", "blob"})
+
+
+def update_settings(db: Any, real_user: UserAccount, expected_version: int, **fields: Any) -> Any:
+    """``PATCH /api/v1/settings``: the app-wide default dashboard and/or the SSH URI handler switch."""
+    unknown = set(fields) - {"default_global_dashboard_id", "ssh_uri_enabled", "ssh_uri_scheme"}
+    if unknown or not fields:
         raise ApiError(
-            ErrorCode.VALIDATION_ERROR, "The app-wide default dashboard must be GLOBAL scope.", status_code=400
+            ErrorCode.VALIDATION_ERROR,
+            f"Unknown field(s): {', '.join(sorted(unknown))}." if unknown else "Nothing to update.",
+            status_code=400,
         )
-    return settings_repo.set_default_global_dashboard(
-        db, expected_version, default_global_dashboard_id=default_global_dashboard_id, updated_by=real_user.username
-    )
+    doc = None
+    if "default_global_dashboard_id" in fields:
+        dashboard = dashboards_repo.get_dashboard(db, fields["default_global_dashboard_id"])
+        if dashboard.scope != ScopeType.GLOBAL:
+            raise ApiError(
+                ErrorCode.VALIDATION_ERROR, "The app-wide default dashboard must be GLOBAL scope.", status_code=400
+            )
+        doc = settings_repo.set_default_global_dashboard(
+            db, expected_version, default_global_dashboard_id=dashboard.id, updated_by=real_user.username
+        )
+        expected_version = doc.version
+    if "ssh_uri_enabled" in fields or "ssh_uri_scheme" in fields:
+        current = settings_repo.get_system_settings(db)
+        enabled = bool(fields.get("ssh_uri_enabled", current.ssh_uri_enabled if current else True))
+        scheme = str(fields.get("ssh_uri_scheme", current.ssh_uri_scheme if current else "panic-ssh")).strip().lower()
+        if not re.match(SSH_URI_SCHEME_RE, scheme) or scheme in _RESERVED_SCHEMES:
+            raise ApiError(
+                ErrorCode.VALIDATION_ERROR,
+                "Invalid URI scheme.",
+                status_code=400,
+                fields={
+                    "ssh_uri_scheme": ["2-32 chars: a lowercase letter, then letters, digits, + . -; not a web scheme."]
+                },
+            )
+        doc = settings_repo.set_ssh_uri(
+            db, expected_version, enabled=enabled, scheme=scheme, updated_by=real_user.username
+        )
+    return doc
 
 
 __all__ = [

@@ -782,6 +782,42 @@ def test_settings_patch_rejects_non_global_dashboard(mongo_db: Any, admin: Any) 
     assert resp.json()["error_code"] == "VALIDATION_ERROR"
 
 
+def test_settings_ssh_uri_handler_switch_and_scheme(mongo_db: Any, admin: Any) -> None:
+    from panic_common.models import CatalogItem
+    from panic_server.services.launch import build_item_view
+
+    settings_repo.ensure_system_settings(mongo_db, default_global_dashboard_id="", updated_by="system")
+    client = _client_as(admin.id)
+    item = CatalogItem(
+        id="cat-uri",
+        title="r1",
+        protocol=Protocol.SSH,
+        host="r1.example.com",
+        port=2222,
+        site="S1",
+        normalized_key="ssh://r1.example.com:2222",
+    )
+
+    def uri() -> str | None:
+        return build_item_view(item, caller=admin, active_zone=None, zones_by_id={})["launch"].get("uri")
+
+    def patch(body: dict[str, Any]) -> Any:
+        version = client.get("/api/v1/settings").json()["version"]
+        return _json(client, "patch", "/api/v1/settings", body, HTTP_IF_MATCH=str(version))
+
+    bad = patch({"ssh_uri_scheme": "https"})
+    assert bad.status_code == 400 and "ssh_uri_scheme" in bad.json()["fields"]
+    on = patch({"ssh_uri_enabled": True, "ssh_uri_scheme": "corp-ssh"})
+    assert on.status_code == 200 and on.json()["ssh_uri_scheme"] == "corp-ssh"
+    assert uri() == f"corp-ssh://{admin.default_remote_user}@r1.example.com:2222"
+    off = patch({"ssh_uri_enabled": False})
+    assert off.status_code == 200 and off.json()["ssh_uri_enabled"] is False
+    assert uri() is None  # disabled: no URI at all, so no "open with system handler" anywhere
+    # Leave no settings document behind: later store tests create it fresh at version 1.
+    settings_repo.delete_system_settings(mongo_db)
+    settings_repo.invalidate_ssh_uri_cache()
+
+
 # ============================================================================ Sites/teams/users admin CRUD smoke
 
 
