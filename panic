@@ -6,7 +6,8 @@
 #   ./panic status
 #   ./panic test [python|web|lint|all] [pytest args...]
 #   ./panic logs [server|web]
-#   ./panic manage <django manage.py args...>
+#   ./panic manage <django manage.py args...>    (loads .env, like start)
+#   ./panic promote|demote <username>             grant / remove Global Admin (also: ./panic user promote|demote)
 #   ./panic contracts [--check]           regenerate (or, with --check, verify) the committed
 #                                          OpenAPI contract, Documents/Architecture/openapi/server.yaml
 #
@@ -362,7 +363,13 @@ case "${1:-help}" in
     test)    shift; cmd_test "$@" ;;
     lint)    cmd_test lint ;;
     logs)    shift; cmd_logs "$@" ;;
-    manage)  shift; ensure_venv; (cd "$SERVER_DIR" && "$VENV/bin/python" manage.py "$@") ;;
+    manage)  shift; ensure_venv; load_env; (cd "$SERVER_DIR" && "$VENV/bin/python" manage.py "$@") ;;
+    promote|demote)
+             [[ $# -eq 2 ]] || die "usage: ./panic $1 <username>"
+             ensure_venv; load_env; (cd "$SERVER_DIR" && "$VENV/bin/python" manage.py panic_user_admin "$1" "$2") ;;
+    user)    shift
+             [[ $# -eq 2 && ( "$1" == promote || "$1" == demote ) ]] || die "usage: ./panic user promote|demote <username>"
+             ensure_venv; load_env; (cd "$SERVER_DIR" && "$VENV/bin/python" manage.py panic_user_admin "$1" "$2") ;;
     contracts) shift; cmd_contracts "$@" ;;
-    *)       echo "Usage: ./panic {setup|start|stop|restart|status|test|lint|logs|manage|contracts}" ;;
+    *)       echo "Usage: ./panic {setup|start|stop|restart|status|test|lint|logs|manage|contracts|promote|demote|user}" ;;
 esac

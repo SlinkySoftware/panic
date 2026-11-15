@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-15 — `./panic promote|demote <username>`
+- New `manage.py panic_user_admin promote|demote <username>` (via `admin_service.update_user`: the last
+  enabled Global Admin cannot be demoted; audited as `cli:<os user>`), exposed as `./panic promote|demote`
+  and `./panic user promote|demote`. `./panic manage` now loads `.env` like `start`.
+
 ## 2026-11-15 — T-S6-14: load test
 - `Build/LoadTest/` (`run.sh`, `locustfile.py`, `mint_sessions.py`; `uv sync --group loadtest`): built
   images, 1 web + 2 servers, the shared dev Mongo in its own `panic_loadtest` database, 50 real sessions

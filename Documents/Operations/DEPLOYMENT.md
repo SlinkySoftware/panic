@@ -122,7 +122,10 @@ and resolves the client to `198.51.100.23`. That address then matches the zone w
    sign in, put a group condition in `PANIC_LDAP_USER_FILTER`, or use the IdP's access policy.
 3. External sign-in is authentication only. A new user gets no permissions; grant permissions and
    teams on `/settings/users`.
-4. Optionally disable local sign-in with `PANIC_AUTH_LOCAL_ENABLED=false` once SSO works.
+4. To make an SSO/LDAP user a Global Admin from the shell (after their first sign-in):
+   `docker compose -f Build/Containers/compose.yaml exec server python -m django panic_user_admin promote <username>`
+   (`demote` reverses it; the last enabled Global Admin cannot be demoted). In development: `./panic promote <username>`.
+5. Optionally disable local sign-in with `PANIC_AUTH_LOCAL_ENABLED=false` once SSO works.
 
 `PANIC_ENV=prod` refuses to start with a weak or placeholder secret key.
 
