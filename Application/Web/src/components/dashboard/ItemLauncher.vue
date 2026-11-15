@@ -1,6 +1,7 @@
 <!--
   One launchable item: click to launch. Unreachable items (zone restrictions) are not launchable at all:
   dimmed, a red "Unavailable" badge with the reason on hover, no launch icon, and clicking does nothing.
+  `showZones` adds a column of badges for the zones the item is reachable from ("All zones" when unrestricted).
 -->
 <template>
   <q-item
@@ -16,6 +17,17 @@
     <q-item-section>
       <q-item-label lines="1">{{ item.title }}</q-item-label>
       <q-item-label caption lines="1">{{ item.target }}</q-item-label>
+    </q-item-section>
+    <q-item-section v-if="showZones" side class="panic-zones" data-testid="item-zones">
+      <div class="row no-wrap items-center q-gutter-x-xs">
+        <q-badge v-if="item.zone_names.length === 0" outline color="grey-6" label="All zones" />
+        <template v-else>
+          <q-badge v-for="z in item.zone_names.slice(0, 3)" :key="z" outline color="teal" :label="z" />
+          <q-badge v-if="item.zone_names.length > 3" outline color="teal" :label="`+${item.zone_names.length - 3}`">
+            <q-tooltip>{{ item.zone_names.join(', ') }}</q-tooltip>
+          </q-badge>
+        </template>
+      </div>
     </q-item-section>
     <q-item-section side>
       <div class="row no-wrap items-center">
@@ -45,7 +57,7 @@
 import type { ItemView } from '@/api/catalog';
 import { useLaunch } from '@/composables/useLaunch';
 
-defineProps<{ item: ItemView }>();
+withDefaults(defineProps<{ item: ItemView; showZones?: boolean }>(), { showZones: false });
 const { launch, openUri } = useLaunch();
 
 const icons: Record<string, string> = { SSH: 'terminal', RDP: 'desktop_windows', WEB: 'language', LOCAL_APP: 'apps' };
@@ -58,6 +70,10 @@ const icons: Record<string, string> = { SSH: 'terminal', RDP: 'desktop_windows',
 .panic-unreachable :deep(.q-item__section--main),
 .panic-unreachable :deep(.q-item__section--avatar) {
   opacity: 0.5;
+}
+.panic-zones {
+  max-width: 45%;
+  overflow: hidden;
 }
 .panic-unavailable {
   font-weight: 600;

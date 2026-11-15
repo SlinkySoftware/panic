@@ -19,7 +19,7 @@
       </template>
       <template v-else>
         <q-list v-if="list" dense separator>
-          <ItemLauncher v-for="item in shownItems" :key="item.id" :item="item" />
+          <ItemLauncher v-for="item in shownItems" :key="item.id" :item="item" show-zones />
           <q-item v-if="shownItems.length === 0">
             <q-item-section class="text-grey-6">
               {{ listItems.length === 0 ? 'No items.' : 'All items are unavailable from your zone.' }}
