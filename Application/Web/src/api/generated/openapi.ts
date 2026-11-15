@@ -798,9 +798,10 @@ export interface components {
         /**
          * @description * `CIDR` - CIDR
          *     * `DEFAULT` - DEFAULT
+         *     * `VIEW_AS` - VIEW_AS
          * @enum {string}
          */
-        ZoneSourceEnum: "CIDR" | "DEFAULT";
+        ZoneSourceEnum: "CIDR" | "DEFAULT" | "VIEW_AS";
     };
     responses: never;
     parameters: never;

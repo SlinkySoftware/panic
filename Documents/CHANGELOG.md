@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-15 — View As a user and/or a zone
+- `PUT /admin/view-as` takes `user_id` and/or `zone_id` (at least one). A zone overrides the IP-derived
+  zone for reachability (`client.zone_source: VIEW_AS`); no user means the admin's own perspective from
+  that zone. Mutations stay refused while any View As is active; exit clears both. AR-2.9 updated.
+- Web: the View As prompt (raw user id) is now a dialog with a user search and a zone picker; the banner
+  shows the zone.
+
 ## 2026-11-15 — Zone specificity, example data commands, menu names
 - Zone resolution: longest prefix wins; on a tie the zone with the smallest total address space wins
   (a zone that is just this /22 beats one spanning several networks), then higher `priority`, then name.

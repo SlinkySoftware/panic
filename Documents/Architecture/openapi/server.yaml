@@ -1658,10 +1658,12 @@ components:
       enum:
       - CIDR
       - DEFAULT
+      - VIEW_AS
       type: string
       description: |-
         * `CIDR` - CIDR
         * `DEFAULT` - DEFAULT
+        * `VIEW_AS` - VIEW_AS
   securitySchemes:
     panicSessionAuth:
       type: apiKey

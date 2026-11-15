@@ -100,7 +100,7 @@ Called once per page load (and after sign-in / View As changes).
 }
 ```
 
-`client.zone` is always present. `zone_source` is `CIDR` for a matched zone, or `DEFAULT`
+`client.zone` is always present. `zone_source` is `CIDR` for a matched zone, `VIEW_AS` for an admin viewing as a zone, or `DEFAULT`
 when the location is unknown or no CIDR matched (zone `{"id": "zone-default", "name": "Default"}`).
 `me`/`permissions` describe the effective user; the real admin is in `real_user` (same shape as
 `me`) when `view_as` is set. `locked` = cannot be removed from the menu (always_display or app-wide
@@ -216,7 +216,7 @@ Writes under `/me` act on the **real** signed-in user and are refused during Vie
 | `PATCH /api/v1/users/{id}` | G | `{display_name?, permissions?, team_ids?, disabled?}`. **The only way to change permissions and team membership.** The IdP never sets them. Removing or disabling the last manual `GLOBAL_ADMIN` gives `409 PROTECTED_RESOURCE`. Disabling flushes the user's sessions and recomputes orphans |
 | `GET /api/v1/admin/orphans?kind=catalog\|list\|dashboard&q=&page=` | G | Orphaned resources (`/settings/orphans`): `{kind, id, title, scope, former_team_ids?, former_owners?, updated_at}` |
 | `POST /api/v1/admin/orphans/{kind}/{id}/assign` | G | `{"username": "jdoe"}` (must be enabled) → the resource now `PERSONAL` for that user, plus `dropped_item_ids` for lists. Audited. Deleting an orphan uses the normal `DELETE` endpoint (allowed for admins on orphans only) |
-| `PUT /api/v1/admin/view-as` | G (real user) | `{"user_id": "usr-…"}` → `200 bootstrap` payload for the new perspective; audited |
+| `PUT /api/v1/admin/view-as` | G (real user) | `{"user_id": "usr-…"?, "zone_id": "zone-…"?}` (at least one; no user = the admin, no zone = the real client zone) → `200 bootstrap` payload for the new perspective (`client.zone_source: VIEW_AS` when a zone is set); audited |
 | `DELETE /api/v1/admin/view-as` | signed-in admin | Exit View As → `200 bootstrap`; audited. The only mutation allowed during View As |
 | `GET /api/v1/settings` | A | `{default_global_dashboard: {id, title}, ssh_uri_enabled, ssh_uri_scheme, version}` |
 | `PATCH /api/v1/settings` | G | Any of `{default_global_dashboard_id` (must be GLOBAL)`, ssh_uri_enabled, ssh_uri_scheme}`. `ssh_uri_enabled: false` removes `launch.uri` from every SSH item; `ssh_uri_scheme` (default `panic-ssh`) must be a lowercase URI scheme, not a web scheme |

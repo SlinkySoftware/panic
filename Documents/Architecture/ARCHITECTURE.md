@@ -84,8 +84,10 @@ browser ──► corporate reverse proxy / LB ──► panic-web (nginx, zone 
   `authenticated` or `admin` through a shared permission class. `tests/test_authz_matrix.py`
   walks every URL pattern and asserts anonymous, plain-user and admin outcomes. *(S6)*
 - **AR-2.9** **View As.**
-  - Only `GLOBAL_ADMIN` may start it. It is stored in the server-side session and changes only
-    the identity used for visibility and permissions, never the zone.
+  - Only `GLOBAL_ADMIN` may start it. It is stored in the server-side session. It can change the
+    identity used for visibility and permissions, the zone used for reachability, or both (owner,
+    2026-11-15): with no user it is the admin's own perspective from the chosen zone
+    (`client.zone_source: VIEW_AS`).
   - Start and stop are audited. Every audit entry written while it is active records both users.
   - While it is active, every mutation except leaving View As is refused (`403 VIEW_AS_READ_ONLY`). *(S6)*
 - **AR-2.11** **Users and teams.**

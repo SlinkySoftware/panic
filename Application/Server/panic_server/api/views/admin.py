@@ -406,8 +406,9 @@ def view_as_view(request: Request) -> Response:
     db = get_db()
     django_request = request._request
     if request.method == "PUT":
-        target_user_id = request.data.get("user_id", "")
-        body = start_view_as(db, django_request, target_user_id)
+        body = start_view_as(
+            db, django_request, request.data.get("user_id") or None, request.data.get("zone_id") or None
+        )
         return Response(body)
     # DELETE: the one mutation explicitly allowed while View As is active (API.md §4.7) -- never
     # calls assert_not_view_as.

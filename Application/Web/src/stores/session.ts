@@ -79,8 +79,12 @@ export const useSessionStore = defineStore('session', () => {
   }
 
   /** `PUT /api/v1/admin/view-as` (admin only, real user): switch perspective, then refresh bootstrap. */
-  async function startViewAs(userId: string): Promise<void> {
-    const data = await requestJson<BootstrapResponse>('PUT', '/admin/view-as', { user_id: userId });
+  /** `PUT /api/v1/admin/view-as`: a user, a zone, or both (no user = yourself; no zone = your real zone). */
+  async function startViewAs(target: { userId?: string | null; zoneId?: string | null }): Promise<void> {
+    const data = await requestJson<BootstrapResponse>('PUT', '/admin/view-as', {
+      user_id: target.userId ?? null,
+      zone_id: target.zoneId ?? null,
+    });
     bootstrap.value = data;
   }
 

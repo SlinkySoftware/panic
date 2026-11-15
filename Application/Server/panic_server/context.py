@@ -30,6 +30,7 @@ from panic_server.store.repos import zones as zones_repo
 SESSION_USER_KEY = "panic_user_id"
 #: Session key holding the admin's current View As target, when active (AR-2.9).
 SESSION_VIEW_AS_KEY = "panic_view_as_user_id"
+SESSION_VIEW_AS_ZONE_KEY = "panic_view_as_zone_id"
 
 #: Exempt from the untrusted-peer ``reject`` policy when the raw peer is loopback (AR-5.3 point 3).
 _HEALTH_VERSION_PATHS = frozenset({"/api/v1/health", "/api/v1/version"})
@@ -57,8 +58,10 @@ class RequestContext:
     the session referenced a user that no longer exists or is disabled -- disabled users'
     sessions are rejected, AR-2.11). ``effective_user`` is the identity used for visibility and
     permission checks: equal to ``real_user`` unless an admin has an active View As target in
-    their session, in which case it is the View As target and ``view_as_active`` is True. View
-    As never changes ``zone`` (AR-2.9): the zone always reflects the real client IP.
+    their session, in which case it is the View As target and ``view_as_active`` is True. An admin
+    may also View As a *zone* (AR-2.9, owner 2026-11-15): ``zone`` is then that zone instead of the
+    one resolved from the client IP, ``view_as_zone`` is True, and View As is active even with no
+    user target (the admin sees their own perspective from that zone).
     """
 
     real_user: UserAccount | None
@@ -67,6 +70,7 @@ class RequestContext:
     client_ip: str
     chain: ChainResolution
     zone: SecurityZone | None
+    view_as_zone: bool = False
 
 
 def proxy_chain_config_from_settings() -> ProxyChainConfig:
@@ -138,13 +142,21 @@ def build_request_context(request: HttpRequest) -> RequestContext:
 
     effective_user = real_user
     view_as_active = False
-    if real_user is not None and session is not None:
+    view_as_zone = False
+    if real_user is not None and session is not None and can_use_view_as(real_user):
         view_as_uid = session.get(SESSION_VIEW_AS_KEY)
-        if view_as_uid and can_use_view_as(real_user):
+        if view_as_uid:
             target = _lookup_active_user(get_db(), str(view_as_uid))
             if target is not None:
                 effective_user = target
                 view_as_active = True
+        view_as_zid = session.get(SESSION_VIEW_AS_ZONE_KEY)
+        if view_as_zid:
+            try:
+                zone = zones_repo.get_zone(get_db(), str(view_as_zid))
+                view_as_active = view_as_zone = True
+            except NotFound:
+                pass  # zone deleted meanwhile: fall back to the real one
 
     return RequestContext(
         real_user=real_user,
@@ -153,12 +165,14 @@ def build_request_context(request: HttpRequest) -> RequestContext:
         client_ip=chain.client_ip,
         chain=chain,
         zone=zone,
+        view_as_zone=view_as_zone,
     )
 
 
 __all__ = [
     "SESSION_USER_KEY",
     "SESSION_VIEW_AS_KEY",
+    "SESSION_VIEW_AS_ZONE_KEY",
     "RequestContext",
     "UntrustedPeerRejected",
     "build_request_context",

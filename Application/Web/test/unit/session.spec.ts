@@ -136,7 +136,7 @@ describe('session store', () => {
     );
     const session = useSessionStore();
     await session.ensureLoaded();
-    await session.startViewAs('usr-2');
+    await session.startViewAs({ userId: 'usr-2' });
     expect(session.isViewingAs).toBe(true);
     expect(session.viewAs?.username).toBe('alice');
     await session.exitViewAs();

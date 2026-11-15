@@ -98,7 +98,7 @@ class ZoneRefSerializer(serializers.Serializer):
 class ClientSerializer(serializers.Serializer):
     ip = serializers.CharField()
     zone = ZoneRefSerializer(allow_null=True)
-    zone_source = serializers.ChoiceField(choices=["CIDR", "DEFAULT"])
+    zone_source = serializers.ChoiceField(choices=["CIDR", "DEFAULT", "VIEW_AS"])
 
 
 class NavDashboardSerializer(serializers.Serializer):

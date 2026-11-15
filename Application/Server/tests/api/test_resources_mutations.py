@@ -649,6 +649,31 @@ def test_view_as_read_only_and_exit(mongo_db: Any, admin: Any, plain: Any) -> No
     assert resume_resp.status_code == 200
 
 
+def test_view_as_zone_with_and_without_user(mongo_db: Any, admin: Any, plain: Any) -> None:
+    zone = zones_repo.create_zone(mongo_db, name=_unique("View As Zone"), cidrs=["192.0.2.128/25"])
+    client = _client_as(admin.id)
+
+    assert _json(client, "put", "/api/v1/admin/view-as", {}).status_code == 400  # needs a user or a zone
+
+    # Zone only: still the admin, but from that zone; mutations are refused.
+    only_zone = _json(client, "put", "/api/v1/admin/view-as", {"zone_id": zone.id})
+    assert only_zone.status_code == 200
+    body = only_zone.json()
+    assert body["me"]["username"] == admin.username
+    assert body["client"]["zone"]["id"] == zone.id and body["client"]["zone_source"] == "VIEW_AS"
+    assert body["view_as"] is not None
+    assert _json(client, "patch", "/api/v1/me", {"display_name": "x"}).status_code == 403
+
+    # User and zone together.
+    both = _json(client, "put", "/api/v1/admin/view-as", {"user_id": plain.id, "zone_id": zone.id}).json()
+    assert both["me"]["username"] == plain.username and both["client"]["zone"]["id"] == zone.id
+
+    # Exit clears both.
+    out = _json(client, "delete", "/api/v1/admin/view-as").json()
+    assert out["me"]["username"] == admin.username and out["client"]["zone_source"] != "VIEW_AS"
+    assert out["view_as"] is None
+
+
 def test_view_as_exit_allowed_even_when_viewing_as_non_admin(mongo_db: Any, admin: Any, plain: Any) -> None:
     """IsRealGlobalAdmin, not IsGlobalAdmin, must gate the DELETE too."""
     client = _client_as(admin.id)

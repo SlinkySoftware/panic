@@ -88,7 +88,7 @@ def build_bootstrap(db: Any, context: RequestContext) -> dict[str, Any]:
 
     zone = context.zone
     zone_matched_cidr = context.chain.location_known and zone is not None and zone.id != DEFAULT_ZONE_ID
-    zone_source = "CIDR" if zone_matched_cidr else "DEFAULT"
+    zone_source = "VIEW_AS" if context.view_as_zone else "CIDR" if zone_matched_cidr else "DEFAULT"
     client = {
         "ip": context.client_ip,
         "zone": {"id": zone.id, "name": zone.name} if zone is not None else None,

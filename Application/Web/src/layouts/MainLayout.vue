@@ -95,9 +95,12 @@
         data-testid="view-as-banner"
       >
         <q-icon name="visibility" class="q-mr-sm" />
-        <span
-          >Viewing as <strong>{{ session.me?.display_name }}</strong> ({{ session.me?.username }})</span
-        >
+        <span>
+          Viewing as <strong>{{ session.me?.display_name }}</strong> ({{ session.me?.username }})
+          <template v-if="session.zoneSource === 'VIEW_AS'">
+            from zone <strong>{{ session.zone?.name }}</strong>
+          </template>
+        </span>
         <q-space />
         <q-btn flat dense no-caps label="Stop View As" data-testid="stop-view-as" @click="onExitViewAs" />
       </div>
@@ -176,6 +179,7 @@
     </q-drawer>
 
     <AddDashboardDialog v-model="newDashboard" />
+    <ViewAsDialog v-model="viewAsOpen" />
     <CommandPalette ref="palette" />
 
     <q-page-container>
@@ -186,11 +190,12 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { Dialog, LocalStorage } from 'quasar';
+import { LocalStorage } from 'quasar';
 import { useRouter } from 'vue-router';
 import { navGroupsFor } from '@/router/nav';
 import AddDashboardDialog from '@/components/dashboard/AddDashboardDialog.vue';
 import CommandPalette from '@/components/palette/CommandPalette.vue';
+import ViewAsDialog from '@/components/admin/ViewAsDialog.vue';
 import { useSessionStore } from '@/stores/session';
 import { useUiStore } from '@/stores/theme';
 
@@ -200,6 +205,7 @@ const router = useRouter();
 
 const drawerOpen = ref(true);
 const newDashboard = ref(false);
+const viewAsOpen = ref(false);
 const palette = ref<InstanceType<typeof CommandPalette> | null>(null);
 const railExpanded = ref(true);
 // Pinned = the rail stays expanded instead of collapsing to icons when the pointer leaves; remembered per browser.
@@ -215,15 +221,7 @@ const isDefaultZone = computed(() => session.zoneSource === 'DEFAULT');
 const navGroups = computed(() => navGroupsFor(session.isAdmin));
 
 function openViewAsDialog(): void {
-  Dialog.create({
-    title: 'View As',
-    message: 'Enter the user id to view the portal as (Settings → Users has the full picker later).',
-    prompt: { model: '', type: 'text', isValid: (v: string) => v.trim().length > 0 },
-    cancel: true,
-    persistent: true,
-  }).onOk((userId: string) => {
-    void session.startViewAs(userId.trim()).then(() => router.push({ name: 'root' }));
-  });
+  viewAsOpen.value = true;
 }
 
 async function onExitViewAs(): Promise<void> {

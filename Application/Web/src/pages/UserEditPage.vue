@@ -170,7 +170,7 @@ async function save() {
 async function viewAs() {
   if (!user.value) return;
   try {
-    await session.startViewAs(user.value.id);
+    await session.startViewAs({ userId: user.value.id });
     await router.push({ name: 'root' });
   } catch (e) {
     $q.notify({ type: 'negative', message: e instanceof Error ? e.message : String(e) });
