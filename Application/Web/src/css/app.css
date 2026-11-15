@@ -17,6 +17,7 @@ body.body--dark {
   --surface-sunken: #1a1a1c;
   --rail-bg: #212123;
   --header-bg: rgba(36, 36, 38, 0.86);
+  --header-fg: #f5f5f7;
   --border: rgba(255, 255, 255, 0.09);
   --border-strong: rgba(255, 255, 255, 0.16);
 
@@ -43,6 +44,7 @@ body:not(.body--dark) {
   --surface-sunken: #eceef0;
   --rail-bg: #ffffff;
   --header-bg: rgba(255, 255, 255, 0.86);
+  --header-fg: #1d1d1f;
   --border: rgba(0, 0, 0, 0.08);
   --border-strong: rgba(0, 0, 0, 0.16);
 
@@ -90,7 +92,7 @@ body {
   background: var(--header-bg);
   backdrop-filter: saturate(180%) blur(12px);
   border-bottom: 1px solid var(--border);
-  color: inherit;
+  color: var(--header-fg); /* follows the theme; a fixed text-dark was unreadable on the dark header */
 }
 
 .panic-rail {

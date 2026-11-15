@@ -1,6 +1,6 @@
 <template>
   <q-layout view="hHh Lpr lFf">
-    <q-header elevated class="panic-header text-dark">
+    <q-header elevated class="panic-header">
       <q-toolbar>
         <q-btn flat dense round icon="menu" aria-label="Toggle navigation" @click="drawerOpen = !drawerOpen" />
         <q-icon name="shield" size="sm" class="q-ml-sm q-mr-xs" color="primary" />
