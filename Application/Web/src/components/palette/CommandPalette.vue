@@ -34,7 +34,10 @@
             <q-item-label>{{ r.title }}</q-item-label>
             <q-item-label caption>{{ r.subtitle }}</q-item-label>
           </q-item-section>
-          <q-item-section side class="text-caption">{{ r.type.toLowerCase() }}</q-item-section>
+          <q-item-section side class="text-caption">
+            <q-badge v-if="r.item && !r.item.reachable" outline color="negative" label="Unavailable" />
+            <span v-else>{{ r.type.toLowerCase() }}</span>
+          </q-item-section>
         </q-item>
       </q-list>
       <div v-else-if="q.trim().length >= 2 && !loading" class="q-pa-md text-grey-6">No matches.</div>

@@ -1,6 +1,15 @@
-<!-- One launchable item: click to launch; unreachable items are dimmed with the reason on hover. -->
+<!--
+  One launchable item: click to launch. Unreachable items (zone restrictions) are not launchable at all:
+  dimmed, a red "Unavailable" badge with the reason on hover, no launch icon, and clicking does nothing.
+-->
 <template>
-  <q-item clickable dense :class="{ 'panic-unreachable': !item.reachable }" @click="launch(item)">
+  <q-item
+    :clickable="item.reachable"
+    dense
+    :class="{ 'panic-unreachable': !item.reachable }"
+    :data-testid="item.reachable ? 'item-launch' : 'item-unavailable'"
+    @click="item.reachable && launch(item)"
+  >
     <q-item-section avatar>
       <q-icon :name="icons[item.protocol] ?? 'link'" :color="item.reachable ? 'primary' : 'grey-6'" />
     </q-item-section>
@@ -11,8 +20,9 @@
     <q-item-section side>
       <div class="row no-wrap items-center">
         <q-badge v-if="item.site" outline color="grey-7" :label="item.site" class="q-mr-xs" />
+        <q-badge v-if="!item.reachable" outline color="negative" label="Unavailable" class="panic-unavailable" />
         <q-btn
-          v-if="item.launch?.uri"
+          v-else-if="item.launch?.uri"
           flat
           round
           dense
@@ -43,6 +53,14 @@ const icons: Record<string, string> = { SSH: 'terminal', RDP: 'desktop_windows',
 
 <style scoped>
 .panic-unreachable {
+  cursor: not-allowed;
+}
+.panic-unreachable :deep(.q-item__section--main),
+.panic-unreachable :deep(.q-item__section--avatar) {
   opacity: 0.5;
+}
+.panic-unavailable {
+  font-weight: 600;
+  border-width: 1.5px;
 }
 </style>

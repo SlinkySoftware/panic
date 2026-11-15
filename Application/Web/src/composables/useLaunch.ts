@@ -9,6 +9,15 @@ export function useLaunch() {
   const $q = useQuasar();
 
   async function launch(item: ItemView): Promise<void> {
+    // Zone-restricted items never launch, whatever the entry point (widget, list, palette).
+    if (!item.reachable) {
+      $q.notify({
+        type: 'warning',
+        message: `${item.title} is unavailable from your zone`,
+        ...(item.unreachable_reason ? { caption: item.unreachable_reason } : {}),
+      });
+      return;
+    }
     const l = item.launch;
     if (!l) return;
     if (l.kind === 'OPEN' && l.url) {
@@ -30,7 +39,7 @@ export function useLaunch() {
 
   /** Secondary action for COPY items that also expose a URI (e.g. ssh://), opened by the OS handler. */
   function openUri(item: ItemView): void {
-    if (item.launch?.uri) window.location.href = item.launch.uri;
+    if (item.reachable && item.launch?.uri) window.location.href = item.launch.uri;
   }
 
   return { launch, openUri };
