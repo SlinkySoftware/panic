@@ -30,16 +30,6 @@
       </template>
     </div>
     <q-card-actions v-if="unavailableCount > 0 || list?.truncated" class="q-py-none q-px-sm">
-      <q-checkbox
-        v-if="unavailableCount > 0"
-        v-model="showUnavailable"
-        dense
-        size="sm"
-        class="text-caption"
-        :label="`Show Unavailable Items (${unavailableCount})`"
-        data-testid="show-unavailable"
-      />
-      <q-space />
       <q-btn
         v-if="list?.truncated"
         flat
@@ -50,6 +40,17 @@
       >
         Show all ({{ list.item_count }})
       </q-btn>
+      <q-space />
+      <q-checkbox
+        v-if="unavailableCount > 0"
+        v-model="showUnavailable"
+        left-label
+        dense
+        size="sm"
+        class="text-caption"
+        :label="`Show Unavailable Items (${unavailableCount})`"
+        data-testid="show-unavailable"
+      />
     </q-card-actions>
   </q-card>
 </template>
