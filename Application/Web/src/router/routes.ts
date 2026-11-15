@@ -100,8 +100,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'zones',
         name: 'zones',
-        component: PlaceholderPage,
-        props: { title: 'Zones', caption: 'Security Zones and their CIDRs.', task: 'T-S6-09/10/11' },
+        component: () => import('@/pages/ZonesPage.vue'),
         meta: { title: 'Zones' },
       },
       {
@@ -118,24 +117,14 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'settings/users',
         name: 'settings-users',
-        component: PlaceholderPage,
-        props: {
-          title: 'Users',
-          caption: 'User management (RBAC permissions, team membership).',
-          task: 'T-S6-09/10/11',
-        },
+        component: () => import('@/pages/UsersPage.vue'),
         meta: { title: 'Users', admin: true },
       },
       {
         path: 'settings/users/:id',
         name: 'settings-user-detail',
-        component: PlaceholderPage,
-        props: (route) => ({
-          title: 'User',
-          caption: 'One user: permissions, teams, owned-resource counts.',
-          task: 'T-S6-09/10/11',
-          id: route.params.id,
-        }),
+        component: () => import('@/pages/UserEditPage.vue'),
+        props: (route) => ({ id: String(route.params.id) }),
         meta: { title: 'User', admin: true },
       },
       {

@@ -24,6 +24,15 @@
       </template>
       <template #body-cell-actions="cell">
         <q-td :props="cell" class="text-right">
+          <q-btn
+            v-if="kind === 'teams'"
+            flat
+            round
+            dense
+            icon="group"
+            :aria-label="`Members of ${cell.row.code}`"
+            @click="openMembers(cell.row)"
+          />
           <q-btn flat round dense icon="edit" :aria-label="`Edit ${cell.row.code}`" @click="openEdit(cell.row)" />
           <q-btn
             flat
@@ -73,6 +82,40 @@
         </q-form>
       </q-card>
     </q-dialog>
+
+    <q-dialog v-model="membersOpen">
+      <q-card style="width: 480px; max-width: 95vw">
+        <q-card-section class="text-h6">{{ membersOf?.code }} members</q-card-section>
+        <q-card-section class="q-pt-none text-caption text-grey-7">
+          Read-only. Change membership on each user's page.
+        </q-card-section>
+        <q-list bordered separator style="max-height: 50vh; overflow-y: auto">
+          <q-item v-if="membersLoading"
+            ><q-item-section class="flex flex-center"><q-spinner /></q-item-section
+          ></q-item>
+          <q-item v-else-if="members.length === 0"
+            ><q-item-section class="text-grey-6">No members.</q-item-section></q-item
+          >
+          <q-item
+            v-for="m in members"
+            :key="m.id"
+            clickable
+            :to="{ name: 'settings-user-detail', params: { id: m.id } }"
+            @click="membersOpen = false"
+          >
+            <q-item-section>
+              <q-item-label>{{ m.display_name }}</q-item-label>
+              <q-item-label caption>{{ m.username }}</q-item-label>
+            </q-item-section>
+            <q-item-section v-if="m.disabled" side><q-badge color="grey-6" label="Disabled" /></q-item-section>
+          </q-item>
+        </q-list>
+        <q-card-section v-if="membersTotal > members.length" class="text-caption text-grey-7">
+          Showing {{ members.length }} of {{ membersTotal }}.
+        </q-card-section>
+        <q-card-actions align="right"><q-btn v-close-popup flat label="Close" /></q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -88,6 +131,7 @@ import {
   type CodeNamedKind,
 } from '@/api/admin';
 import { ApiError } from '@/api/http';
+import { listTeamMembers, type UserSummary } from '@/api/users';
 import { useSessionStore } from '@/stores/session';
 
 const props = defineProps<{ kind: CodeNamedKind; title: string; noun: string }>();
@@ -174,6 +218,27 @@ function confirmDelete(row: CodeNamed) {
       }
     })();
   });
+}
+
+const membersOpen = ref(false);
+const membersOf = ref<CodeNamed | null>(null);
+const members = ref<UserSummary[]>([]);
+const membersTotal = ref(0);
+const membersLoading = ref(false);
+async function openMembers(team: CodeNamed) {
+  membersOf.value = team;
+  members.value = [];
+  membersOpen.value = true;
+  membersLoading.value = true;
+  try {
+    const page = await listTeamMembers(team.id);
+    members.value = page.results;
+    membersTotal.value = page.total;
+  } catch (e) {
+    notifyError(e);
+  } finally {
+    membersLoading.value = false;
+  }
 }
 
 // Sites and Teams share this component, so the router reuses one instance across them: reload on every kind change.
