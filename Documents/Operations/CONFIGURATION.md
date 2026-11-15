@@ -3,8 +3,9 @@
 Every setting comes from the environment (AR-3.1). Any variable may instead be supplied as
 `<NAME>_FILE` pointing at a file whose contents are the value (Docker / Kubernetes secrets); the
 `_FILE` form wins when both are set. Booleans accept `true/false/1/0/yes/no/on/off`; lists are
-comma-separated. Source of truth: `Application/Server/panic_server/settings.py` and
-`Build/Containers/server/entrypoint.sh` (a test fails if a setting is missing from this page).
+comma-separated. Source of truth: the server code (`Application/Server/panic_server/`), both images'
+entrypoints and health checks (`Build/Containers/`) and the compose files; a test
+(`tests/test_e2e_workflows.py`) fails if any `PANIC_*` variable they read is missing from this page.
 
 All examples use reserved documentation names and addresses (`example.com`, RFC 5737, RFC 3849).
 
@@ -23,25 +24,27 @@ All examples use reserved documentation names and addresses (`example.com`, RFC 
 | `PANIC_LOG_FORMAT` | `json` | `json` (structured, with request id) or `console`. |
 | `PANIC_SERVER_BIND` | `0.0.0.0:8120` (`./panic`), `0.0.0.0:8210` (container) | Gunicorn / dev server bind address. |
 
-## Database
+## Container init (panic-server image)
 
-PANIC has no relational database (T-S6-04 removed the Django ORM / SQLite-or-PostgreSQL store
-entirely; see [`DATA_MODEL.md`](../Architecture/DATA_MODEL.md)). All domain data, sessions and
-rate limits live in MongoDB -- see the "MongoDB" section below.
+PANIC has no relational database: all domain data, sessions and rate limits live in MongoDB (see
+"MongoDB" below and [`DATA_MODEL.md`](../Architecture/DATA_MODEL.md)). On start the entrypoint always
+runs `panic_ensure_indexes`, then:
 
 | Variable | Default | Description |
 |---|---|---|
-| `PANIC_MIGRATE_ON_START` | `true` | Container entrypoint runs `migrate --noinput` (a no-op: there are no Django-ORM migrations left). |
-| `PANIC_SEED_ON_START` | `never` in prod, else `if-empty` | Container entrypoint seeding of the demo fixtures: `if-empty` or `never`. |
+| `PANIC_MIGRATE_ON_START` | `true` | Run `panic_migrate` (MongoDB data migrations). Set `false` on all but one replica if you prefer to migrate from a single place, or run `docker run … panic-server init` before a rollout. |
+| `PANIC_SEED_ON_START` | `never` in prod, else `if-empty` | `if-empty` seeds the demo fixtures into an empty database; `never` does not. |
 
 ## Gunicorn (container)
 
 | Variable | Default | Description |
 |---|---|---|
 | `PANIC_GUNICORN_WORKERS` | `2` | Worker processes. |
-| `PANIC_GUNICORN_THREADS` | `4` | Threads per worker. |
+| `PANIC_GUNICORN_THREADS` | `8` | Threads per worker (`gthread`; `preload_app` is off so each worker opens its own MongoClient). |
 | `PANIC_GUNICORN_TIMEOUT` | `30` | Worker timeout (s). |
-| `PANIC_GUNICORN_FORWARDED_ALLOW_IPS` | `127.0.0.1` | Gunicorn `--forwarded-allow-ips` (scheme headers only; client IPs use `PANIC_TRUSTED_PROXY_CIDRS`). |
+| `PANIC_GUNICORN_FORWARDED_ALLOW_IPS` | `127.0.0.1` | Gunicorn `forwarded_allow_ips` (scheme headers only; client IPs use `PANIC_TRUSTED_PROXY_CIDRS`). |
+
+Settings live in `panic_server/gunicorn_conf.py`; `PANIC_SERVER_BIND` sets the listen address.
 
 ## Reverse proxy & Security Zones
 
@@ -139,6 +142,43 @@ See [`API.md`](../Architecture/API.md) §4.2 and [`DATA_MODEL.md`](../Architectu
 | `PANIC_NAV_MAX_DASHBOARDS` | `100` | Cap on `GET /api/v1/ui/bootstrap`'s `nav.dashboards`. |
 | `PANIC_LIST_WIDGET_MAX_ITEMS` | `200` | Cap on a LIST widget's `item_ids` on `GET /api/v1/ui/dashboards/{id}`; `truncated: true` past this. |
 | `PANIC_LIST_MAX_ITEMS` | `500` | Hard cap on an endpoint list's `item_ids` (DATA_MODEL.md §3); enforced by `PUT /api/v1/lists/{id}` and `GET /api/v1/lists/{id}`'s resolved `items`. |
+
+## panic-web image
+
+panic-web serves the SPA and proxies **only** the allow-listed paths in
+`Application/Web/proxy-paths.json` to panic-server (AR-6.4); `/metrics` is never proxied.
+
+| Variable | Default | Description |
+|---|---|---|
+| `PANIC_SERVER_URL` | *(required)* | panic-server origin, `scheme://host[:port]` with no path, e.g. `http://panic-server:8210`. Validated at start; `PANIC_SERVER_URL_FILE` is also accepted. The dev proxy (`./panic start`) reads it too (default `http://127.0.0.1:8121`). |
+
+panic-web appends the browser's address to `X-Forwarded-For`; list panic-web's address in the
+server's `PANIC_TRUSTED_PROXY_CIDRS` so the server resolves the real client IP and zone.
+
+## Compose and development
+
+| Variable | Default | Description |
+|---|---|---|
+| `PANIC_IMAGE_PREFIX` / `PANIC_IMAGE_TAG` | `panic-local` / `latest` | Image names used by the compose files. |
+| `PANIC_SERVER_REPLICAS` | `1` | panic-server replicas in `compose.yaml` (any replica serves any session). |
+| `PANIC_WEB_PUBLISH` | `8080` | Host port for panic-web. |
+| `PANIC_SERVER_PUBLISH` | `8210` | Host port in `compose.standalone.server.yaml`. |
+| `PANIC_ENV_FILE` | `panic.env` | Env file for `compose.standalone.server.yaml`. |
+| `PANIC_WEB_PORT` | `8120` | `./panic start` dev web server port. |
+| `PANIC_WEB_ALLOWED_HOSTS` | *(this machine's hostname and FQDN)* | Extra hostnames the Vite dev server accepts (comma-separated; leading dot = subdomains). |
+
+## Removed in Stage 6
+
+These are no longer read; delete them from env files.
+
+| Variable | Why |
+|---|---|
+| `PANIC_DB_ENGINE`, `PANIC_DB_HOST`, `PANIC_DB_PORT`, `PANIC_DB_NAME`, `PANIC_DB_USER`, `PANIC_DB_PASSWORD`, `PANIC_DB_CONN_MAX_AGE`, `PANIC_SQLITE_PATH` | No relational database: MongoDB only (`PANIC_MONGO_URI`). |
+| `PANIC_STATIC_ROOT` | panic-server serves no static files; panic-web serves the SPA. |
+| `PANIC_AUTO_SEED` | Replaced by `PANIC_SEED_ON_START`. |
+| `PANIC_AUTH_MODE` | The simulator auth mode is gone; local, LDAP and OIDC are switched on individually. |
+| `PANIC_OIDC_GROUPS_CLAIM`, `PANIC_LDAP_GROUP_BASE_DN`, `PANIC_LDAP_GROUP_FILTER`, `PANIC_RBAC_ADMIN_GROUPS`, `PANIC_RBAC_GLOBAL_CONTRIB_GROUPS`, `PANIC_RBAC_TEAM_CONTRIB_GROUPS`, `PANIC_RBAC_TEAM_GROUP_MAP`, `PANIC_RBAC_TEAM_GROUP_PREFIX` | External identity is authentication only: permissions and teams are set on `/settings/users`. |
+| `PANIC_CACHE_URL` | Rate limits and sessions live in MongoDB. |
 
 ## Reserved
 

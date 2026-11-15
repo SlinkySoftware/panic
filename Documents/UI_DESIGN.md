@@ -62,3 +62,22 @@ Aligned directly with **reference-ui** (`Documents/UI_DESIGN.md` & `src/css/app.
   - `SSH`: Host / IP + SSH Port (default `22`) + Pre-Defined Site + SSH Command Line Options + Remote User Override.
   - `RDP`: Host / IP + RDP Port (default `3389`) + Pre-Defined Site + Domain\Username Override.
   - `LOCAL_APP`: Command / Executable Path + Pre-Defined Site + Command Line Options / Arguments (hiding Host and Port).
+
+## 4. Quasar Implementation Mapping (Stage 6 panic-web)
+
+The tokens above are CSS custom properties in `Application/Web/src/css/app.css` (dark set on
+`body.body--dark`, light set otherwise). Quasar components map onto them as follows.
+
+| Token / pattern | Quasar implementation |
+|---|---|
+| `--page-bg`, `--surface*`, `--rail-bg`, `--header-bg`, `--border*` | `q-layout` / `q-header` / `q-drawer` (`.panic-rail`) backgrounds and hairlines in `app.css`; cards are `q-card flat bordered`. |
+| Brand teal `--brand-*` | Shell accents in `app.css`. Quasar's `primary` (buttons, toggles, active nav) is still Quasar's default blue: map `primary` to `--brand-500` (`setCssVar('primary', …)` in `boot/theme.ts`) if full brand alignment is wanted. |
+| Status tones | `color="positive"` (ok / active), `warning` (edit mode, conflicts, View As), `negative` (delete, errors, hygiene failures), `grey-6` (disabled, unreachable). |
+| Scope pills | `q-badge`: GLOBAL `primary`, TEAM `teal`, PERSONAL `grey-7`. |
+| Protocol icons | Material icons: SSH `terminal`, RDP `desktop_windows`, WEB `language`, LOCAL_APP `apps`. |
+| `.mono` | Hostnames, normalized targets, CIDRs, SSH templates and client-IP diagnostics (monospace inputs and cells). |
+| Unreachable items | `opacity: 0.5` and the reason in a `q-tooltip` (DIM); omitted by the server under HIDE. |
+| Two-card resource screens (§3) | Two server-paged `q-table` cards (`flat bordered`, `@request`), with search and filters in `#top-right`. |
+| Forms | `q-dialog` + `q-form` on a single `row q-col-gutter-md` 12-column grid. Fields are `outlined dense hide-bottom-space`, so error text takes space only when shown. Server `fields` errors land on the matching input. |
+| Dashboard grid (§2) | CSS grid, 12 columns, fixed row height. Edit mode: pointer-drag header to move, corner to resize, overlaps pushed down (`components/dashboard/grid.ts`, mirroring the server clamp). |
+| Density / theme | Top-bar toggles (`stores/theme.ts`, per browser); Profile saves the same choices server-side. |
