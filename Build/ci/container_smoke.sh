@@ -11,7 +11,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PROJECT="panic-smoke-$$"
 SUBNET_PREFIX="172.31.250"
 CLIENT_IP="${SUBNET_PREFIX}.50"
-WORK="$(mktemp -d)"
+# Inside the checkout, not /tmp: in CI the job runs in a container while `docker run -v` is resolved by the
+# host daemon, and only the checkout (the runner's bind_workdir) is a real host path a sibling container can mount.
+WORK="$ROOT/.run/smoke-$$"
+mkdir -p "$WORK"
 chmod 777 "$WORK"
 ADMIN_PW="smoke-$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
 
