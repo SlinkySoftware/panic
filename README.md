@@ -1,43 +1,49 @@
 # PANIC — Portal for Accessing Networks, Infrastructure, and Compute
 
-**PANIC** is a lightweight, self-hosted, multi-user enterprise operations portal and jump-host session launcher. Unlike heavy HTML5 session proxies that stream terminal or desktop video over WebSockets and store credentials on the server, PANIC acts as a zero-install control plane that hands off execution directly to native workstation and jump-host tools (`ssh`, PuTTY, `mstsc.exe`, browser tabs, and local SOE binaries).
+**PANIC** is a self-hosted, multi-user operations portal and session launcher. It does not stream
+terminals or desktops and never stores credentials: it hands launches to native tools on the operator's
+workstation or jump host (`ssh`, PuTTY, `mstsc.exe`, browser tabs, local applications).
 
-## Key Capabilities
+## Key capabilities
 
-- **Zabbix-Style Full-Width 12-Column Dashboards**:
-  - Locked View Mode for one-click operations and Unlocked Edit Mode (`/dashboard/<dash-uuid>/edit`) with drag-and-drop widget reordering and bottom-right corner drag-resize handles.
-  - Strictly two focused widget types: **Individual Host Card (`HOST`)** and **Endpoint List Table Card (`LIST`)** with drag-and-drop row ordering.
-  - Explicit, bookmarkable browser URLs for every dashboard and portal screen (`pushState` / `replaceState` / `popstate`).
-  - Two-tier Default Dashboard hierarchy: personal **User Default Dashboard** override inheriting from the **App-Wide Default Global Dashboard**.
-- **Zero-Install Protocol Launchers (`WEB`, `SSH`, `RDP`, `LOCAL_APP`)**:
-  - Protocol-aware target definitions, personalized SSH CLI template interpolation, and ephemeral in-memory `.rdp` file streaming (`Content-Type: application/x-rdp`) with strict control-character sanitization.
-- **Unified Scope Model (`GLOBAL`, `TEAM`, `PERSONAL`) & Same-Scope Lists**:
-  - Shared scoping across Catalog Items, Endpoint Lists, and Dashboards, enforcing same-scope membership on lists (`SCOPE_MISMATCH`) and pre-defined site codes (`/sites`).
-- **Security Zones & Source IP Reachability (`/zones`)**:
-  - Longest-prefix CIDR matching (IPv4 & IPv6) resolving the operator's connecting jump-host Zone and dimming or hiding unreachable targets.
-- **In-App RBAC & Admin "View As" (`/rbac`)**:
-  - Granular permissions (`GLOBAL_ADMIN`, `CAN_ADD_GLOBAL`, `CAN_ADD_TEAM`) plus an Admin **"View As"** perspective switcher to verify any user's dashboards, navigation rail, and scope visibility.
+- **Dashboards:** full-width 12-column grids of HOST and LIST widgets; edit mode with drag-to-move,
+  corner resize and conflict-safe saves; personal default dashboard over an app-wide default.
+- **Launchers:** WEB (open URL), SSH and LOCAL_APP (copy an interpolated command, optional URI
+  handler), RDP (`.rdp` download). Commands use each user's SSH template and remote user.
+- **Scopes:** GLOBAL, TEAM and PERSONAL catalog items, lists and dashboards; lists stay same-scope.
+- **Security zones:** the client IP, resolved through trusted proxies, maps to a zone, and unreachable
+  items are dimmed or hidden.
+- **Access:** local bootstrap admin, LDAP and OIDC sign-in. Permissions (`GLOBAL_ADMIN`,
+  `CAN_ADD_GLOBAL`, `CAN_ADD_TEAM`) and team membership are managed in the app. Admins can
+  "View As" any user.
+- **Command palette:** Ctrl+K or `/` to search and launch items, lists and dashboards.
 
-## Repository Layout
+## Architecture
 
-- `Application/Common/panic_common` — Pure Python domain library (Pydantic v2 schemas, normalization/deduplication, credential hygiene, IPv4/IPv6 CIDR zone resolver, RBAC & scope validation, `.rdp` & CLI template interpolators). Enforced dependency-free via `import-linter` (`AR-1.1`).
-- `Application/Server/panic_server` — Django server rendering the reference-ui-aligned dark-first UI, REST API (`/api/v1/*`), ephemeral `.rdp` streamer, and Prometheus metrics (`/metrics`).
-- `Build/Containers` — Containerfile and Docker Compose stack.
-- `Documents/` — Architecture rules (`Documents/Architecture/ARCHITECTURE.md`), Data Model (`Documents/Architecture/DATA_MODEL.md`), UI Design (`Documents/UI_DESIGN.md`), Development Tasks (`Documents/TASKS.md`), and Session Status (`Documents/SESSION_STATUS.md`).
-- `SPEC.md` — Full functional and architectural specification.
+```
+browser ──► panic-web (Vue 3 + Quasar SPA, nginx allow-list proxy) ──► panic-server (Django REST API) ──► MongoDB
+```
 
-## Quick Start
+- `Application/Web`: the SPA (Vue 3, Quasar 2, TypeScript, Vite). `proxy-paths.json` is the single
+  list of server paths the web tier forwards.
+- `Application/Server/panic_server`: the API (`/api/v1/*`), `.rdp` launcher, client-IP and zone
+  resolution, and Prometheus `/metrics` (server port only).
+- `Application/Common/panic_common`: a pure domain library (models, normalisation, hygiene, zone
+  resolver, RBAC), kept dependency-free by `import-linter`.
+- `Build/Containers`: both images and the compose files. `Build/ci`: the CI scripts.
+- `Documents/`: architecture (`Architecture/`), operations (`Operations/DEPLOYMENT.md`,
+  `CONFIGURATION.md`), UI design, tasks and session status. `SPEC.md`: the full specification.
+
+## Quick start (development)
 
 ```bash
-# Initialize virtual environment, editable packages, and default .env
-./panic setup
-
-# Start the development server (default http://0.0.0.0:8120)
-./panic start
-
-# Run the full test and static analysis suite (pytest, ruff, mypy, import-linter)
-./panic test
+./panic setup     # Python venv, pinned Node, npm ci, .env
+./panic start     # dev MongoDB, API on :8121, web UI on http://<this host>:8120
+./panic test      # pytest, ruff, mypy, import-linter
+(cd Application/Web && npm test && npm run lint && npm run typecheck)
 ```
+
+To deploy, see [`Documents/Operations/DEPLOYMENT.md`](Documents/Operations/DEPLOYMENT.md).
 
 ## License
 

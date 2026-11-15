@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-15 — T-S6-13: operations and user documentation
+- `CONFIGURATION.md`: container init, gunicorn, panic-web, compose/dev variables and a "Removed in
+  Stage 6" table; the coverage test now scans all server modules, both images and the compose files,
+  and fails if a removed variable is read again.
+- `DEPLOYMENT.md` rewritten for Stage 6: topology, compose, replicas and migrations, a four-tier
+  trusted-proxy worked example (incl. the L4 LB caveat), MongoDB URI and least-privilege role,
+  `mongodump` and `panic_export` backups, monitoring, upgrades, dev workflow.
+- `UI_DESIGN.md` §4 (Quasar mapping), `README.md` and `SESSION_STATUS.md` updated.
+
 ## 2026-11-15 — T-S6-12: containers, compose, CI with two images (verified locally; CI run pending push)
 - `panic-web` image: Node build stage, then `nginx-unprivileged` 1.29 on 8080 (read-only root fs works:
   the template renders into `/tmp`). `Build/scripts/gen_nginx_conf.py` (+ tests) generates the server
