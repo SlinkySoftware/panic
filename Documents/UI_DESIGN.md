@@ -27,7 +27,7 @@ Aligned directly with **reference-ui** (`Documents/UI_DESIGN.md` & `src/css/app.
   - Command Palette trigger (`Ctrl+K` / `/`).
   - **Admin "View As" Perspective Switcher**: Visible to users with `GLOBAL_ADMIN` permission, allowing instant preview of dashboards, left-hand navigation, catalog items, and lists as any other user.
   - **Interactive Context Switcher**: Live popover for switching Active RBAC User, Source IP, and Security Zone override.
-  - Comfort / Compact density toggle & Dark / Light theme toggle.
+  - Dark / Light theme toggle. The layout is always compact (no density setting; removed 2026-11-15, owner).
 - **Collapsible Left Navigation Rail** (`232px` expanded, `64px` mini):
   - All navigation items are real `<a href="...">` links with visible browser URLs and HTML5 History (`pushState` / `replaceState` / `popstate`) synchronization.
   - **Dashboards** group: User's pinned, `always_display`, and Default Global dashboards (`<a href="/dashboard/<dash-uuid>">`) + `+` button opening the **"Add Existing (Global / Team)" / "+ Create New"** modal.
@@ -80,4 +80,4 @@ The tokens above are CSS custom properties in `Application/Web/src/css/app.css` 
 | Two-card resource screens (§3) | Two server-paged `q-table` cards (`flat bordered`, `@request`), with search and filters in `#top-right`. |
 | Forms | `q-dialog` + `q-form` on a single `row q-col-gutter-md` 12-column grid. Fields are `outlined dense hide-bottom-space`, so error text takes space only when shown. Server `fields` errors land on the matching input. |
 | Dashboard grid (§2) | CSS grid, 12 columns, fixed row height. Edit mode: pointer-drag header to move, corner to resize, overlaps pushed down (`components/dashboard/grid.ts`, mirroring the server clamp). |
-| Density / theme | Top-bar toggles (`stores/theme.ts`, per browser); Profile saves the same choices server-side. |
+| Theme | Top-bar toggle (`stores/theme.ts`, per browser); User Settings saves it server-side. Always compact: no density setting. |

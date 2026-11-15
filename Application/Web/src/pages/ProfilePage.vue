@@ -1,5 +1,5 @@
 <!--
-  /profile (T-S6-11): display name, remote user, SSH template, my default dashboard, density, theme and the
+  /profile (T-S6-11): display name, remote user, SSH template, my default dashboard, theme and the
   unreachable policy. Writes act on the real signed-in user, so they are refused during View As.
 -->
 <template>
@@ -43,13 +43,6 @@
             label="Unreachable items"
             emit-value
             map-options
-            v-bind="field"
-          />
-          <q-select
-            v-model="form.density"
-            class="col-12 col-sm-6"
-            :options="['COMFORT', 'COMPACT']"
-            label="Density"
             v-bind="field"
           />
           <q-select
@@ -111,12 +104,12 @@ const err = (f: string) => {
   const m = fieldErrors.value[f];
   return m?.length ? { error: true, errorMessage: m.join(' ') } : {};
 };
-type Form = Pick<MyProfile, 'display_name' | 'default_remote_user' | 'ssh_template'> & MyProfile['prefs'];
+type Form = Pick<MyProfile, 'display_name' | 'default_remote_user' | 'ssh_template'> &
+  Omit<MyProfile['prefs'], 'density'>;
 const form = reactive<Form>({
   display_name: '',
   default_remote_user: '',
   ssh_template: '',
-  density: 'COMFORT',
   theme: 'LIGHT',
   unreachable_policy: 'DIM',
 });
@@ -134,7 +127,8 @@ async function load() {
       display_name: p.display_name,
       default_remote_user: p.default_remote_user,
       ssh_template: p.ssh_template,
-      ...p.prefs,
+      theme: p.prefs.theme,
+      unreachable_policy: p.prefs.unreachable_policy,
     });
     defaultDashboard.value = p.default_dashboard_id;
     dashboardOptions.value = d.results.map((x) => ({ label: `${x.title} (${x.scope})`, value: x.id }));
@@ -153,7 +147,6 @@ async function save() {
     await updateMe(p.version, { ...form, display_name: form.display_name.trim() });
     if (defaultDashboard.value !== p.default_dashboard_id) await setMyDefaultDashboard(defaultDashboard.value);
     // The top-bar toggles are per-browser; follow the saved profile.
-    ui.setDensity(form.density);
     ui.setTheme(form.theme === 'DARK' ? 'dark' : 'light');
     $q.notify({ type: 'positive', message: 'Profile saved' });
     await Promise.all([load(), session.fetchBootstrap()]);

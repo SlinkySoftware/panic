@@ -55,7 +55,7 @@ def create_user(
         "team_ids": team_ids or [],
         "pinned_dashboard_ids": [],
         "default_dashboard_id": None,
-        "prefs": {"density": "COMFORT", "theme": "DARK", "unreachable_policy": "DIM"},
+        "prefs": {"density": "COMPACT", "theme": "DARK", "unreachable_policy": "DIM"},
         "search_keys": search_keys or [],
         "created_at": now,
         "updated_at": now,

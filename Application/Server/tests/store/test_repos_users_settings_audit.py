@@ -21,7 +21,7 @@ def test_user_crud_prefs_roundtrip_and_password_hash_never_leaks(mongo_db: Datab
         default_remote_user="jdoe",
         password_hash="pbkdf2_sha256$fakehash",
     )
-    assert user.density == "COMFORT"
+    assert user.density == "COMPACT"
     assert user.theme == "DARK"
     assert not hasattr(user, "password_hash")
     assert "password_hash" not in user.model_dump()

@@ -48,18 +48,6 @@
           flat
           round
           dense
-          :icon="ui.densityIcon"
-          :aria-label="ui.densityLabel"
-          data-testid="density-toggle"
-          @click="ui.toggleDensity()"
-        >
-          <q-tooltip>{{ ui.densityLabel }}</q-tooltip>
-        </q-btn>
-
-        <q-btn
-          flat
-          round
-          dense
           :icon="ui.themeIcon"
           :aria-label="ui.themeLabel"
           data-testid="theme-toggle"

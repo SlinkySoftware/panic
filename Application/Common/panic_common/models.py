@@ -177,7 +177,7 @@ class UserAccount(BaseModel):
     team_ids: list[str] = Field(default_factory=list)
     pinned_dashboard_ids: list[str] = Field(default_factory=list)
     default_dashboard_id: str | None = None
-    density: DensityMode = DensityMode.COMFORT
+    density: DensityMode = DensityMode.COMPACT  # no longer exposed in the UI; the layout is always compact
     theme: ThemeMode = ThemeMode.DARK
     unreachable_policy: UnreachablePolicy = UnreachablePolicy.DIM
     search_keys: list[str] = Field(default_factory=list)

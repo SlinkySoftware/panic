@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-15 — Density setting removed; always compact
+- Removed the top-bar density toggle and the Density field on User Settings: it was stored but never
+  changed the layout. The UI is compact. The server keeps the stored `density` pref (unused), default
+  now `COMPACT`.
+
 ## 2026-11-15 — View As a user and/or a zone
 - `PUT /admin/view-as` takes `user_id` and/or `zone_id` (at least one). A zone overrides the IP-derived
   zone for reachability (`client.zone_source: VIEW_AS`); no user means the admin's own perspective from
