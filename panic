@@ -97,7 +97,7 @@ ensure_dev_tools() {
     local marker="$VENV/.panic-dev-lock-hash"
     local now; now="$(sha256sum uv.lock pyproject.toml Application/*/pyproject.toml | sha256sum | awk '{print $1}')"
     if [[ -f "$marker" && "$(cat "$marker")" == "$now" ]]; then ok "$step"; return; fi
-    uv sync --group dev >"$RUN/setup-uv-dev.log" 2>&1 || { cat "$RUN/setup-uv-dev.log" >&2; die "uv sync --group dev failed"; }
+    uv sync --inexact --group dev >"$RUN/setup-uv-dev.log" 2>&1 || { cat "$RUN/setup-uv-dev.log" >&2; die "uv sync --group dev failed"; }
     echo "$now" > "$marker"
     changed "$step" "synced"
 }

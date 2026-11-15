@@ -56,3 +56,4 @@ build/
 # Local scratch notes
 appidea.txt
 Application/Server/staticfiles/
+Build/LoadTest/results/

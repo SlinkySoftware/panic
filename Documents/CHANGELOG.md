@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-15 — T-S6-14: load test
+- `Build/LoadTest/` (`run.sh`, `locustfile.py`, `mint_sessions.py`; `uv sync --group loadtest`): built
+  images, 1 web + 2 servers, the shared dev Mongo in its own `panic_loadtest` database, 50 real sessions
+  over 4 zones, 15 min steady state plus a stress run. Results and follow-ups in
+  `Documents/Operations/PERFORMANCE.md`: 0 errors; all p95 targets met except search (140 ms vs 100) and
+  catalog page (130 ms vs 120); saturation about 142 req/s, MongoDB-bound.
+- Fix: `panic_seed` now gives seeded resources `search_keys` (seeded data was unsearchable).
+- `./panic` dev-tools sync uses `uv sync --inexact`, so it no longer uninstalls the loadtest group.
+
 ## 2026-11-15 — Per-user SSH URI handler (one click into PuTTY / OpenSSH)
 - Settings (Global Admin): "SSH system handler" switch and scheme (default `panic-ssh`). Off removes the
   SSH `launch.uri` everywhere; on, it is `<scheme>://user@host:port` (was `ssh://`). Cached per process

@@ -12,6 +12,7 @@ from typing import Any
 
 from django.core.management.base import BaseCommand, CommandParser
 
+from panic_common.search_keys import search_keys as compute_search_keys
 from panic_server.fixtures import Fixture, build_profile
 from panic_server.services.portability import wipe_all
 from panic_server.store.client import get_db
@@ -68,6 +69,22 @@ def _fixture_objects(fixture: Fixture, section: str) -> list[Any]:
     return by_section[section]
 
 
+def with_search_keys(section: str, obj: Any) -> Any:
+    """Fixtures are plain models: fill in ``search_keys`` the way the services do on create, or seeded
+    data is invisible to palette and catalog search."""
+    if getattr(obj, "search_keys", None) or not hasattr(obj, "search_keys"):
+        return obj
+    if section == "catalog":
+        keys = compute_search_keys(obj.title, obj.host, obj.site, obj.tags)
+    elif section == "users":
+        keys = compute_search_keys(obj.display_name, "", "", [], obj.username)
+    elif section in ("lists", "dashboards"):
+        keys = compute_search_keys(obj.title, "", "", [])
+    else:
+        return obj
+    return obj.model_copy(update={"search_keys": keys})
+
+
 def _seed_fixture(db: Any, fixture: Fixture) -> dict[str, int]:
     """Insert every document in ``fixture`` whose id does not already exist. Never overwrites."""
     created: dict[str, int] = {}
@@ -78,7 +95,7 @@ def _seed_fixture(db: Any, fixture: Fixture) -> dict[str, int]:
             try:
                 get_one(db, obj.id)
             except NotFound:
-                upsert(db, obj)
+                upsert(db, with_search_keys(section, obj))
                 n += 1
         created[section] = n
     if fixture.system_settings is not None and settings_repo.get_system_settings(db) is None:
