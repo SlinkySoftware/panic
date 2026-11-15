@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-15 — Zone specificity, example data commands, menu names
+- Zone resolution: longest prefix wins; on a tie the zone with the smallest total address space wins
+  (a zone that is just this /22 beats one spanning several networks), then higher `priority`, then name.
+  The Zones page hint ("Lower wins") was wrong: priority is a tie-breaker and higher wins.
+- `./panic addexamples` / `delexamples` (`manage.py panic_examples add|remove`): a re-keyed copy of the demo
+  profile (ids `example-*`, users `ex-*` without passwords, codes `EX-*`, documentation-only CIDRs), added
+  next to existing data and idempotent; removal deletes only those and strips references real data picked up
+  (list items, dashboard widgets, team/zone ids, menu pins and defaults), keeping sites real items still use.
+- Menu: "Settings" is now "Application Settings", "Profile" is "User Settings".
+
 ## 2026-11-15 — `./panic promote|demote <username>`
 - New `manage.py panic_user_admin promote|demote <username>` (via `admin_service.update_user`: the last
   enabled Global Admin cannot be demoted; audited as `cli:<os user>`), exposed as `./panic promote|demote`

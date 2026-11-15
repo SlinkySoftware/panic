@@ -180,4 +180,6 @@ start (§2). panic-web and panic-server from the same release are tested togethe
 ./panic start     # dev MongoDB container, server on :8121, Vite dev server on :8120 (this host's name allowed)
 ./panic test      # pytest (incl. Build/scripts), ruff, mypy, import-linter; web: cd Application/Web && npm test
 Build/ci/container_smoke.sh   # build-and-run check of both images (needs the images built locally)
+./panic addexamples           # example sites/teams/zones/users/items/lists/dashboards (example-*/ex-*/EX-*)
+./panic delexamples           # remove exactly those, plus references real data picked up; nothing else
 ```
