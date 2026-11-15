@@ -22,7 +22,7 @@
           @click.stop="openUri(item)"
         >
           <q-tooltip>{{
-            item.protocol === 'SSH' ? 'Open in SSH client (set up on your Profile)' : 'Open with system handler'
+            item.protocol === 'SSH' ? 'Open in SSH client (set up in User Settings)' : 'Open with system handler'
           }}</q-tooltip>
         </q-btn>
       </div>

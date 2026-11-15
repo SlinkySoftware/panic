@@ -39,8 +39,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
   {
     title: 'System',
     links: [
-      { name: 'settings', to: { name: 'settings' }, title: 'Settings', icon: 'settings' },
-      { name: 'profile', to: { name: 'profile' }, title: 'Profile', icon: 'account_circle' },
+      { name: 'settings', to: { name: 'settings' }, title: 'Application Settings', icon: 'settings' },
+      { name: 'profile', to: { name: 'profile' }, title: 'User Settings', icon: 'account_circle' },
       { name: 'audit', to: { name: 'audit' }, title: 'Audit log', icon: 'history', admin: true },
     ],
   },

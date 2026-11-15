@@ -107,7 +107,7 @@ const routes: RouteRecordRaw[] = [
         path: 'settings',
         name: 'settings',
         component: () => import('@/pages/SettingsPage.vue'),
-        meta: { title: 'Settings' },
+        meta: { title: 'Application Settings' },
       },
       {
         path: 'settings/users',
@@ -138,7 +138,7 @@ const routes: RouteRecordRaw[] = [
         path: 'profile',
         name: 'profile',
         component: () => import('@/pages/ProfilePage.vue'),
-        meta: { title: 'Profile' },
+        meta: { title: 'User Settings' },
       },
       {
         path: 'audit',

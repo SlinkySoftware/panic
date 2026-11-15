@@ -4,7 +4,7 @@
 -->
 <template>
   <q-page class="q-pa-lg">
-    <div class="text-h5 q-mb-md">Profile</div>
+    <div class="text-h5 q-mb-md">User Settings</div>
     <div v-if="!profile && !error" class="flex flex-center q-pa-xl"><q-spinner size="xl" /></div>
     <q-banner v-if="session.isViewingAs" class="bg-warning q-mb-md" rounded dense>
       You are viewing as another user; profile changes are disabled.

@@ -1,7 +1,7 @@
 <!-- /settings (T-S6-11): the app-wide default dashboard (GLOBAL only), export, and links to the admin pages. -->
 <template>
   <q-page class="q-pa-lg q-gutter-y-lg">
-    <div class="text-h5">Settings</div>
+    <div class="text-h5">Application Settings</div>
 
     <q-card flat bordered>
       <q-card-section class="text-subtitle1">Default dashboard for everyone</q-card-section>
@@ -39,7 +39,8 @@
       <q-card-section class="q-pt-none">
         <div class="text-caption text-grey-7 q-mb-sm">
           Lets users open SSH items in PuTTY or OpenSSH with one click, through a per-user URI handler they set up on
-          their Profile page. Turned off, SSH items only offer "copy command" and the setup instructions are hidden.
+          their User Settings page. Turned off, SSH items only offer "copy command" and the setup instructions are
+          hidden.
         </div>
         <div class="row q-col-gutter-md items-center">
           <q-toggle

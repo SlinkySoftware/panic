@@ -79,7 +79,7 @@
             <q-separator />
             <q-item v-close-popup clickable :to="{ name: 'profile' }">
               <q-item-section avatar><q-icon name="account_circle" /></q-item-section>
-              <q-item-section>Profile</q-item-section>
+              <q-item-section>User Settings</q-item-section>
             </q-item>
             <q-item v-close-popup clickable data-testid="logout" @click="onLogout">
               <q-item-section avatar><q-icon name="logout" /></q-item-section>
