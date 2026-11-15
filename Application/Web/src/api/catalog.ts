@@ -72,6 +72,8 @@ export interface CatalogQuery {
   q?: string;
   protocol?: string;
   site?: string;
+  zone_id?: string;
+  team_id?: string;
   sort?: string;
   page: number;
   page_size: number;

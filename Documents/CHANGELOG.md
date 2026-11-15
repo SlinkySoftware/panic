@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-15 — T-S6-11 done (and T-S6-10 done): admin and user screens
+- `/zones` (CIDR chips, priority, built-in Default zone description-only, Test IP), `/settings/users`
+  (search; permission, team and status filters; pre-provision; disable / enable), `/settings/users/<id>`
+  (display name, permissions, team membership, enable, View As, owned counts), Teams members dialog
+  (read-only, linked to users), `/settings/orphans` (assign to an enabled user, delete), `/settings`
+  (app-wide default dashboard, export, admin links), `/profile`, `/audit` (filters in the URL, keyset
+  "Load more"), `/settings/client-ip` (summary, hop table, policy, raw headers).
+- Catalog cards gain zone and (shared card) team filters.
+- First component tests (`test/unit/adminForms.spec.ts`): validation display and server field errors.
+
 ## 2026-11-15 — T-S6-09 (part 3): Command Palette — T-S6-09 done
 - Ctrl/Cmd+K, `/` outside text fields, or the top-bar Search button: debounced `/ui/search`, arrow keys,
   Enter launches an item from its `launch` or opens a dashboard / list. Shortcut handling unit-tested.

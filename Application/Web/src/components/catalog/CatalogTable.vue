@@ -31,6 +31,29 @@
           style="min-width: 130px"
         />
         <q-select v-model="site" :options="sites" dense outlined clearable label="Site" style="min-width: 110px" />
+        <q-select
+          v-model="zoneId"
+          :options="zones.map((z) => ({ label: z.name, value: z.id }))"
+          dense
+          outlined
+          emit-value
+          map-options
+          clearable
+          label="Zone"
+          style="min-width: 120px"
+        />
+        <q-select
+          v-if="group === 'shared'"
+          v-model="teamId"
+          :options="teams.map((t) => ({ label: t.code, value: t.id }))"
+          dense
+          outlined
+          emit-value
+          map-options
+          clearable
+          label="Team"
+          style="min-width: 110px"
+        />
         <q-input v-model="q" dense outlined clearable debounce="300" placeholder="Search">
           <template #prepend><q-icon name="search" /></template>
         </q-input>
@@ -77,9 +100,9 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import type { CodeNamed } from '@/api/admin';
 import { useQuasar, type QTableColumn, type QTableProps } from 'quasar';
-import { listCatalog, PROTOCOLS, type CatalogGroup, type ItemView, type Scope } from '@/api/catalog';
+import { listCatalog, PROTOCOLS, type CatalogGroup, type ItemView, type Scope, type Zone } from '@/api/catalog';
 
-const props = defineProps<{ group: CatalogGroup; title: string; sites: string[]; teams: CodeNamed[] }>();
+const props = defineProps<{ group: CatalogGroup; title: string; sites: string[]; teams: CodeNamed[]; zones: Zone[] }>();
 const emit = defineEmits<{ edit: [row: ItemView]; delete: [row: ItemView] }>();
 
 const $q = useQuasar();
@@ -111,6 +134,8 @@ const loading = ref(false);
 const q = ref('');
 const protocol = ref<string | null>(null);
 const site = ref<string | null>(null);
+const zoneId = ref<string | null>(null);
+const teamId = ref<string | null>(null);
 const pagination = ref({ sortBy: 'title', descending: false, page: 1, rowsPerPage: 25, rowsNumber: 0 });
 
 async function onRequest(req: Parameters<NonNullable<QTableProps['onRequest']>>[0]) {
@@ -124,6 +149,8 @@ async function onRequest(req: Parameters<NonNullable<QTableProps['onRequest']>>[
       q: q.value ?? '',
       protocol: protocol.value ?? '',
       site: site.value ?? '',
+      zone_id: zoneId.value ?? '',
+      team_id: teamId.value ?? '',
       sort,
       page,
       page_size: rowsPerPage,
@@ -145,7 +172,7 @@ function reload(resetPage = false) {
   });
 }
 
-watch([q, protocol, site], () => reload(true));
+watch([q, protocol, site, zoneId, teamId], () => reload(true));
 onMounted(() => reload());
 
 defineExpose({ reload });

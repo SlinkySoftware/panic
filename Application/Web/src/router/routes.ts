@@ -106,12 +106,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'settings',
         name: 'settings',
-        component: PlaceholderPage,
-        props: {
-          title: 'Settings',
-          caption: 'Instance settings and the Default Global Dashboard.',
-          task: 'T-S6-09/10/11',
-        },
+        component: () => import('@/pages/SettingsPage.vue'),
         meta: { title: 'Settings' },
       },
       {
@@ -130,33 +125,25 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'settings/orphans',
         name: 'settings-orphans',
-        component: PlaceholderPage,
-        props: { title: 'Orphaned resources', caption: 'Resources left with no team or owner.', task: 'T-S6-09/10/11' },
+        component: () => import('@/pages/OrphansPage.vue'),
         meta: { title: 'Orphans', admin: true },
       },
       {
         path: 'settings/client-ip',
         name: 'settings-client-ip',
-        component: PlaceholderPage,
-        props: {
-          title: 'Client-IP diagnostics',
-          caption: 'Trust-chain and Security Zone resolution.',
-          task: 'T-S6-09/10/11',
-        },
+        component: () => import('@/pages/ClientIpPage.vue'),
         meta: { title: 'Client-IP diagnostics', admin: true },
       },
       {
         path: 'profile',
         name: 'profile',
-        component: PlaceholderPage,
-        props: { title: 'Profile', caption: 'Display name, SSH template, preferences.', task: 'T-S6-09/10/11' },
+        component: () => import('@/pages/ProfilePage.vue'),
         meta: { title: 'Profile' },
       },
       {
         path: 'audit',
         name: 'audit',
-        component: PlaceholderPage,
-        props: { title: 'Audit log', caption: 'Keyset-paged audit entries.', task: 'T-S6-09/10/11' },
+        component: () => import('@/pages/AuditPage.vue'),
         meta: { title: 'Audit', admin: true },
       },
     ],
