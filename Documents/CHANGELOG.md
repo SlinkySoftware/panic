@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-15 — T-S6-12 done: CI green on gitea
+- The joint smoke test failed in CI only: the job runs in a container but `docker run -v` is resolved by the
+  host daemon, so a `/tmp` work dir mounted as an empty root-owned folder. It now lives in the checkout
+  (the runner's `bind_workdir`). Run 697: checks and images green; `panic-web` and `panic-server` published.
+
 ## 2026-11-15 — Density setting removed; always compact
 - Removed the top-bar density toggle and the Density field on User Settings: it was stored but never
   changed the layout. The UI is compact. The server keeps the stored `density` pref (unused), default
