@@ -22,7 +22,7 @@ def test_add_is_idempotent_and_remove_leaves_real_data_clean(mongo_db: Any) -> N
     call_command("panic_examples", "add")
     n_items = _count(mongo_db, catalog_repo.COLLECTION)
     assert n_items > 0 and _count(mongo_db, "users") > 0 and _count(mongo_db, "zones") > 0
-    call_command("panic_examples", "add")  # re-run: nothing duplicated
+    call_command("panic_examples", "add")  # re-run: replaced, nothing duplicated
     assert _count(mongo_db, catalog_repo.COLLECTION) == n_items
 
     ex_item = mongo_db[catalog_repo.COLLECTION].find_one({"_id": {"$regex": "^example-"}})
@@ -95,3 +95,24 @@ def test_add_is_idempotent_and_remove_leaves_real_data_clean(mongo_db: Any) -> N
     assert catalog_repo.get_catalog_item(mongo_db, real_item.id).zone_ids == []
     u = users_repo.get_user(mongo_db, real_user.id)
     assert u.team_ids == [] and u.pinned_dashboard_ids == [] and u.default_dashboard_id is None
+
+
+def test_add_replaces_an_older_example_version_and_refuses_real_clashes(mongo_db: Any) -> None:
+    import pytest
+    from django.core.management import CommandError
+
+    from panic_server.store.repos import teams as teams_repo
+
+    # An older dataset version: same code, different id (the bug this guards against).
+    mongo_db["teams"].insert_one({"_id": "example-team-old", "code": "EX-NETOPS", "name": "old", "version": 1})
+    call_command("panic_examples", "add")
+    assert mongo_db["teams"].count_documents({"_id": "example-team-old"}) == 0
+    assert mongo_db["teams"].count_documents({"code": "EX-NETOPS"}) == 1
+    call_command("panic_examples", "remove")
+
+    # Real data holding an example code: refuse, write nothing.
+    real = teams_repo.create_team(mongo_db, code="EX-SECOPS", name="Real team")
+    with pytest.raises(CommandError, match="EX-SECOPS"):
+        call_command("panic_examples", "add")
+    assert _count(mongo_db, catalog_repo.COLLECTION) == 0
+    mongo_db["teams"].delete_one({"_id": real.id})

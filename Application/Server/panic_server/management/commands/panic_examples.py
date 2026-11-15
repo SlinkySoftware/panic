@@ -1,7 +1,9 @@
 """``manage.py panic_examples add|remove`` (``./panic addexamples`` / ``./panic delexamples``).
 
 ``add`` inserts the example dataset (``panic_server.fixtures.examples``: everything prefixed ``example-``,
-``ex-`` usernames, ``EX-`` codes) next to existing data; it never overwrites and is safe to re-run.
+``ex-`` usernames, ``EX-`` codes) next to existing data. Any example data already present (including an
+older version of the dataset) is removed first, so re-running always gives the current set. If a code or
+username the examples need is held by non-example data, nothing is written and the clashes are listed.
 ``remove`` deletes exactly the prefixed documents, then strips references real data picked up meanwhile
 (example items in real lists, example widgets on real dashboards, example teams/zones on real resources,
 example dashboards in real users' menus). Sites still used by real catalog items are kept and reported.
@@ -11,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.core.management.base import BaseCommand, CommandParser
+from django.core.management.base import BaseCommand, CommandError, CommandParser
 
 from panic_server.fixtures import examples
 from panic_server.management.commands.panic_seed import _seed_fixture
@@ -41,12 +43,45 @@ class Command(BaseCommand):
     def handle(self, *args: Any, **options: Any) -> None:
         db = get_db()
         if options["action"] == "add":
-            created = _seed_fixture(db, examples.build())
+            fixture = examples.build()
+            conflicts = _real_conflicts(db, fixture)
+            if conflicts:
+                raise CommandError(
+                    "Not adding examples: these names are already used by non-example data: " + "; ".join(conflicts)
+                )
+            replaced = ""
+            if any(db[c].count_documents({"_id": PREFIX}, limit=1) for c in _EXAMPLE_COLLECTIONS):
+                replaced = " (previous example data replaced: " + _remove(db) + ")"
+            created = _seed_fixture(db, fixture)
             zones_repo.invalidate_cache(db)
             summary = ", ".join(f"{k}={v}" for k, v in created.items())
-            self.stdout.write(self.style.SUCCESS(f"examples added ({summary}); already-present ones were left as is"))
+            self.stdout.write(self.style.SUCCESS(f"examples added ({summary}){replaced}"))
             return
         self.stdout.write(self.style.SUCCESS("examples removed (" + _remove(db) + ")"))
+
+
+_EXAMPLE_COLLECTIONS = (
+    sites_repo.COLLECTION,
+    teams_repo.COLLECTION,
+    zones_repo.COLLECTION,
+    users_repo.COLLECTION,
+    catalog_repo.COLLECTION,
+    lists_repo.COLLECTION,
+    dashboards_repo.COLLECTION,
+)
+
+
+def _real_conflicts(db: Any, fixture: Any) -> list[str]:
+    """Unique names (site/team codes, usernames) the examples need that non-example documents already hold."""
+    found: list[str] = []
+    for coll, field, values in (
+        (sites_repo.COLLECTION, "code", [s.code for s in fixture.sites]),
+        (teams_repo.COLLECTION, "code", [t.code for t in fixture.teams]),
+        (users_repo.COLLECTION, "username", [u.username for u in fixture.users]),
+    ):
+        for doc in db[coll].find({field: {"$in": values}, "_id": {"$not": PREFIX}}, {field: 1}):
+            found.append(f"{coll}.{field}={doc[field]}")
+    return found
 
 
 def _bump(extra: dict[str, Any]) -> dict[str, Any]:
