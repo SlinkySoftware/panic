@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-19 — panic-web on nginx 1.30.7 (CVE-2026-123007, CVE-2026-123633)
+- `panic-web` is built on the official `nginx:1.30.7-alpine` image instead of `nginx-unprivileged:1.29-alpine`.
+  1.30.7 fixes two HTTP/2 bugs (flow-control heap overflow, proxy use-after-free); the 1.29 branch gets no fix
+  and `nginx-unprivileged` had no 1.30.7 build. The Containerfile sets the image up the way
+  `nginx-unprivileged` is (no `user` directive, pid and temp files in `/tmp`, uid 101, port 8080), so the
+  container contract is unchanged. panic-web serves HTTP/1.1 only, so deployed images were not exposed.
+  Rebuild and redeploy `panic-web`.
+
 ## 2026-11-15 — T-S6-12 done: CI green on gitea
 - The joint smoke test failed in CI only: the job runs in a container but `docker run -v` is resolved by the
   host daemon, so a `/tmp` work dir mounted as an empty root-owned folder. It now lives in the checkout
