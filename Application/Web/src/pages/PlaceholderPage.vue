@@ -1,7 +1,6 @@
 <!--
-  Rendered for every AR-1.4 route this task routes but does not build a real screen for (everything except
-  /login and the shell itself). The route exists and is reachable -- the explicit-URL requirement is about
-  routing existing, not about every screen being feature-complete yet; the real screens land in T-S6-09/10/11.
+  Rendered for any AR-1.4 route that has no dedicated screen. The route exists and is reachable -- the
+  explicit-URL requirement is about routing existing, not about every screen having its own page.
 -->
 <template>
   <q-page class="q-pa-lg">

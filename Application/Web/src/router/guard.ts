@@ -18,7 +18,7 @@ export function safeRedirect(target: unknown): string {
   return t;
 }
 
-/** `next` (exactly this query param name, per this task's scope line). */
+/** The return-to target travels in the `next` query param (exactly this name). */
 export function loginLocation(next: string): RouteLocationRaw {
   const target = safeRedirect(next);
   return target === '/' ? { name: 'login' } : { name: 'login', query: { next: target } };

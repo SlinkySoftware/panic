@@ -1,4 +1,4 @@
-<!-- /settings/users (T-S6-11): search, filters, pre-provision, disable / enable. Row click opens the user. -->
+<!-- /settings/users: search, filters, pre-provision, disable / enable. Row click opens the user. -->
 <template>
   <q-page class="q-pa-lg">
     <q-table

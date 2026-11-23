@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Contract drift checks (T-S6-12): committed OpenAPI document and generated TS types match the code, the
+# Contract drift checks: committed OpenAPI document and generated TS types match the code, the
 # nginx template still generates from proxy-paths.json, and every compose file is valid.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

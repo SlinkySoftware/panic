@@ -1,4 +1,4 @@
-"""Piped into ``python -m django shell`` inside a panic-server container (T-S6-14): create one real
+"""Piped into ``python -m django shell`` inside a panic-server container: create one real
 server-side session per seeded load user and print ``{username: session_key}`` as JSON on the last line."""
 
 import json

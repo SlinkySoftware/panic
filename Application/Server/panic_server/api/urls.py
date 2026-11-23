@@ -1,7 +1,5 @@
-"""``/api/v1/...`` DRF routes owned by T-S6-06 (auth session, UI reads, the ``.rdp`` download).
-
-T-S6-07 adds dashboards CRUD, ``/me``, catalog/lists CRUD, sites/teams/zones/users/admin/
-settings/audit/export under this same ``urlpatterns`` list.
+"""``/api/v1/...`` DRF routes: auth session, UI reads, the ``.rdp`` download, dashboards CRUD,
+``/me``, catalog/lists CRUD, sites/teams/zones/users/admin/settings/audit/export.
 """
 
 from __future__ import annotations
@@ -30,7 +28,7 @@ urlpatterns = [
     path("ui/dashboards/<str:dashboard_id>", ui_views.dashboard_view, name="ui-dashboard"),
     path("ui/search", ui_views.search_view, name="ui-search"),
     path("launch/rdp/<str:item_id>.rdp", launch_views.rdp_download_view, name="launch-rdp"),
-    # -------------------------------------------------------------- T-S6-07
+    # -------------------------------------------------------------- resources
     path("dashboards", dashboards_views.dashboards_view, name="dashboards-list"),
     path("dashboards/<str:dashboard_id>", dashboards_views.dashboard_detail_view, name="dashboard-detail"),
     path("dashboards/<str:dashboard_id>/layout", dashboards_views.dashboard_layout_view, name="dashboard-layout"),

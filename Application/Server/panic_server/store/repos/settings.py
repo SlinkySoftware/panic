@@ -73,7 +73,7 @@ def set_default_global_dashboard(
 
 
 def upsert_system_settings(db: Database[dict[str, Any]], model: SystemSettings) -> SystemSettings:
-    """Insert-or-fully-replace the single settings document (T-S6-03: portable import)."""
+    """Insert-or-fully-replace the single settings document (portable import)."""
     doc = {
         "default_global_dashboard_id": model.default_global_dashboard_id,
         "ssh_uri_enabled": model.ssh_uri_enabled,

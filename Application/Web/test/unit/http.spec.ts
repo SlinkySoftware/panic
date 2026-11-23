@@ -1,4 +1,4 @@
-/** CSRF header + one retry (this task's scope line), and the ApiError envelope shape (API.md §3). */
+/** CSRF header + one retry, and the ApiError envelope shape (API.md §3). */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   apiFetch,

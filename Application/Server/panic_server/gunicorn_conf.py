@@ -1,4 +1,4 @@
-"""Gunicorn settings for the panic-server image (T-S6-12): gthread workers, no preload.
+"""Gunicorn settings for the panic-server image: gthread workers, no preload.
 
 ``preload_app`` stays off so each worker opens its own MongoClient after the fork (pymongo clients are
 not fork-safe).

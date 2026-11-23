@@ -1,11 +1,8 @@
-"""OIDC login/callback views, and the shared ``sign_in`` session-establishment helper (T-S3-01/02,
-T-S6-04, T-S6-06).
+"""OIDC login/callback views, and the shared ``sign_in`` session-establishment helper.
 
-``login_view``/``logout_view`` (the old server-rendered ``/login``/``/logout`` routes, and their
-T-S6-04 JSON stopgap) are gone: superseded by the real JSON contract at
-``/api/v1/auth/{providers,csrf,login,logout}`` (``panic_server.api.views.auth``), which reuses
-``sign_in`` below for session establishment + audit rather than duplicating it. The OIDC routes
-are untouched by that cutover -- same paths, same behaviour.
+Local sign-in is the JSON contract at ``/api/v1/auth/{providers,csrf,login,logout}``
+(``panic_server.api.views.auth``), which reuses ``sign_in`` below for session establishment +
+audit rather than duplicating it.
 """
 
 from __future__ import annotations

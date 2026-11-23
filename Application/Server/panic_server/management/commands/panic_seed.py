@@ -1,6 +1,6 @@
-"""``manage.py panic_seed`` -- idempotently seed canonical PANIC fixtures into MongoDB (T-S6-03).
+"""``manage.py panic_seed`` -- idempotently seed canonical PANIC fixtures into MongoDB.
 
-Mongo-backed rewrite of the Stage 1-4 command: reaches Mongo only through
+Reaches Mongo only through
 ``panic_server.store``'s public API (AR-4.1), seeding one of the ``panic_server.fixtures``
 profiles. Existing documents (matched by id) are never duplicated or overwritten; use
 ``--reset`` to force canonical values back.

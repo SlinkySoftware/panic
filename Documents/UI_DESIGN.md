@@ -1,8 +1,9 @@
 # PANIC — UI Design System
 
-Aligned directly with **reference-ui** (`Documents/UI_DESIGN.md` & `src/css/app.css`) so PANIC feels like a sister application built by the same engineering team.
+A dark-first operations look: neutral graphite surfaces, one teal brand colour, semantic status
+tones and monospace for anything an operator might copy.
 
-## 1. Visual Tokens (Adopted from reference-ui)
+## 1. Visual Tokens
 - **Brand Palette**: Deep Teal `--brand-500` (`#0f766e` light / `#2ebfae` dark), `--brand-400` (`#14958a` / `#3ccfbd`), `--brand-600` (`#0b5f58` / `#23a294`).
 - **Dark-First Operations Theme (`body.body--dark` default)**:
   - `--page-bg: #1c1c1e`
@@ -20,50 +21,44 @@ Aligned directly with **reference-ui** (`Documents/UI_DESIGN.md` & `src/css/app.
   - Protocol pills using `--cache-hit` (WEB blue), `--brand-500` (SSH teal), `--cache-stale` (RDP violet), `--cache-miss` (LOCAL_APP amber).
 - **Typography**: `Inter` for UI labels and hierarchy, `JetBrains Mono` (`.mono`) for hostnames, URLs, commands, CIDRs, site codes, and interpolated CLI commands; `font-variant-numeric: tabular-nums` on all ports, metrics, and counters.
 
-## 2. Shell, Navigation Rail & Full-Width Zabbix Grid
+## 2. Shell, Navigation Rail & Full-Width Grid
 - **Top Bar**:
-  - Brand mark + `PANIC` wordmark with full definition (`Portal for Accessing Networks, Infrastructure, and Compute`) stacked directly underneath.
-  - `STAGE 1 MOCK` status badge.
+  - Brand mark + `PANIC` wordmark, with the full name (`Portal for Accessing Networks, Infrastructure, and Compute`) underneath on wider screens.
   - Command Palette trigger (`Ctrl+K` / `/`).
-  - **Admin "View As" Perspective Switcher**: Visible to users with `GLOBAL_ADMIN` permission, allowing instant preview of dashboards, left-hand navigation, catalog items, and lists as any other user.
-  - **Interactive Context Switcher**: Live popover for switching Active RBAC User, Source IP, and Security Zone override.
-  - Dark / Light theme toggle. The layout is always compact (no density setting; removed 2026-11-15, owner).
-- **Collapsible Left Navigation Rail** (`232px` expanded, `64px` mini):
-  - All navigation items are real `<a href="...">` links with visible browser URLs and HTML5 History (`pushState` / `replaceState` / `popstate`) synchronization.
-  - **Dashboards** group: User's pinned, `always_display`, and Default Global dashboards (`<a href="/dashboard/<dash-uuid>">`) + `+` button opening the **"Add Existing (Global / Team)" / "+ Create New"** modal.
-    - The user's effective **Default Dashboard** displays a `★` badge in the rail.
-    - Dashboards with `always_display` enabled show a `📌` indicator and cannot be unpinned; the active **Default Global Dashboard** is also protected from unpinning and deletion.
-  - **Resources & Lists** group: **Catalog Items** (`/catalog`) followed by **Endpoint Lists** (`/lists`).
-  - **Scope, Zones & RBAC** group: **Pre-Defined Sites** (`/sites`), **Teams** (`/teams`), **Zones & IP CIDRs** (`/zones`), **RBAC Permissions** (`/rbac`).
-  - **System** group: **System Settings** (`/settings`), **SSH & User Profile** (`/profile`), **Audit Log** (`/audit`).
-- **Explicit Browser URL Routing (No Hidden URLs)**:
-  - `<url>/` and `<url>/dashboard`: Resolve to the active user's effective Default Dashboard and canonicalize the browser address bar to `<url>/dashboard/<dash-uuid>`.
-  - `<url>/dashboard/<dash-uuid>`: Opens the specific dashboard in Locked (View) Mode.
-  - `<url>/dashboard/<dash-uuid>/edit`: Opens the specific dashboard directly in Unlocked (Edit) Mode (for users with write access to the dashboard's scope).
-  - `<url>/catalog`, `<url>/lists`, `<url>/sites`, `<url>/teams`, `<url>/zones`, `<url>/rbac`, `<url>/settings`, `<url>/profile`, `<url>/audit`: Direct bookmarkable URLs for every portal screen, also displayed in the page header breadcrumbs.
-- **Default Dashboard Hierarchy (User Default vs. App-Wide Default Global Dashboard)**:
-  - **User Default Dashboard**: Users can set any dashboard available to them as their personal Default Dashboard via:
-    1. The `☆ Set as My Default` / `★ My Default (Reset)` button on the dashboard header.
-    2. The **My Default Dashboard** selector on **SSH & User Profile** (`/profile`) or **System Settings** (`/settings`).
-    3. The `★ Set as My Default Dashboard` checkbox in **Dashboard Properties** or **+ Create New Dashboard**.
-  - **App-Wide System Setting — Default Global Dashboard**: Global Admins can configure the system-wide **Default Global Dashboard** (`SystemSettings.default_global_dashboard_id`, restricted to `GLOBAL` scope dashboards) via **System Settings** (`/settings`) or **Dashboard Properties**. Users who have not set a personal override automatically inherit the Default Global Dashboard.
-- **Main Content Area & Zabbix-Style 12-Column Grid**:
-  - Uses 100% of available viewport width (`.ws-page { width: 100%; max-width: 100%; }`) so cards resize proportionally with the browser window.
-  - **Locked View Mode vs. Unlocked Edit Mode**:
-    - In Edit Mode (`/dashboard/<dash-uuid>/edit`), widgets feature a draggable header bar (`.widget-edit-bar`) for reordering and a bottom-right corner drag-resize handle (`.widget-resize-handle`) for interactive width (`3..12` columns) and height (`1..6` rows) resizing.
-    - Dashboards include a `⚙ Dashboard Properties` button to edit Name, Description, Scope, Teams, `Always Display`, `Set as My Default Dashboard`, and (for Global Admins on Global dashboards) `Set as App-Wide Default Global Dashboard`.
+  - Zone badge: the caller's Security Zone, with a hint when it is the Default zone.
+  - **View As** (Global Admins only): view the portal as another user, from another zone, or both. While it is active a banner shows the perspective with a **Stop View As** button; editing controls are disabled and the server refuses mutations.
+  - Dark / Light theme toggle and the user menu (User Settings, Sign out). The layout is always compact (no density setting).
+- **Collapsible Left Navigation Rail** (`232px` expanded, `64px` mini; expands on hover, "Keep menu open" pins it):
+  - Every entry is a real link with a visible, bookmarkable URL (AR-1.4).
+  - **Dashboards** group: the user's menu dashboards (pinned, `always_display`, the app-wide default and the user's default), then **Add dashboard** ("Add existing" / "Create new").
+    - The user's effective default dashboard shows a star.
+    - `always_display` dashboards and the app-wide default show a pin and cannot be removed from the menu.
+  - **Resources** group: **Catalog** (`/catalog`), **Endpoint lists** (`/lists`).
+  - **Scope** group: **Sites** (`/sites`), **Teams** (`/teams`), **Zones** (`/zones`), **Users** (`/settings/users`, admin only).
+  - **System** group: **Application Settings** (`/settings`), **User Settings** (`/profile`), **Audit log** (`/audit`, admin only).
+- **URLs**:
+  - `/` and `/dashboard` resolve to the user's effective default dashboard and replace the address with `/dashboard/<uuid>`.
+  - `/dashboard/<uuid>` opens a dashboard in view mode; `/dashboard/<uuid>/edit` opens it in edit mode (for users who may edit it).
+  - `/rbac` redirects to `/settings/users`.
+- **Default dashboards**:
+  - **User default**: any dashboard visible to the user, set with the star on the dashboard header, the **My default dashboard** selector in User Settings, or "Make this my default dashboard" when creating one.
+  - **App-wide default**: a `GLOBAL` dashboard chosen by a Global Admin in Application Settings. Users without their own default get it.
+- **Dashboard grid** (12 columns, full viewport width, so cards resize with the window):
+  - View mode: star (my default), pin (menu) and **Edit** in the dashboard header.
+  - Edit mode: drag a widget's header to move it and its bottom-right corner to resize it (width `3..12` columns, height `1..6` rows). **Dashboard details** edits title, icon, description, `always_display` and deletion. A version conflict on save offers "Discard mine and reload" or "Overwrite theirs".
 
 ## 3. Two-Card Resource Screens & Protocol-Aware Forms
-- **Catalog Items (`/catalog`) & Endpoint Lists (`/lists`)**:
-  - Both screens present **2 cards**: Card 1 for **Global & Team** items/lists and Card 2 for **Personal** items/lists.
-  - Endpoint List tables and the Edit/Define List modal support drag-and-drop row ordering (`⠿`).
-- **Protocol-Specific Catalog Item Modal**:
-  - `WEB`: Target URL (`https://...`) + Pre-Defined Site dropdown.
-  - `SSH`: Host / IP + SSH Port (default `22`) + Pre-Defined Site + SSH Command Line Options + Remote User Override.
-  - `RDP`: Host / IP + RDP Port (default `3389`) + Pre-Defined Site + Domain\Username Override.
-  - `LOCAL_APP`: Command / Executable Path + Pre-Defined Site + Command Line Options / Arguments (hiding Host and Port).
+- **Catalog (`/catalog`) & Endpoint lists (`/lists`)**:
+  - Both screens show **2 cards**: Card 1 for **Global & Team** items/lists and Card 2 for **Personal** items/lists.
+  - List items are reordered only in the Edit List dialog, by dragging rows.
+- **Protocol-aware catalog item dialog**:
+  - `WEB`: Host or URL, Port, Path.
+  - `SSH`: Host, Port, Arguments, Account override.
+  - `RDP`: Host, Port, Account override.
+  - `LOCAL_APP`: Host, Port, Arguments, Account override, Custom URI.
+  - Every protocol: Title, Site, Scope, Teams, Zones (where the item is reachable), Tags, Description.
 
-## 4. Quasar Implementation Mapping (Stage 6 panic-web)
+## 4. Quasar Implementation Mapping
 
 The tokens above are CSS custom properties in `Application/Web/src/css/app.css` (dark set on
 `body.body--dark`, light set otherwise). Quasar components map onto them as follows.

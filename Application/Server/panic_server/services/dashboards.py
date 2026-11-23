@@ -1,6 +1,6 @@
 """``/api/v1/dashboards`` composition and writes (API.md §4.3). The *editable* resource shapes
 here (summaries, the create/patch/layout bodies) are deliberately separate from
-``panic_server.services.dashboards_read`` (T-S6-06's read-only, item-resolving ``/ui/dashboards/{id}``) --
+``panic_server.services.dashboards_read`` (the read-only, item-resolving ``/ui/dashboards/{id}``) --
 this module never resolves widget targets into ``ItemView``s, only validates that they exist and
 are visible.
 """

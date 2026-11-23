@@ -1,5 +1,5 @@
 """View As: the read-only-mutation guard, and starting/exiting a View As session (API.md §4.7,
-AR-2.9). Owned by T-S6-07; the session key and ``RequestContext`` plumbing are T-S6-04's.
+AR-2.9). The session key and ``RequestContext`` plumbing live in ``panic_server.context``.
 """
 
 from __future__ import annotations

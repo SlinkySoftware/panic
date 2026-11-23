@@ -1,4 +1,4 @@
-/** Remaining T-S6-11 endpoints: orphans, app settings, my profile, audit, client-IP diagnostics (API.md §4.4, §4.7). */
+/** Settings-area endpoints: orphans, app settings, my profile, audit, client-IP diagnostics (API.md §4.4, §4.7). */
 import { requestJson } from './http';
 import type { Page, Scope } from './catalog';
 

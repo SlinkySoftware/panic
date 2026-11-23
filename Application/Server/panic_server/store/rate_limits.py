@@ -2,8 +2,7 @@
 
 Correctness relies on the window start being encoded in the document id, not on the TTL monitor
 (which only sweeps roughly every 60s); the TTL index on ``expire_at`` just reclaims old windows.
-Buckets: ``login:ip``, ``login:user``, ``api:ip``. Not wired into ``security.py``'s
-``RateLimitMiddleware`` here (T-S6-04 owns that file); exercise this module directly.
+Buckets: ``login:ip``, ``login:user``, ``api:ip``; used by ``security.py``'s ``RateLimitMiddleware``.
 """
 
 from __future__ import annotations

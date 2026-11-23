@@ -65,7 +65,7 @@ def get_list(db: Database[dict[str, Any]], list_id: str) -> EndpointList:
 
 
 def get_lists_by_ids(db: Database[dict[str, Any]], list_ids: list[str]) -> list[EndpointList]:
-    """Every list in ``list_ids`` that still exists, in one round trip (T-S6-06).
+    """Every list in ``list_ids`` that still exists, in one round trip.
 
     Sibling of ``catalog.get_catalog_items_by_ids``; same rationale (API.md §8 round-trip budgets
     for the dashboard read view, which may reference up to a dozen lists).
@@ -104,12 +104,12 @@ def delete_list(db: Database[dict[str, Any]], list_id: str, expected_version: in
 
 
 def list_all_lists(db: Database[dict[str, Any]]) -> list[EndpointList]:
-    """Every list regardless of visibility/orphan status (T-S6-03: admin export only)."""
+    """Every list regardless of visibility/orphan status (admin export only)."""
     return [_to_model(d) for d in db[COLLECTION].find().sort("_id", 1)]
 
 
 def upsert_list(db: Database[dict[str, Any]], model: EndpointList) -> EndpointList:
-    """Insert-or-fully-replace a list by ``model.id`` (T-S6-03: portable import)."""
+    """Insert-or-fully-replace a list by ``model.id`` (portable import)."""
     doc: dict[str, Any] = {
         "title": model.title,
         "description": model.description,

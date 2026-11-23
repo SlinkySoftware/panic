@@ -1,11 +1,8 @@
-"""Login/logout, rate limiting, disabled-user rejection, and request-context isolation (T-S6-04,
-T-S6-06).
+"""Login/logout, rate limiting, disabled-user rejection, and request-context isolation.
 
-Replaces the Stage 1-5 STORE-backed ``test_auth.py``/``test_security.py``: same behaviours
-(sign-in, sign-out, per-IP/per-username rate limiting, disabled accounts), now against the
-Mongo-backed store and the lock-free, per-request ``RequestContext``. T-S6-06 moves the actual
-login/logout surface from the old ``/login``/``/logout`` (now deleted) to the real JSON contract,
-``/api/v1/auth/login``/``/api/v1/auth/logout`` -- these tests move with it.
+Sign-in, sign-out, per-IP/per-username rate limiting and disabled accounts, against the
+Mongo-backed store, the lock-free, per-request ``RequestContext`` and the JSON contract
+``/api/v1/auth/login``/``/api/v1/auth/logout``.
 """
 
 from __future__ import annotations

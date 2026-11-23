@@ -104,12 +104,12 @@ def delete_dashboard(db: Database[dict[str, Any]], dashboard_id: str, expected_v
 
 
 def list_all_dashboards(db: Database[dict[str, Any]]) -> list[Dashboard]:
-    """Every dashboard regardless of visibility/orphan status (T-S6-03: admin export only)."""
+    """Every dashboard regardless of visibility/orphan status (admin export only)."""
     return [_to_model(d) for d in db[COLLECTION].find().sort("_id", 1)]
 
 
 def upsert_dashboard(db: Database[dict[str, Any]], model: Dashboard) -> Dashboard:
-    """Insert-or-fully-replace a dashboard by ``model.id`` (T-S6-03: portable import).
+    """Insert-or-fully-replace a dashboard by ``model.id`` (portable import).
 
     Widgets are stored without ``dashboard_id`` (DATA_MODEL.md §4.7: "dropped (implicit)"),
     the inverse of ``_to_model``'s re-injection on read.

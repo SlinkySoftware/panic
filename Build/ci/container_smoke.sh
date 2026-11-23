@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Joint smoke test of the built images (T-S6-12): browser -> panic-web -> 2x panic-server -> MongoDB.
+# Joint smoke test of the built images: browser -> panic-web -> 2x panic-server -> MongoDB.
 #   PANIC_IMAGE_PREFIX / PANIC_IMAGE_TAG select the images (default panic-local/*:latest).
 #   SMOKE_BASE_PATH runs the stack under a URL prefix (PANIC_BASE_PATH on both tiers, e.g. /panic).
 # Proves: SPA + healthz served, /metrics and unlisted API paths 404 at web, sign-in through web, sessions

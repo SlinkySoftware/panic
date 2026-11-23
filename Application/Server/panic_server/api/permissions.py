@@ -54,7 +54,7 @@ class IsGlobalAdmin(BasePermission):
 
 
 class IsRealGlobalAdmin(BasePermission):
-    """``GLOBAL_ADMIN`` on the **real** signed-in user, not the View As effective user (T-S6-07).
+    """``GLOBAL_ADMIN`` on the **real** signed-in user, not the View As effective user.
 
     ``request.user`` (and so :class:`IsGlobalAdmin`) is always the *effective* user
     (``RequestContextAuthentication``) -- the View As subject when View As is active. That is
@@ -74,7 +74,7 @@ class IsRealGlobalAdmin(BasePermission):
 
 
 class ReadAuthenticatedWriteAdmin(BasePermission):
-    """Mixed-tier resource (T-S6-07): any signed-in user may read (``GET``/``HEAD``/``OPTIONS``,
+    """Mixed-tier resource: any signed-in user may read (``GET``/``HEAD``/``OPTIONS``,
     API.md's ``A``), but only a Global Admin may write (API.md's ``G``).
 
     Several API.md §4.7 collections share one URL for both tiers (e.g. ``GET /api/v1/sites`` is
@@ -92,7 +92,7 @@ class ReadAuthenticatedWriteAdmin(BasePermission):
 
 #: ``tier name -> permission class (or classes)``, used by the authz matrix test to label every
 #: route. ``admin`` accepts either ``IsGlobalAdmin`` (the common case) or ``IsRealGlobalAdmin``
-#: (the View As start/exit pair, T-S6-07) -- both are "G" in API.md terms, just checked against a
+#: (the View As start/exit pair) -- both are "G" in API.md terms, just checked against a
 #: different user.
 TIERS: dict[str, type[BasePermission] | tuple[type[BasePermission], ...]] = {
     "public": IsPublic,

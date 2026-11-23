@@ -16,7 +16,7 @@ dev = [
     "mypy>=1.14.0",
     "import-linter>=2.1",
 ]
-# T-S6-14 load test (Build/LoadTest): `uv sync --group loadtest`
+# Load test (Build/LoadTest): `uv sync --group loadtest`
 loadtest = [
     "locust>=2.32.0",
 ]

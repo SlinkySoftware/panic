@@ -1,4 +1,4 @@
-"""Deterministic seed fixtures for ``manage.py panic_seed`` (T-S6-03).
+"""Deterministic seed fixtures for ``manage.py panic_seed``.
 
 Two profiles, each a pure function returning a :class:`Fixture` of
 ``panic_common.models`` instances -- no I/O, no Mongo, no randomness tied to wall-clock

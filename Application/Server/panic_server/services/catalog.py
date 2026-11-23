@@ -1,6 +1,6 @@
 """``/api/v1/catalog`` composition and writes (API.md §4.5).
 
-Visibility is always ``panic_common.visibility.matches``/``VisibilitySpec`` (the Stage 6 pure
+Visibility is always ``panic_common.visibility.matches``/``VisibilitySpec`` (the pure
 definition) -- never ``panic_common.rbac.is_visible_in_scope``, which DATA_MODEL.md §5 keeps only
 as the parity test's in-memory comparison baseline, not for production enforcement (its PERSONAL
 branch is deliberately more permissive: "empty owner_usernames -> visible to everyone", a rule

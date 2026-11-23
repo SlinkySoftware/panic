@@ -1,11 +1,8 @@
 """``/api/v1/auth/...`` -- providers, CSRF, login, logout (API.md §4.1).
 
-Supersedes the Stage 3-5 server-rendered ``/login``/``/logout`` views and their T-S6-04 JSON
-stopgap (``panic_server.auth.views.login_view``/``logout_view``, deleted by this task -- see
-``panic_server/auth/urls.py``'s module docstring). Password verification, LDAP and OIDC
-machinery are untouched: this module only wires ``panic_server.auth.backends``/``ldap_auth``
-into the new DRF surface and reuses ``panic_server.auth.views.sign_in`` for session
-establishment + audit, exactly as the brief asks.
+Password verification, LDAP and OIDC machinery live in ``panic_server.auth``: this module only
+wires ``panic_server.auth.backends``/``ldap_auth`` into the DRF surface and reuses
+``panic_server.auth.views.sign_in`` for session establishment + audit.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Session authentication enforcement, using the already-resolved ``request.context`` (T-S6-04).
+"""Session authentication enforcement, using the already-resolved ``request.context``.
 
 Identity resolution itself (who the session's user is, whether a View As target applies) lives
 in ``panic_server.context`` so there is exactly one place that resolves "who is this session's
@@ -17,7 +17,7 @@ from panic_common.errors import ErrorCode
 from panic_server.context import SESSION_USER_KEY, SESSION_VIEW_AS_KEY
 from panic_server.paths import app_path
 
-#: "/login"/"/logout" are kept here even though T-S6-06 deletes those routes: without the
+#: "/login"/"/logout" are kept here even though those routes no longer exist: without the
 #: carve-out, an anonymous request to either (e.g. a stale bookmark or old frontend build) would
 #: redirect to itself below (an infinite loop) instead of falling through to Django's URL
 #: resolver and getting a clean 404 (``panic_server.api.errors.not_found_view``). "/api/v1/auth/"
@@ -59,7 +59,7 @@ class PanicAuthMiddleware:
 
         response = self.get_response(request)
 
-        # Re-read ``request.context``, not the ``context`` captured above: T-S6-07's View As
+        # Re-read ``request.context``, not the ``context`` captured above: the View As
         # start/exit views (``services.view_as``) deliberately swap ``request.context`` for a
         # freshly rebuilt one *during* the view, after mutating the session's View As key. Using
         # the pre-view snapshot here would see the *old* (necessarily ``view_as_active=False``)

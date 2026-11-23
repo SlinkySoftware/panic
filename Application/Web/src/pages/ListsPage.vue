@@ -1,4 +1,4 @@
-<!-- /lists (T-S6-10): Shared and Personal cards; `?open=<id>` opens a list (the LIST widget's "Show all"). -->
+<!-- /lists: Shared and Personal cards; `?open=<id>` opens a list (the LIST widget's "Show all"). -->
 <template>
   <q-page class="q-pa-lg q-gutter-y-lg">
     <div class="row items-center">

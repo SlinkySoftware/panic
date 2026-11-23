@@ -1,4 +1,4 @@
-"""OIDC Authorization Code flow (with PKCE, ``state`` and ``nonce``) adapter (T-S3-02).
+"""OIDC Authorization Code flow (with PKCE, ``state`` and ``nonce``) adapter.
 
 The ID token is received directly from the token endpoint over TLS using the client secret, so
 per OIDC Core §3.1.3.7 the TLS server validation substitutes for signature checking; ``iss``,
@@ -159,9 +159,9 @@ def complete_flow(session: Any, params: dict[str, str]) -> tuple[dict[str, Any],
     return claims, str(flow.get("next") or "/")
 
 
-#: Claim holding group/role names, read for the IdP adapter's own convenience only -- T-S6-04
-#: deletes every setting that would map it to PANIC RBAC/teams (ADR-0001 decision 11), so this
-#: is no longer configurable, just the conventional OIDC claim name.
+#: Claim holding group/role names, read for the IdP adapter's own convenience only -- nothing
+#: maps it to PANIC RBAC/teams (ADR-0001 decision 11), so this is not configurable, just the
+#: conventional OIDC claim name.
 _GROUPS_CLAIM = "groups"
 
 

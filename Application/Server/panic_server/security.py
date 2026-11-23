@@ -1,4 +1,4 @@
-"""Security headers, Mongo-backed rate limiting, and JSON-aware CSRF failure handling (T-S3-04, T-S6-04)."""
+"""Security headers, Mongo-backed rate limiting, and JSON-aware CSRF failure handling."""
 
 from __future__ import annotations
 
@@ -43,8 +43,8 @@ def parse_rate(rate: str) -> tuple[int, int]:
     return max(1, int(count)), max(1, int(window or "60"))
 
 
-#: The old ``/login`` (T-S6-06 deletes it) and its real replacement, ``/api/v1/auth/login``
-#: (API.md §4.1), bucket identically. ``/auth/oidc/login`` is GET-only in practice, so it never
+#: The legacy ``/login`` path (no longer routed) and ``/api/v1/auth/login`` (API.md §4.1) bucket
+#: identically. ``/auth/oidc/login`` is GET-only in practice, so it never
 #: actually reaches here (``_STATE_CHANGING`` already filtered to POST/PUT/PATCH/DELETE above);
 #: it is kept for the same reason the old entry was: harmless, future-proof against a GET-only
 #: assumption changing.

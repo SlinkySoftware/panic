@@ -1,5 +1,5 @@
 <!--
-  Edit List modal (T-S6-10): the only place items are reordered (drag, or the arrow buttons). The picker offers
+  Edit List modal: the only place items are reordered (drag, or the arrow buttons). The picker offers
   only visible items of the list's own scope. Saves the full ordered item_ids with If-Match; a stale save shows
   the conflict banner. Read-only ("Show all") when the caller cannot edit.
 -->

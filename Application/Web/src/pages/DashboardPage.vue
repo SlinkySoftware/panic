@@ -1,5 +1,5 @@
 <!--
-  /dashboard/<id> locked view (T-S6-09): 12-column grid of HOST and LIST widgets, pin / default actions.
+  /dashboard/<id> locked view: 12-column grid of HOST and LIST widgets, pin / default actions.
   Re-entering a dashboard revalidates with If-None-Match.
 -->
 <template>

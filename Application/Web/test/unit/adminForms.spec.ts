@@ -1,4 +1,4 @@
-/** T-S6-11: admin form validation is displayed, and a server field error lands on the right field. */
+/** Admin form validation is displayed, and a server field error lands on the right field. */
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { Quasar, Dialog, Notify } from 'quasar';

@@ -1,6 +1,6 @@
 """``GET /api/v1/export?shared_only=`` -- portable JSON export (API.md §4.7). A thin, audited
-wrapper around ``panic_server.services.portability.export_state`` (T-S6-03); the export format
-itself is owned by that task and is not reimplemented here.
+wrapper around ``panic_server.services.portability.export_state``; the export format itself is
+owned by that module and is not reimplemented here.
 """
 
 from __future__ import annotations

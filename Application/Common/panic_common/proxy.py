@@ -1,4 +1,4 @@
-"""Trusted Reverse Proxy Client-IP Extraction Engine (T-S3-03, T-S6-05)."""
+"""Trusted Reverse Proxy Client-IP Extraction Engine."""
 
 from __future__ import annotations
 
@@ -135,7 +135,7 @@ def resolve_client_ip(
 
 
 # ---------------------------------------------------------------------------
-# T-S6-05: hardened X-Forwarded-For / Forwarded chain resolution (ARCHITECTURE §5, AR-5.3).
+# Hardened X-Forwarded-For / Forwarded chain resolution (ARCHITECTURE §5, AR-5.3).
 # ---------------------------------------------------------------------------
 
 ChainDecision = Literal[
@@ -183,7 +183,7 @@ class ProxyChainConfig(BaseModel):
 
     ``untrusted_peer_policy`` is carried here for the caller's convenience; this pure function
     only reports facts (``decision``) and never raises — applying ``reject`` (403) is the
-    caller's job (middleware / context, T-S6-04).
+    caller's job (middleware / context).
     """
 
     trust_proxy_headers: bool = True

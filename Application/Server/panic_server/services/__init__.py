@@ -1,3 +1,3 @@
-"""Service-layer modules that compose ``panic_server.store`` repos (T-S6-03+)."""
+"""Service-layer modules that compose ``panic_server.store`` repos."""
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""The ``loadtest`` seed profile (T-S6-03): exactly 5,000 catalog items, 50 users, 12 teams,
+"""The ``loadtest`` seed profile: exactly 5,000 catalog items, 50 users, 12 teams,
 20 zones, 200 lists and 60 dashboards, generated purely from the index (no RNG) so re-running
 :func:`build` always produces byte-identical data.
 

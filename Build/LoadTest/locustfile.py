@@ -1,6 +1,6 @@
-"""T-S6-14 load scenario: 50 signed-in users through panic-web, spread over 4 zones via XFF.
+"""Load scenario: 50 signed-in users through panic-web, spread over 4 zones via XFF.
 
-Request mix (per TASKS.md): 35% dashboard view (60% of those revalidate with If-None-Match),
+Request mix: 35% dashboard view (60% of those revalidate with If-None-Match),
 15% bootstrap, 15% palette search (3 keystroke queries), 15% catalog page/filter, 5% list detail,
 5% .rdp launch, 10% mutations (layout save on the user's own dashboard, profile save).
 Env: PANIC_LT_SESSIONS (JSON file from mint_sessions.py), PANIC_LT_NO_THINK=1 for the stress run.

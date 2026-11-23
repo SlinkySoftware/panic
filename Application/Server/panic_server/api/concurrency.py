@@ -1,4 +1,4 @@
-"""``If-Match`` / optimistic-concurrency helpers shared by every mutation view (T-S6-07, API.md §2).
+"""``If-Match`` / optimistic-concurrency helpers shared by every mutation view (API.md §2).
 
 Dashboards and endpoint lists *require* ``If-Match`` on ``PUT``/``PATCH``/``DELETE`` (missing ->
 ``428 PRECONDITION_REQUIRED``); every other resource treats it as optional, honoured when sent.

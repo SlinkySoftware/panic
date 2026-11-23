@@ -1,8 +1,8 @@
-# Local dev-only MongoDB for ./panic start / ./panic test / ./panic load (T-S6-02).
+# Local dev-only MongoDB for ./panic start / ./panic test / ./panic load.
 #
-# One named container, reused across dev-server runs, pytest runs and (future) load tests, so
-# state and indexes persist across restarts. Not used by CI (T-S6-12 wires Mongo for the Gitea
-# runner separately). No auth: bound to 127.0.0.1 only, for local development.
+# One named container, reused across dev-server runs, pytest runs and load tests, so
+# state and indexes persist across restarts. Not used by CI (the Gitea Actions workflow runs its
+# own Mongo). No auth: bound to 127.0.0.1 only, for local development.
 #
 #   docker compose -f Build/Containers/compose.dev-mongo.yaml up -d
 #   docker compose -f Build/Containers/compose.dev-mongo.yaml down       # (also drops the volume: add -v)

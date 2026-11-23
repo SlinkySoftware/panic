@@ -43,7 +43,7 @@ def iso_z(value: dt.datetime) -> str:
 def from_iso_z(value: str) -> dt.datetime:
     """The inverse of :func:`iso_z`: parse an RFC 3339 ``...Z`` string back into a BSON date.
 
-    Used by every repo's ``upsert_*`` primitive (T-S6-03) to translate an already-validated
+    Used by every repo's ``upsert_*`` primitive to translate an already-validated
     ``panic_common.models`` instance (e.g. from a portable export) back into Mongo's storage shape.
     """
     return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))

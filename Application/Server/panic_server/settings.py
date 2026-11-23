@@ -35,8 +35,8 @@ PANIC_TRUST_PROXY_HEADERS = env_bool("PANIC_TRUST_PROXY_HEADERS", True)
 _PANIC_PROXY_IP_HEADER_CHOICES = {"X-Forwarded-For", "Forwarded"}
 PANIC_PROXY_IP_HEADER = env_str("PANIC_PROXY_IP_HEADER", "X-Forwarded-For")
 if PANIC_PROXY_IP_HEADER not in _PANIC_PROXY_IP_HEADER_CHOICES:
-    # T-S6-04 removes the "X-Real-IP" option (AR-5.1: panic-web never sets it; the design has no
-    # use for it, dev or prod) -- only the two hop-chain-aware forms below remain valid.
+    # There is no "X-Real-IP" option (AR-5.1: panic-web never sets it; the design has no use
+    # for it, dev or prod) -- only the two hop-chain-aware forms below are valid.
     raise ImproperlyConfigured("PANIC_PROXY_IP_HEADER must be X-Forwarded-For or Forwarded")
 PANIC_TRUSTED_PROXY_CIDRS = env_list("PANIC_TRUSTED_PROXY_CIDRS", "127.0.0.1/32,::1/128")
 PANIC_UNTRUSTED_PEER_POLICY = env_str("PANIC_UNTRUSTED_PEER_POLICY", "default")
@@ -46,7 +46,7 @@ PANIC_XFF_MAX_HOPS = env_int("PANIC_XFF_MAX_HOPS", 16)
 PANIC_XFF_MAX_BYTES = env_int("PANIC_XFF_MAX_BYTES", 4096)
 
 
-# ---------------------------------------------------------------- Authentication (Stage 3, hardened T-S6-04)
+# ---------------------------------------------------------------- Authentication
 # There is no simulator left (ADR-0001 decision 6): identity always comes from a real sign-in
 # (local bootstrap admin, OIDC, LDAP) and the session engine below.
 PANIC_AUTH_LOCAL_ENABLED = env_bool("PANIC_AUTH_LOCAL_ENABLED", True)
@@ -79,9 +79,9 @@ PANIC_LDAP_USERNAME_ATTR = env_str("PANIC_LDAP_USERNAME_ATTR", "uid")
 PANIC_LDAP_DISPLAY_NAME_ATTR = env_str("PANIC_LDAP_DISPLAY_NAME_ATTR", "displayName")
 PANIC_LDAP_TIMEOUT_S = env_int("PANIC_LDAP_TIMEOUT_S", 5)
 
-# T-S6-04: external identity is authentication only. panic_common.claim_mapping, the OIDC groups
-# claim setting, the LDAP group-search settings, and every PANIC_RBAC_* group-mapping setting are
-# gone -- permissions and team membership only ever come from the users pages (ADR-0001 decision 11).
+# External identity is authentication only: there are no group-claim, LDAP group-search or
+# group-to-permission mapping settings -- permissions and team membership only ever come from the
+# users pages (ADR-0001 decision 11).
 
 ROOT_URLCONF = "panic_server.urls"
 WSGI_APPLICATION = "panic_server.wsgi.application"
@@ -100,16 +100,16 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
-    # Resolves request.context: real/effective identity, client IP and Security Zone (T-S6-04).
+    # Resolves request.context: real/effective identity, client IP and Security Zone.
     "panic_server.middleware.RequestContextMiddleware",
-    # Per-client-IP (and per-username, for /login) limits, backed by Mongo (T-S3-04, T-S6-04).
+    # Per-client-IP (and per-username, for /login) limits, backed by Mongo.
     "panic_server.security.RateLimitMiddleware",
-    # Binds the authenticated session user to the request (Stage 3, T-S6-04).
+    # Binds the authenticated session user to the request.
     "panic_server.auth.middleware.PanicAuthMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-# T-S6-04: Mongo-backed sessions (DATA_MODEL.md §4.11, AR-4.7) -- there is no relational DATABASES
+# Mongo-backed sessions (DATA_MODEL.md §4.11, AR-4.7) -- there is no relational DATABASES
 # left, so the db-backed django.contrib.sessions.backends.db engine is not an option, and
 # "django.contrib.sessions" need not be an installed app either (its app only supplies the
 # django_session model/migration used by that db backend, and the clearsessions command -- a
@@ -135,7 +135,7 @@ SECURE_HSTS_SECONDS = env_int("PANIC_HSTS_SECONDS", 0)
 if env_bool("PANIC_SECURE_PROXY_SSL_HEADER", False):
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-# ---------------------------------------------------------------- CSRF, CSP, rate limiting (T-S3-04)
+# ---------------------------------------------------------------- CSRF, CSP, rate limiting
 CSRF_COOKIE_NAME = "panic_csrftoken"
 CSRF_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SECURE = SESSION_COOKIE_SECURE
@@ -151,7 +151,7 @@ REST_FRAMEWORK: dict[str, Any] = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
     "UNAUTHENTICATED_USER": None,
-    # T-S6-06: bridges request.context (T-S6-04) into DRF's request.user; every view explicitly
+    # Bridges request.context into DRF's request.user; every view explicitly
     # declares one of panic_server.api.permissions' three tiers, and an undeclared view's default
     # (DenyAll) fails closed rather than silently falling through to public (AR-2.8).
     "DEFAULT_AUTHENTICATION_CLASSES": ["panic_server.api.authentication.RequestContextAuthentication"],
@@ -161,8 +161,8 @@ REST_FRAMEWORK: dict[str, Any] = {
 }
 
 # The committed contract Documents/Architecture/openapi/server.yaml is generated from these
-# settings and the views (./panic contracts; CI fails when it is stale -- same pattern as
-# reference-app). Nothing here may depend on the environment.
+# settings and the views (./panic contracts; CI fails when it is stale). Nothing here may
+# depend on the environment.
 SPECTACULAR_SETTINGS: dict[str, Any] = {
     "TITLE": "PANIC Server API",
     "DESCRIPTION": (
@@ -187,7 +187,7 @@ LOGGING = logging_config(
     env_str("PANIC_LOG_FORMAT", "json").lower(),
 )
 
-# ---------------------------------------------------------------- MongoDB (Stage 6, T-S6-02)
+# ---------------------------------------------------------------- MongoDB
 # panic_server.store is the only package that opens this (AR-4.1); see DATA_MODEL.md §2.
 PANIC_MONGO_URI = env_str("PANIC_MONGO_URI", "")
 PANIC_ZONE_CACHE_TTL_S = env_int("PANIC_ZONE_CACHE_TTL_S", 10)
@@ -195,13 +195,13 @@ PANIC_AUDIT_RETENTION_DAYS = env_int("PANIC_AUDIT_RETENTION_DAYS", 365)
 # Test-only override so the test suite never touches a dev/prod database (see tests/conftest.py).
 PANIC_TEST_MONGO_URI = env_str("PANIC_TEST_MONGO_URI", "")
 
-# ---------------------------------------------------------------- UI read views (T-S6-06, DATA_MODEL.md §4.7)
+# ---------------------------------------------------------------- UI read views (DATA_MODEL.md §4.7)
 #: Navigation menu cap (DATA_MODEL.md §4.7 "Navigation menu").
 PANIC_NAV_MAX_DASHBOARDS = env_int("PANIC_NAV_MAX_DASHBOARDS", 100)
 #: Per-LIST-widget item cap on a dashboard view (API.md §4.2); a list's own "Show all" page uses
-#: the larger PANIC_LIST_MAX_ITEMS instead (T-S6-07's /api/v1/lists/{id}).
+#: the larger PANIC_LIST_MAX_ITEMS instead (/api/v1/lists/{id}).
 PANIC_LIST_WIDGET_MAX_ITEMS = env_int("PANIC_LIST_WIDGET_MAX_ITEMS", 200)
 
-# ---------------------------------------------------------------- resources/mutations (T-S6-07)
+# ---------------------------------------------------------------- resources/mutations
 #: Hard cap on an endpoint list's item_ids (DATA_MODEL.md §3); PUT/GET /api/v1/lists/{id} enforce this.
 PANIC_LIST_MAX_ITEMS = env_int("PANIC_LIST_MAX_ITEMS", 500)

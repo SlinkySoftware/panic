@@ -1,4 +1,4 @@
-# PANIC CI (T-S6-12): Python and web checks, contract drift, Mongo-backed tests, then both images built,
+# PANIC CI (Gitea Actions): Python and web checks, contract drift, Mongo-backed tests, then both images built,
 # smoke-tested together (web -> 2x server -> Mongo) and published for main and v* tags:
 #   push to main  -> <registry>/<owner>/panic-{web,server}:main and :sha-<short>
 #   tag vX.Y.Z    -> <registry>/<owner>/panic-{web,server}:X.Y.Z, :X.Y and :latest

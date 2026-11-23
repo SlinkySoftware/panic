@@ -2,7 +2,7 @@
 
 Run by ``manage.py panic_migrate`` (a thin wrapper -- this module is where the pymongo-touching
 logic lives, per AR-4.1). ``schema_meta`` (``_id: "schema"``) records the highest applied step
-number, so later tasks can append steps 2, 3, ... to :data:`STEPS` without rewriting this runner,
+number, so new steps 2, 3, ... can be appended to :data:`STEPS` without rewriting this runner,
 and a re-run only applies what's missing.
 """
 

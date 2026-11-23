@@ -1,4 +1,4 @@
-"""The ``demo`` seed profile (T-S6-03): a small, plausible, entirely fictional dataset.
+"""The ``demo`` seed profile: a small, plausible, entirely fictional dataset.
 
 4 sites, 4 teams, 4 zones (plus the always-present builtin Default zone, not created here),
 14 users (including one Global Admin), ~20 catalog items, 6 lists and 5 dashboards, split

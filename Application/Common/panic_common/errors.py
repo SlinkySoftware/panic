@@ -1,4 +1,4 @@
-"""Documented error codes for PANIC (AR-3.2 / reference-app AR-9.2 pattern)."""
+"""Documented error codes for PANIC (AR-3.2)."""
 
 from __future__ import annotations
 

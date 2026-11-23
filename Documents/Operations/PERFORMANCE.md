@@ -1,17 +1,17 @@
-# PANIC Performance (T-S6-14)
+# PANIC Performance
 
-Load test of the Stage 6 stack. Re-run with `Build/LoadTest/run.sh` (results land in
+Load test of the two-tier stack (panic-web, panic-server, MongoDB). Re-run with `Build/LoadTest/run.sh` (results land in
 `Build/LoadTest/results/<timestamp>/`, not committed).
 
 ## Environment
 
 | | |
 |---|---|
-| Host | Shared development VM: 12 vCPU (AMD Ryzen AI 9 HX PRO 370), 31 GB RAM, Docker 29 |
+| Host | Development VM: 12 vCPU (AMD Ryzen AI 9 HX PRO 370), 31 GB RAM, Docker 29 |
 | Topology | Built images via `compose.yaml`: 1× panic-web (nginx), 2× panic-server (gunicorn `gthread`, 2 workers × 8 threads each) |
-| MongoDB | The shared dev container (`mongo:8.3`, single node), own database `panic_loadtest` |
+| MongoDB | The dev container (`mongo:8.3`, single node), own database `panic_loadtest` |
 | Client | Locust 2.47 on the same host (CPU reported below), through panic-web on `127.0.0.1:18080` |
-| Run | 2026-11-15, commit `ca01207` + the `panic_seed` search-key fix |
+| Run | 2026-11-15, with the `panic_seed` search-key fix (see the end of this page) |
 
 ## Dataset and scenario
 
@@ -66,14 +66,16 @@ Average payloads:
 - **What drives it:** the text-matching requests, search and catalog `q`. A run without matching search
   terms (all other things equal) saturated at about 640 requests/s.
 
-## Comparison with Stage 4
+## Comparison with the first implementation
 
-| | Stage 4 (3,000 endpoints, 44 users) | Stage 6 (5,000 endpoints, 50 users) |
+The first implementation loaded the whole portal on every request ([ADR-0001](../Architecture/adr/0001-web-server-mongo-split.md)).
+
+| | First implementation (3,000 endpoints, 44 users) | Current (5,000 endpoints, 50 users) |
 |---|---|---|
 | Dashboard payload | 9.8 MB per request | 3.2 KB (200), 0 bytes (304) |
 | Typical request time | ~190 ms | 7–8 ms p50, 11–12 ms p95 for dashboard / bootstrap |
 
-## Follow-ups (missed or untested targets)
+## Open follow-ups (missed or untested targets)
 
 1. **Catalog page p95 130 ms.** `services/catalog.list_catalog` loads every visible item (3,000+ for a
    typical user), filters the card's scope group, sorts and builds a full item view for each, then
@@ -87,7 +89,7 @@ Average payloads:
    seeded dashboard has 3 widgets, and lists hold at most 5 items, so all dashboard views resolve under
    100 items. Extend the `loadtest` profile with a few large lists (200–500 items) on some dashboards,
    then re-run.
-4. **Measurement caveat.** The steady window overlapped about a minute of `./panic test` runs on the same
+4. **Measurement caveat.** The steady window overlapped about a minute of test runs on the same
    host and Mongo container. The effect is small next to the misses above, but re-run on a quiet host
    before quoting final numbers.
 

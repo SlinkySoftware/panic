@@ -1,4 +1,4 @@
-"""Tiny shared request-body validation helper (T-S6-07): turns a missing required field into a
+"""Tiny shared request-body validation helper: turns a missing required field into a
 proper ``400 VALIDATION_ERROR`` (API.md §3) instead of an uncaught ``KeyError`` -> 500.
 """
 

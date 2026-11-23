@@ -9,12 +9,12 @@ separate reasons:
 - **Round trips** are measured around a *direct call to the ``panic_server.services`` function*
   (e.g. ``build_dashboard_view(db, context, id)``), not the full HTTP request. Every authenticated
   request pays a fixed, endpoint-independent Mongo cost before a view even runs -- the custom
-  Mongo-backed session store loading the session (T-S6-04's ``store.sessions``) and
+  Mongo-backed session store loading the session (``store.sessions``) and
   ``RequestContextMiddleware`` resolving the real user and the client's Security Zone
-  (``panic_server.context``) -- identical on every route and owned by an earlier task, not
-  something this task's service composition controls. API.md §8's budget is about *this
+  (``panic_server.context``) -- identical on every route, not
+  something the endpoint's service composition controls. API.md §8's budget is about *this
   endpoint's own* Mongo cost, so that fixed overhead is deliberately excluded; round-trips is
-  the metric to catch an accidental N+1 in *our* code, not to re-measure T-S6-04's.
+  the metric to catch an accidental N+1 in *our* code, not to re-measure that fixed cost.
 - Either way, the counter is a ``pymongo.monitoring.CommandListener`` attached to a *freshly
   constructed* ``MongoClient`` that temporarily replaces ``panic_server.store.client``'s
   module-level singleton: pymongo snapshots the global ``pymongo.monitoring.register()`` listener
@@ -137,7 +137,7 @@ def plain_user_id(loadtest_db: Database) -> str:
 
 @pytest.fixture(scope="module")
 def admin_user_id(loadtest_db: Database) -> str:
-    """A fresh ``GLOBAL_ADMIN`` (T-S6-07's mutation budget tests need ``CAN_ADD_GLOBAL`` rights
+    """A fresh ``GLOBAL_ADMIN`` (the mutation budget tests need ``CAN_ADD_GLOBAL`` rights
     to edit the loadtest dataset's ``GLOBAL``-scope dashboards/catalog items/lists; ``plain_user_id``
     deliberately has no permissions, API.md §4.7's read-side budgets only)."""
     user = users_repo.create_user(
@@ -194,7 +194,7 @@ def largest_dashboard_id(loadtest_db: Database) -> str:
 
 @pytest.fixture(scope="module")
 def searchable_fixture(loadtest_db: Database) -> None:
-    """``fixtures/loadtest.py`` never populates ``search_keys`` (T-S6-03 predates search), so
+    """``fixtures/loadtest.py`` never populates ``search_keys``, so
     none of its 5,000+ catalog items/lists/dashboards are findable -- a handful of real,
     search_keys-bearing documents across all three collections are added here so the search
     budget test exercises an actual, non-empty, multi-type result set."""
@@ -283,10 +283,10 @@ def test_search_payload_budget(plain_user_id: str) -> None:
     assert counter.count <= SEARCH_MAX_ROUNDTRIPS, f"search took {counter.commands}"
 
 
-# ---------------------------------------------------------------- T-S6-07 mutation budgets
+# ---------------------------------------------------------------- mutation budgets
 #
 # API.md §8: "Any mutation response <= 32 KB (dashboard layout <= 48 KB)". These extend this same
-# file/pattern (not a parallel one) for the write endpoints T-S6-07 adds, reusing the loadtest
+# file/pattern (not a parallel one) for the write endpoints, reusing the loadtest
 # dataset's catalog items so the dashboard-layout case is a realistic, non-trivial payload (close
 # to the 100-widget cap), not a one-widget toy.
 

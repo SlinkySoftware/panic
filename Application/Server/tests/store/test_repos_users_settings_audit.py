@@ -103,9 +103,8 @@ def test_audit_append_and_keyset_pagination(mongo_db: Database) -> None:
 
     entry = audit.list_audit(mongo_db, action="catalog.create", limit=1)[0]
     assert entry.action == "catalog.create"
-    # T-S6-07: client_ip (and view_as_username/zone_id/request_id) are now on AuditLogEntry
-    # itself (DATA_MODEL.md §4.9), surfaced by GET /api/v1/audit -- previously dropped silently
-    # by base_kwargs() since the model didn't declare them.
+    # client_ip (and view_as_username/zone_id/request_id) are on AuditLogEntry itself
+    # (DATA_MODEL.md §4.9), surfaced by GET /api/v1/audit.
     assert entry.client_ip == "10.0.0.1"
 
 

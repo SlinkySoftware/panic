@@ -53,7 +53,7 @@ export interface DashboardInput {
   set_as_user_default?: boolean;
 }
 
-// ETag cache: a revisit sends If-None-Match and reuses the cached body on 304 (T-S6-09).
+// ETag cache: a revisit sends If-None-Match and reuses the cached body on 304.
 const viewCache = new Map<string, { etag: string; body: DashboardView }>();
 
 export async function getDashboardView(id: string): Promise<DashboardView> {

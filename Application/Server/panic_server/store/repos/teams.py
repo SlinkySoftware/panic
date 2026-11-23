@@ -1,8 +1,7 @@
 """``teams`` repository (DATA_MODEL.md §4.3).
 
-**Changed in Stage 6:** membership is not stored here. ``TeamDefinition.members`` keeps its
-pydantic default (``[]``); a team's members are ``users.find({team_ids: <id>})`` (a later
-task's service/API-layer concern, not this repo).
+Membership is not stored here. ``TeamDefinition.members`` keeps its pydantic default (``[]``);
+a team's members are ``users.find({team_ids: <id>})`` (a service/API-layer concern, not this repo).
 """
 
 from __future__ import annotations
@@ -103,7 +102,7 @@ def delete_team(db: Database[dict[str, Any]], team_id: str, expected_version: in
 
 
 def upsert_team(db: Database[dict[str, Any]], model: TeamDefinition) -> TeamDefinition:
-    """Insert-or-fully-replace a team by ``model.id`` (T-S6-03). ``members`` is never stored (Stage 6)."""
+    """Insert-or-fully-replace a team by ``model.id``. ``members`` is never stored."""
     doc = {
         "code": model.code,
         "name": model.name,

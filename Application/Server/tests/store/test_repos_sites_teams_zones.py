@@ -44,7 +44,7 @@ def test_sites_crud(mongo_db: Database) -> None:
 # ---------------------------------------------------------------- teams
 def test_teams_crud_never_stores_members(mongo_db: Database) -> None:
     team = teams.create_team(mongo_db, code="NETOPS", name="Network Operations")
-    assert team.members == []  # Stage 6: membership lives only in users.team_ids
+    assert team.members == []  # membership lives only in users.team_ids
     raw = mongo_db["teams"].find_one({"_id": team.id})
     assert raw is not None
     assert "members" not in raw

@@ -1,7 +1,6 @@
-"""End-to-end workflow against the real Mongo-backed stack (T-S6-07; replaces the spirit of the
-deleted Stage 1-5 ``test_e2e_workflows.py``): sign in -> dashboard -> edit layout -> list edit ->
-catalog -> admin -> audit. One long, realistic session through real HTTP, asserting each step's
-effect is visible in the next and that the audit trail records the whole journey.
+"""End-to-end workflow against the real Mongo-backed stack: sign in -> dashboard -> edit layout ->
+list edit -> catalog -> admin -> audit. One long, realistic session through real HTTP, asserting
+each step's effect is visible in the next and that the audit trail records the whole journey.
 """
 
 from __future__ import annotations
@@ -177,8 +176,8 @@ def test_full_workflow_sign_in_through_audit(mongo_db: Any) -> None:
 
     for entry in entries:
         assert entry["client_ip"]
-        # auth.login's audit write predates T-S6-07 (panic_server.auth.views.sign_in, untouched
-        # here) and does not carry a request_id; every T-S6-07 mutation does.
+        # auth.login's audit write (panic_server.auth.views.sign_in) does not carry a
+        # request_id; every mutation does.
         assert entry["request_id"] or entry["action"] == "auth.login"
 
     # ---------------------------------------------------------------- sign out

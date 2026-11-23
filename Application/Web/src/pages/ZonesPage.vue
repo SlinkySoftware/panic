@@ -1,5 +1,5 @@
 <!--
-  /zones (T-S6-11): zones with CIDR editing and Test IP. The built-in Default zone is shown as such; only its
+  /zones: zones with CIDR editing and Test IP. The built-in Default zone is shown as such; only its
   description can be edited (the server enforces this too). Non-admins see names only.
 -->
 <template>

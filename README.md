@@ -31,8 +31,9 @@ browser ──► panic-web (Vue 3 + Quasar SPA, nginx allow-list proxy) ──�
 - `Application/Common/panic_common`: a pure domain library (models, normalisation, hygiene, zone
   resolver, RBAC), kept dependency-free by `import-linter`.
 - `Build/Containers`: both images and the compose files. `Build/ci`: the CI scripts.
-- `Documents/`: architecture (`Architecture/`), operations (`Operations/DEPLOYMENT.md`,
-  `CONFIGURATION.md`), UI design, tasks and session status. `SPEC.md`: the full specification.
+- `Documents/`: architecture rules, API contract, data model and ADRs (`Architecture/`),
+  operations (`Operations/DEPLOYMENT.md`, `CONFIGURATION.md`, `PERFORMANCE.md`), UI design and
+  the changelog. `SPEC.md`: the full specification.
 
 ## Quick start (development)
 

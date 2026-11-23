@@ -1,4 +1,4 @@
-"""DRF serializers for the T-S6-06 endpoints: request validation (login) and OpenAPI response
+"""DRF serializers for the auth and UI endpoints: request validation (login) and OpenAPI response
 shapes (everything else -- the views return plain dicts built by ``panic_server.services``;
 these classes exist so drf-spectacular has a concrete schema to generate instead of guessing).
 """

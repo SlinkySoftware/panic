@@ -1,6 +1,6 @@
 <!--
   One catalog card (Shared = GLOBAL + TEAM, or Personal): server-paged, sorted, searched and filtered. Never asks
-  for more than one page per request (T-S6-10 acceptance).
+  for more than one page per request.
 -->
 <template>
   <q-table

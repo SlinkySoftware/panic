@@ -3,7 +3,7 @@
 Pure composition: every function here takes already-fetched ``panic_common.models`` instances
 (or a ``Database`` handle for the one function that needs to fetch/audit) and returns plain
 dicts/bytes. ``build_item_view`` is the single place "what does this catalog item look like, and
-how do I launch it" is computed, reused by the dashboard view, search and (T-S6-07) the catalog
+how do I launch it" is computed, reused by the dashboard view, search and the catalog
 and list views -- never duplicated.
 
 **Launch field decisions (not specified verbatim in API.md, made here):**
@@ -142,8 +142,7 @@ def get_rdp_download(
     Raises :class:`panic_server.store.errors.NotFound` uniformly for "does not exist", "not
     visible to the caller" (AR-2.7: never a 403 for an invisible resource) and "visible but
     ``unreachable_policy=HIDE`` and currently unreachable" (the item would never even be shown as
-    a link, so the download must not work either -- same behaviour the deleted Stage 1-5
-    ``rdp_download_view``/``test_f3_rdp_download_requires_visibility`` enforced, F3).
+    a link, so the download must not work either, F3).
     """
     item = catalog_repo.get_catalog_item(db, item_id)
     if item.protocol != Protocol.RDP or not matches(visibility_spec(caller), item):

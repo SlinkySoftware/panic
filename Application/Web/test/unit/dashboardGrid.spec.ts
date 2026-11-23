@@ -1,4 +1,4 @@
-/** T-S6-09: grid clamping matches the server (API.md §4.3) and edits never leave widgets overlapping. */
+/** Grid clamping matches the server (API.md §4.3) and edits never leave widgets overlapping. */
 import { describe, expect, it } from 'vitest';
 import { clampBox, nextFreeRow, overlaps, settle, type Box } from '@/components/dashboard/grid';
 

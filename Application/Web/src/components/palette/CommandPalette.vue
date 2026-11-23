@@ -1,5 +1,5 @@
 <!--
-  Command palette (T-S6-09): Ctrl+K / Cmd+K, or `/` outside a text field. Debounced `/ui/search`; arrows move,
+  Command palette: Ctrl+K / Cmd+K, or `/` outside a text field. Debounced `/ui/search`; arrows move,
   Enter launches an item (from its `launch`, no extra round trip) or opens a dashboard / list.
 -->
 <template>

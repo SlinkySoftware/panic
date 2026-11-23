@@ -1,21 +1,18 @@
 # PANIC — Data Model Specification
 
-> **Status:** Stage 6 target model (MongoDB), decided in
-> [ADR-0001](adr/0001-web-server-mongo-split.md). Stages 1–4 used Django ORM records on
-> SQLite/PostgreSQL behind a full-snapshot store; that layer is removed in Stage 6 (`T-S6-02`).
-> Domain semantics (scopes, default-dashboard precedence, same-scope lists, zone reachability)
-> are unchanged unless marked **Changed in Stage 6**.
+> The MongoDB data model, decided in [ADR-0001](adr/0001-web-server-mongo-split.md). There is no
+> relational database and no full-snapshot store.
 
 ## 1. Layers
 
 | Layer | Where | Role |
 |---|---|---|
 | Domain models | `panic_common.models` (Pydantic v2) | The contract used by rules, API serializers and the repository. No I/O. |
-| Domain rules | `panic_common.rbac`, `panic_common.visibility` (new), `zones`, `hygiene`, `launchers`, `proxy` | Pure functions. Visibility rules produce a **filter spec** (§5), never a query. |
-| Repository | `panic_server.store` (new) | The **only** package that imports `pymongo` / `bson` (AR-4.1). Maps documents to domain models, translates filter specs to Mongo queries, owns indexes. |
+| Domain rules | `panic_common.rbac`, `panic_common.visibility`, `zones`, `hygiene`, `launchers`, `proxy` | Pure functions. Visibility rules produce a **filter spec** (§5), never a query. |
+| Repository | `panic_server.store` | The **only** package that imports `pymongo` / `bson` (AR-4.1). Maps documents to domain models, translates filter specs to Mongo queries, owns indexes. |
 | API | `panic_server.api` (DRF) | Request/response shapes in [`API.md`](API.md); never touches documents directly. |
 
-There is no full-state load. Every repository call is scoped to what one screen needs (AR-5.1).
+There is no full-state load. Every repository call is scoped to what one screen needs (AR-6.1).
 
 ## 2. Connection
 
@@ -28,8 +25,8 @@ There is no full-state load. Every repository call is scoped to what one screen 
 
 ## 3. Conventions (all collections)
 
-- **`_id`** is a string: UUIDv4 for every new document. The Stage 1–4 6-hex-digit suffixes had
-  about a 50 % collision chance at 5,000 items. Imports and the demo fixtures keep the ids they
+- **`_id`** is a string: UUIDv4 for every new document (short random suffixes would collide at
+  a few thousand items). Imports and the demo fixtures keep the ids they
   carry. Exceptions are the fixed ids `system` (settings) and `zone-default` (Default zone). The
   API exposes `_id` as `id`.
 - **Timestamps** are BSON dates (UTC): `created_at`, `updated_at`; the API renders them as RFC 3339.
@@ -60,7 +57,7 @@ There is no full-state load. Every repository call is scoped to what one screen 
   "disabled": false,                              // disabled users cannot sign in; users are never deleted
   "pinned_dashboard_ids": ["<uuid>"],
   "default_dashboard_id": "<uuid> | null",
-  "prefs": {"density": "COMFORT", "theme": "DARK", "unreachable_policy": "DIM"},
+  "prefs": {"density": "COMPACT", "theme": "DARK", "unreachable_policy": "DIM"},  // density is stored but not shown: the UI is always compact
   "last_login_at": ISODate, "created_at": ISODate, "updated_at": ISODate, "version": 3
 }
 ```
@@ -78,14 +75,14 @@ the `PERSONAL` resources they own (§5.1).
 
 `{_id, code, name, description, created_at, updated_at, version}`. `code` is upper case.
 Indexes: `{code: 1}` unique. Catalog items reference sites by `code`; renaming a code updates
-referencing items with one `update_many` (as today).
+referencing items with one `update_many`.
 
 ### 4.3 `teams`
 
 `{_id, code, name, description, created_at, updated_at, version}`.
 Indexes: `{code: 1}` unique.
 
-**Changed in Stage 6:** `TeamDefinition.members` is no longer stored. Membership lives only in
+Teams store no member list. Membership lives only in
 `users.team_ids` and is edited only on the user page (`/settings/users/<id>`). A team's members
 are `users.find({team_ids: <id>})`, shown read-only on `/teams`. External sign-in never changes
 team membership: IdP groups are not mapped to anything.
@@ -142,8 +139,8 @@ Indexes:
 
 `{_id, title, description, scope, team_ids, owner_usernames, item_ids: [ordered ids], search_keys, created_by, created_at, updated_by, updated_at, version}`.
 
-- Same-scope rule unchanged (`SCOPE_MISMATCH`). **Changed in Stage 6:** every added item must
-  also be visible to the editor (no adding items you cannot see).
+- Every item must have the list's scope (`SCOPE_MISMATCH`) and be visible to the editor (no
+  adding items you cannot see).
 - Order changes only through the Edit List modal (`PUT /api/v1/lists/{id}` with the full ordered
   `item_ids`, `If-Match` required).
 - Deleting a catalog item `$pull`s it from every list (`{item_ids: id}` index) and bumps those
@@ -170,20 +167,20 @@ Indexes: `{scope: 1, team_ids: 1, title: 1}` · `{scope: 1, owner_usernames: 1, 
 }
 ```
 
-Widgets are embedded (always read and written with their dashboard; bounded at 100). The widget's
-`dashboard_id` field of the old relational model is dropped (implicit). Deleted items/lists leave
-widgets in place; the dashboard view renders them as "unavailable" placeholders (as today).
+Widgets are embedded (always read and written with their dashboard; bounded at 100), so they
+carry no `dashboard_id`. Deleted items/lists leave widgets in place; the dashboard view renders
+them as "unavailable" placeholders.
 
 Indexes: `{scope: 1, team_ids: 1, sort_order: 1}` · `{scope: 1, owner_usernames: 1, sort_order: 1}` ·
 `{scope: 1, always_display: 1, sort_order: 1}` · `{widgets.catalog_item_id: 1}` ·
 `{widgets.list_id: 1}` · `{search_keys: 1}`.
 
-**Default dashboard resolution** (unchanged precedence, now three small indexed queries at most):
+**Default dashboard resolution** (three small indexed queries at most):
 1. `user.default_dashboard_id` if set and visible → `USER`
 2. `system_settings.default_global_dashboard_id` if visible → `SYSTEM_GLOBAL`
 3. first visible dashboard by `sort_order` → `FALLBACK`
 
-**Navigation menu** (unchanged rule): visible dashboards that are `always_display` (GLOBAL/TEAM),
+**Navigation menu:** visible dashboards that are `always_display` (GLOBAL/TEAM),
 the global default, the user default, or in `pinned_dashboard_ids`; if the user has no pins, all
 visible dashboards. Capped at `PANIC_NAV_MAX_DASHBOARDS` (default 100), projected to `_id`, `title`,
 `scope`, `always_display`, `sort_order`.
@@ -199,8 +196,8 @@ demotion (enforced in the service layer, re-checked inside the write filter).
 `{_id: ObjectId, created_at: ISODate, actor_username, view_as_username?, action, target_type, target_id, summary, details, client_ip, zone_id?, request_id}`
 
 - Append-only; written by the service layer after each successful mutation, sign-in, View As
-  change, `.rdp` download and export. **Changed in Stage 6:** `view_as_username`, `client_ip`,
-  `zone_id` and `request_id` are recorded.
+  change, `.rdp` download and export. Each entry records the View As subject, client IP, zone
+  and request id alongside the real actor.
 - **Retention:** TTL index on `created_at` with `expireAfterSeconds = PANIC_AUDIT_RETENTION_DAYS × 86400`
   (default **365** days; `0` disables expiry). `panic_ensure_indexes` changes the TTL in place with
   `collMod` when the setting changes. Long-term retention belongs in the log pipeline (each audit
@@ -242,8 +239,9 @@ Correctness relies on the window start in the key, not on the TTL monitor (which
 
 `{_id: "schema", version: <int>, migrated_at}`. Data migrations (rare, e.g. back-filling
 `search_keys`) are numbered idempotent functions run by `manage.py panic_migrate`; indexes are
-created by `manage.py panic_ensure_indexes`. The container entrypoint runs both when
-`PANIC_MIGRATE_ON_START=true`; set it to `false` on all but one replica (or run a one-off job).
+created by `manage.py panic_ensure_indexes`. The container entrypoint runs `panic_ensure_indexes`
+on every start and `panic_migrate` when `PANIC_MIGRATE_ON_START=true` (the default); set it to
+`false` on all but one replica (or run a one-off job).
 
 ## 5. Visibility filter spec
 
@@ -253,7 +251,7 @@ created by `manage.py panic_ensure_indexes`. The container entrypoint runs both 
 VisibilitySpec(
     username="jdoe",
     team_ids=("team-a", "team-b"),
-    all_teams=False,          # True for GLOBAL_ADMIN (sees every TEAM resource, as today)
+    all_teams=False,          # True for GLOBAL_ADMIN (sees every TEAM resource)
 )
 ```
 
@@ -273,7 +271,7 @@ against the same generated documents (real Mongo) and requires identical results
 Normal queries also add `{"orphaned": {"$ne": true}}`. Global Admins get a second branch
 `{"orphaned": true}` (read-only, §5.1).
 
-### 5.1 Orphaned resources (owner decision, ADR-0001 decision 10)
+### 5.1 Orphaned resources (ADR-0001 decision 10)
 
 - **Definition:**
   - a `TEAM` catalog item, list or dashboard with no `team_ids`, or
@@ -297,14 +295,14 @@ Normal queries also add `{"orphaned": {"$ne": true}}`. Global Admins get a secon
 
 ## 6. Edit rights
 
-`panic_common.rbac.can_edit(user, resource) -> Decision` (pure). **Changed in Stage 6** (Stages 1–4
-checked only the scope permission, so e.g. any user could edit another user's `PERSONAL` item):
+`panic_common.rbac.can_edit(user, resource) -> Decision` (pure). It checks ownership and team
+membership as well as the scope permission:
 
 | Scope | May create | May edit / delete |
 |---|---|---|
 | `GLOBAL` | `CAN_ADD_GLOBAL` | `CAN_ADD_GLOBAL` |
 | `TEAM` | `CAN_ADD_TEAM` and member of every chosen team (Global Admin: any team) | `CAN_ADD_TEAM` and member of at least one of the resource's teams, before and after the change (Global Admin: any) |
-| `PERSONAL` | everyone (owner = self) | an owner only. **Global Admins cannot edit or delete other users' personal resources** (owner decision). |
+| `PERSONAL` | everyone (owner = self) | an owner only. **Global Admins cannot edit or delete other users' personal resources.** |
 | orphan (§5.1) | n/a | nobody. Global Admins may only assign to a user or delete. |
 
 A resource that is not visible is reported as `404 NOT_FOUND`, never `403`. Visible but not
@@ -314,17 +312,14 @@ editable is `403 PERMISSION_DENIED`. A visible orphan is `403 ORPHANED_RESOURCE`
 
 `manage.py panic_export` / `panic_import` and `GET /api/v1/export` keep the portable JSON format
 (`format: panic-export`, `schema_version: 2`). It is used for backup and for provisioning shared
-configuration between environments. There is **no** import of Stage 1–4 (`schema_version: 1`)
-files and no data migration from SQL, because PANIC has no existing deployments (owner
-decision). Users export with `team_ids`, `permissions` and `disabled`.
+configuration between environments. Files with `schema_version: 1` (from the first,
+never-deployed implementation) are not accepted. Users export with `team_ids`, `permissions` and `disabled`.
 Password hashes, sessions, rate limits and the audit log are never exported.
 
-## 8. Domain enums (unchanged)
+## 8. Domain enums
 
 - `Protocol`: `WEB`, `SSH`, `RDP`, `LOCAL_APP`
 - `ScopeType`: `GLOBAL`, `TEAM`, `PERSONAL`
 - `PermissionFlag`: `GLOBAL_ADMIN`, `CAN_ADD_GLOBAL`, `CAN_ADD_TEAM`
 - `WidgetType`: `HOST`, `LIST`
 - `DensityMode`: `COMFORT`, `COMPACT` · `ThemeMode`: `DARK`, `LIGHT` · `UnreachablePolicy`: `HIDE`, `DIM`
-
-Removed in Stage 6: `SimulationState` (source-IP / user simulator).

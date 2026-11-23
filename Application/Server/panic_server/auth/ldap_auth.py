@@ -1,4 +1,4 @@
-"""LDAP / LDAPS bind authentication and group lookup adapter (T-S3-02).
+"""LDAP / LDAPS bind authentication and group lookup adapter.
 
 Flow: (optional) service-account bind -> search the user's DN -> bind as the user with the supplied
 password -> search group memberships. All filter values are escaped (RFC 4515).
@@ -91,8 +91,8 @@ def authenticate(username: str, password: str) -> LdapIdentity | None:
             svc.unbind()
             return None
 
-        # T-S6-04: no group search -- external identity is for authentication only (ADR-0001
-        # decision 11), so PANIC no longer reads or maps directory groups at all.
+        # No group search -- external identity is for authentication only (ADR-0001
+        # decision 11), so PANIC does not read or map directory groups at all.
         groups: list[str] = []
         svc.unbind()
     except LDAPException as e:

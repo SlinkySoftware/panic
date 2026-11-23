@@ -1,4 +1,4 @@
-"""Pydantic v2 conceptual data model for PANIC Stage 1."""
+"""Pydantic v2 conceptual data model for PANIC."""
 
 from __future__ import annotations
 

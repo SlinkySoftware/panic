@@ -77,7 +77,7 @@ def delete_site(db: Database[dict[str, Any]], site_id: str, expected_version: in
 
 
 def upsert_site(db: Database[dict[str, Any]], model: SiteDefinition) -> SiteDefinition:
-    """Insert-or-fully-replace a site by ``model.id`` (T-S6-03: portable import, byte-stable)."""
+    """Insert-or-fully-replace a site by ``model.id`` (portable import, byte-stable)."""
     doc = {
         "code": model.code,
         "name": model.name,

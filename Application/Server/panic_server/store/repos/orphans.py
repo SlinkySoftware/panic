@@ -1,8 +1,8 @@
 """Orphan flag maintenance and queries, shared across the three scoped collections
 (DATA_MODEL.md §5.1): ``catalog_items``, ``endpoint_lists``, ``dashboards``.
 
-Recomputation on a user disable/enable is a later task's call site (the service layer); this
-module provides the primitive so that task doesn't touch ``panic_server.store`` internals.
+Recomputation on a user disable/enable is called from the service layer; this module provides
+the primitive so callers don't touch ``panic_server.store`` internals.
 """
 
 from __future__ import annotations

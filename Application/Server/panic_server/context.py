@@ -1,7 +1,6 @@
-"""Per-request, lock-free request context (T-S6-04).
+"""Per-request, lock-free request context.
 
-Replaces the Stage 1-5 process-wide ``STORE``/``STORE._lock`` pattern with a plain value
-resolved fresh for every request from that request's own session and headers. There is no
+A plain value resolved fresh for every request from that request's own session and headers. There is no
 process-level cache, global, or lock here (ADR-0001 decision 6): a :class:`RequestContext` is
 built once per request by ``panic_server.middleware.RequestContextMiddleware`` and stashed as
 ``request.context``. Because every field is read from the ``request`` object passed in, and
@@ -41,8 +40,8 @@ class UntrustedPeerRejected(Exception):
     """AR-5.3 point 3's ``reject`` policy applies to this request.
 
     ``resolve_client_chain`` itself never raises; this is raised by the caller-side policy
-    check in :func:`resolve_client_and_zone`, which is this task's job per the pure function's
-    own docstring. The middleware catches this and returns ``403 UNTRUSTED_PEER``.
+    check in :func:`resolve_client_and_zone`, as the pure function's own docstring leaves it to
+    the caller. The middleware catches this and returns ``403 UNTRUSTED_PEER``.
     """
 
     def __init__(self, remote_addr: str) -> None:

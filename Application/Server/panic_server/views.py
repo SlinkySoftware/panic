@@ -1,9 +1,6 @@
-"""Health, version and Prometheus metrics endpoints (T-S6-04).
+"""Health, version and Prometheus metrics endpoints.
 
-Every other Stage 1-5 view here was STORE-coupled (the server-rendered UI shell, and the whole
-``/api/v1/*`` CRUD surface for dashboards/catalog/lists/sites/teams/zones/rbac/audit/export/the
-.rdp launcher) and is deleted along with ``STORE``/``state.py``/``store_db.py``. That surface is
-rebuilt against the new DRF/Mongo stack by T-S6-06/07 (see ``urls.py``'s module docstring).
+Everything else under ``/api/v1/*`` is the DRF API in ``panic_server.api`` (see ``urls.py``).
 """
 
 from __future__ import annotations

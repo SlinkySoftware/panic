@@ -1,4 +1,4 @@
-"""Settings helpers: every setting comes from the environment (AR-3.1, mirroring reference_server.conf).
+"""Settings helpers: every setting comes from the environment (AR-3.1).
 
 Secrets may also be supplied as ``<NAME>_FILE`` pointing to a file (Docker secrets). The ``_FILE``
 variant wins when both are set.

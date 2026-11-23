@@ -1,4 +1,4 @@
-<!-- /settings/client-ip (T-S6-11): how the server derived this request's client IP and zone (API.md §6). -->
+<!-- /settings/client-ip: how the server derived this request's client IP and zone (API.md §6). -->
 <template>
   <q-page class="q-pa-lg q-gutter-y-lg">
     <div class="row items-center">

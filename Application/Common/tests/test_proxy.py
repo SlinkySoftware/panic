@@ -122,7 +122,7 @@ def test_malformed_or_missing_headers_fallback_to_clean_remote() -> None:
 
 
 # ---------------------------------------------------------------------------
-# T-S6-05: resolve_client_chain (ARCHITECTURE §5, AR-5.3 / AR-5.5) — table-driven, 40+ cases.
+# resolve_client_chain (ARCHITECTURE §5, AR-5.3 / AR-5.5) — table-driven, 40+ cases.
 # ---------------------------------------------------------------------------
 
 TRUSTED = ("127.0.0.1/32", "::1/128", "172.16.0.0/16", "10.0.0.0/8")

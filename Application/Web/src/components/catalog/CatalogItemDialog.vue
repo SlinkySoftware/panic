@@ -1,5 +1,5 @@
 <!--
-  Protocol-aware catalog item modal (T-S6-10): live preview (normalized key, hygiene, visible duplicate), server
+  Protocol-aware catalog item modal: live preview (normalized key, hygiene, visible duplicate), server
   field errors, and a duplicate prompt that resends with force_allow_duplicate.
 -->
 <template>

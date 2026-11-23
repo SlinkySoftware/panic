@@ -1,10 +1,10 @@
-"""Local (bootstrap admin) authentication and external-identity provisioning (T-S3-01/02, T-S6-04).
+"""Local (bootstrap admin) authentication and external-identity provisioning.
 
 External identity (OIDC/LDAP) is for authentication only (ADR-0001 decision 11):
-``panic_common.claim_mapping`` is gone, and ``provision_external_user`` never derives
-``permissions``/``team_ids`` from directory groups. A first external sign-in provisions the
-user with no permissions and no teams; later sign-ins update only ``display_name`` and
-``last_login_at``. Disabled users cannot sign in (AR-2.11): every path here refuses them.
+``provision_external_user`` never derives ``permissions``/``team_ids`` from directory groups.
+A first external sign-in provisions the user with no permissions and no teams; later sign-ins
+update only ``display_name`` and ``last_login_at``. Disabled users cannot sign in (AR-2.11):
+every path here refuses them.
 """
 
 from __future__ import annotations
@@ -82,7 +82,7 @@ def provision_external_user(
 ) -> UserAccount | None:
     """Create or update a user from an external IdP (OIDC/LDAP). ``groups`` is accepted for the
     adapters' convenience but is never mapped to RBAC/teams here (ADR-0001 decision 11): that is
-    exclusively a ``/settings/users`` concern (a later task).
+    exclusively a ``/settings/users`` concern.
     """
     if not valid_username(username):
         return None

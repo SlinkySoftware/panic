@@ -1,4 +1,4 @@
-"""Server test configuration: a real MongoDB-backed test database per session (T-S6-02/04)."""
+"""Server test configuration: a real MongoDB-backed test database per session."""
 
 from __future__ import annotations
 

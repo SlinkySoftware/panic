@@ -1,8 +1,7 @@
-"""Authentication URL routes.
+"""Authentication URL routes (OIDC only).
 
-``/login`` (GET+POST) and ``/logout`` (POST) are gone (T-S6-06): superseded by the real JSON
-contract at ``/api/v1/auth/{providers,csrf,login,logout}`` (``panic_server.api.urls``), which
-T-S6-04 flagged this JSON stopgap as waiting on. The OIDC routes are untouched.
+Local sign-in and sign-out are the JSON contract at ``/api/v1/auth/{providers,csrf,login,logout}``
+(``panic_server.api.urls``).
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Index definitions for the PANIC database (DATA_MODEL.md §4, following the reference-app pattern).
+"""Index definitions for the PANIC database (DATA_MODEL.md §4).
 
 Applied by ``manage.py panic_ensure_indexes`` (idempotent; run by ``panic setup``/``panic test``
 and container start). Every index has an explicit name so re-runs are no-ops and a changed

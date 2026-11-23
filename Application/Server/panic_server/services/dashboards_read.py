@@ -1,5 +1,5 @@
-"""``GET /api/v1/ui/dashboards/{id}`` composition (API.md §4.2). Read-only: T-S6-07 owns the
-write-side dashboards service (create/update/layout/delete) separately.
+"""``GET /api/v1/ui/dashboards/{id}`` composition (API.md §4.2). Read-only: the write-side
+dashboards service (create/update/layout/delete) is ``panic_server.services.dashboards``.
 
 Keeps the Mongo round-trip budget (API.md §8: typical/largest both ≤ 6) by batch-fetching every
 referenced list and catalog item in one query each (``get_lists_by_ids``/``get_catalog_items_by_ids``)

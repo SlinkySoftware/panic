@@ -89,7 +89,7 @@ def find_by_normalized_key(db: Database[dict[str, Any]], normalized_key: str, sc
 
 
 def get_catalog_items_by_ids(db: Database[dict[str, Any]], item_ids: list[str]) -> list[CatalogItem]:
-    """Every catalog item in ``item_ids`` that still exists, in one round trip (T-S6-06).
+    """Every catalog item in ``item_ids`` that still exists, in one round trip.
 
     Used by the dashboard/search read views to resolve many widget/list-referenced items without
     an N+1 ``get_catalog_item`` per id (API.md §8's Mongo round-trip budgets). Visibility is the
@@ -134,12 +134,12 @@ def delete_catalog_item(db: Database[dict[str, Any]], item_id: str, expected_ver
 
 
 def list_all_catalog_items(db: Database[dict[str, Any]]) -> list[CatalogItem]:
-    """Every catalog item regardless of visibility/orphan status (T-S6-03: admin export only)."""
+    """Every catalog item regardless of visibility/orphan status (admin export only)."""
     return [_to_model(d) for d in db[COLLECTION].find().sort("_id", 1)]
 
 
 def upsert_catalog_item(db: Database[dict[str, Any]], model: CatalogItem) -> CatalogItem:
-    """Insert-or-fully-replace a catalog item by ``model.id`` (T-S6-03: portable import)."""
+    """Insert-or-fully-replace a catalog item by ``model.id`` (portable import)."""
     doc: dict[str, Any] = {
         "title": model.title,
         "description": model.description,

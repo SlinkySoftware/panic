@@ -1,5 +1,5 @@
 <!--
-  /dashboard/<id>/edit (T-S6-09): 12-column grid editor. Drag a widget by its header to move it, drag the
+  /dashboard/<id>/edit: 12-column grid editor. Drag a widget by its header to move it, drag the
   corner to resize; whatever it lands on is pushed down. Add Widget, widget Properties, dashboard details,
   Save (PUT layout with If-Match; a stale save shows the conflict banner), Cancel.
 -->

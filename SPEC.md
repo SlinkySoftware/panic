@@ -1,207 +1,390 @@
 # PANIC — Portal for Accessing Networks, Infrastructure, and Compute
 
-**Software Requirements & Staged Development Specification**  
-**Version:** 1.0  
-**License / Distribution:** Open-Source Enterprise Infrastructure Portal  
+**Product specification.** This document describes PANIC as built. The enforced architecture rules
+(`AR-x.y`) are in [`Documents/Architecture/ARCHITECTURE.md`](Documents/Architecture/ARCHITECTURE.md),
+the HTTP contract in [`API.md`](Documents/Architecture/API.md) (authoritative form: the generated
+OpenAPI document), and storage in [`DATA_MODEL.md`](Documents/Architecture/DATA_MODEL.md). Where this
+page and those disagree, they win.
 
 ---
 
-## 1. Executive Summary & Core Vision
+## 1. Purpose and principles
 
-**PANIC** (*Portal for Accessing Networks, Infrastructure, and Compute*) is a lightweight, self-hosted, multi-user enterprise operations portal and jump-host launcher. It acts as a centralized control plane and customizable launchpad for web applications, SSH endpoints, Remote Desktop (RDP) hosts, and local thick-client utilities.
+PANIC is a self-hosted, multi-user operations portal and session launcher. Operators get dashboards
+of the web applications, SSH and RDP hosts, and local tools they use, and launch them in one click.
 
-### 1.1 Architectural Distinction
-* **Control Plane & Launcher (Not an HTML5 Session Proxy):** Unlike heavy web-based bastions that proxy terminal or desktop video streams over WebSockets and store private keys or passwords on the server, PANIC renders a fast, lightweight dashboard that hands off session execution directly to native tools on the operator's workstation or jump host (`ssh`, PuTTY, `mstsc.exe`, browser tabs, or local SOE binaries).
-* **Zero Client Modification:** PANIC functions seamlessly on locked-down jump hosts without requiring custom OS URI protocol handlers, registry edits, browser extensions, or local client agents.
-* **Vendor-Agnostic Open Source:** All documentation, UI labels, data models, and provider interfaces remain completely generic and vendor-neutral.
+- **Launcher, not a session proxy.** PANIC never streams terminals or desktops. It hands each launch to
+  a native tool on the operator's workstation or jump host: a browser tab, `ssh` or PuTTY, `mstsc.exe`,
+  or a local application (AR-1.2).
+- **No client modification.** Launches use standard browser navigation, the clipboard, optional
+  standard URI schemes, or a downloaded `.rdp` file. No agent, extension or registry change is
+  required (AR-1.3).
+- **No stored credentials.** Catalog items never hold passwords, private keys or tokens, and
+  submissions that contain them are rejected (AR-2.1).
+- **Vendor-neutral.** Labels, data and interfaces are generic.
 
----
-
-## 2. Reference Repositories & Style/Architecture Alignment
-
-1. **Visual & UI Language Reference (`reference-project`):**
-   * Adopts reference-ui's color palette, CSS variables, typography (`Inter` and `JetBrains Mono`), card borders, CVD-safe badges, spacing tokens, dark-first operations aesthetic, and component polish so PANIC feels like a sister application.
-2. **Backend & Project Architecture Reference (`reference-project`):**
-   * Mirrors `reference-app`'s repository directory layout (`Application/Common`, `Application/Server`, `Application/Web`, `Build/`, `Documents/`), `./panic` control script, environment configuration loading (`panic_server.conf`), structured JSON logging, Prometheus metrics, strict separation of concerns (`import-linter` contracts), and (Stage 6) the nginx web unit + stateless API server split, pymongo repository layer, and generated OpenAPI / TypeScript client.
-
----
-
-## 3. Staged Development Roadmap
-
-Development proceeds in structured stages so UI ergonomics, layout density, and scope/RBAC workflows are validated before locking down relational persistence and external identity integrations.
-
-### Stage 1: Interactive UI Scaffold & Mock State (Completed Baseline)
-* **Deliverable:** A runnable web application implementing the complete UI, Zabbix-style 12-column full-width grid editor (`HOST` and `LIST` widgets), explicit bookmarkable URLs, Default Dashboard hierarchy, Command Palette (`Ctrl+K`), density/theme toggles, Catalog Items, Endpoint Lists, Pre-Defined Sites, Teams, Security Zones, and In-App RBAC with Admin `"View As"`—backed by an in-memory store (`MockPortalStore`) and deterministic fixtures.
-
-### Stage 2: Relational Data Model, Persistence & Provisioning
-* **Deliverable:** Relational database schema and Django ORM migrations (supporting SQLite for single-node deployments and PostgreSQL for enterprise HA), `DatabasePortalStore` repository implementation replacing the in-memory store, idempotent seed command (`manage.py panic_seed`), and declarative JSON/YAML export/import commands for catalog, list, zone, and dashboard provisioning.
-
-### Stage 3: Enterprise Authentication, Trusted Proxy Zone Resolution & Security Hardening
-* **Deliverable:** Session authentication with local bootstrap admin, pluggable OIDC/SSO and LDAP/LDAPS authentication backends with group-to-Team/RBAC claim mapping, trusted reverse-proxy source-IP and Security Zone resolution middleware, strict CSRF enforcement on all state-changing endpoints, Content-Security-Policy (CSP) headers, rate limiting, and filterable persistent audit logging.
-
-### Stage 4: Containerization, Production Readiness & Operations Documentation
-* **Deliverable:** Hardened multi-stage `Containerfile` (non-root user, static asset collection, Gunicorn workers), production `compose.yaml` with PostgreSQL, end-to-end smoke test suite, and operations documentation covering deployment, reverse proxies, configuration, and backup/restore.
-
-> Stages 1–4 are complete. Stage 6 ([ADR-0001](Documents/Architecture/adr/0001-web-server-mongo-split.md)) replaces the Stage 1 server-rendered full-snapshot UI, the Stage 1 simulator, and the Stage 2 relational persistence. (Stage 5, JIT entitlements, was removed from scope.)
-
-### Stage 6: Web/Server Split, MongoDB & Scoped API
-* **Deliverable:** Two deployable units:
-  * **panic-web**: nginx serving a Vue 3 + Quasar + TypeScript SPA. It proxies an allow-list of `/api/v1/…` and `/auth/…` paths to `PANIC_SERVER_URL`, so everything stays same-origin.
-  * **panic-server**: a stateless Django + DRF JSON API, N replicas behind an internal load balancer.
-* **Data:** **MongoDB only** (the existing HA replica set, `PANIC_MONGO_URI`), through a pymongo repository layer with indexes defined in code. Django sessions and rate limits are also stored in Mongo.
-* **No full-state loading:**
-  * Per-screen endpoints: `/api/v1/ui/bootstrap`, `/api/v1/ui/dashboards/{id}`, paged catalog and lists, and server-side Command Palette search.
-  * Mutations return only the changed resource.
-  * Lists and dashboards use optimistic concurrency (`version` + `If-Match`).
-  * Payload budgets are tested.
-* **Also in this stage:**
-  * The RBAC / source-IP simulator is removed.
-  * Multi-tier `X-Forwarded-For` trust is hardened, with an admin diagnostics view.
-  * The OpenAPI contract is committed, with a CI drift check.
-  * Two images are published.
-  * A load test runs at 5,000 endpoints / 50 users.
-
-### Deployment topology (Stage 6)
+## 2. Architecture overview
 
 ```text
-user ─► corporate reverse proxy / LB ─► panic-web (nginx; one or more per network zone) ─► internal LB ─► panic-server × N ─► MongoDB replica set
+browser ─► reverse proxy / LB ─► panic-web (nginx, one or more) ─► internal LB ─► panic-server × N ─► MongoDB replica set
 ```
 
-* Several panic-web instances (one per zone or site) point at one internal server load balancer. Each unit has its own standalone compose file (`compose.standalone.web.yaml`, `compose.standalone.server.yaml`).
-* The browser only ever talks to its own panic-web origin. The SPA uses relative URLs.
-* Every proxy tier appends to `X-Forwarded-For`. panic-server trusts only `PANIC_TRUSTED_PROXY_CIDRS`, which must list every tier, and fails closed (`Documents/Architecture/ARCHITECTURE.md` §5).
+| Unit | What it is | Notes |
+|---|---|---|
+| **panic-web** | nginx serving the Vue 3 + Quasar + TypeScript single-page application | Proxies only the allow-listed server paths in `Application/Web/proxy-paths.json` (AR-6.4); everything else under `/api/` or `/auth/` is `404`. Needs only `PANIC_SERVER_URL`. Serves `/healthz` itself. |
+| **panic-server** | Django + Django REST Framework JSON API under Gunicorn | Stateless; any number of replicas. Never renders HTML pages or serves the SPA. Serves Prometheus `/metrics` on its own port only. |
+| **MongoDB** | The only datastore | Domain data, sessions, rate-limit counters and the audit log. Indexes are defined in code. |
 
----
+- The browser talks only to its own panic-web origin, using relative URLs, so the deployment is
+  same-origin (AR-1.6). Several panic-web instances (for example one per network zone or site) can
+  share one server pool.
+- Server code is layered `api` → `services` → `store`. Only `store` touches MongoDB. Shared domain
+  rules (models, scope visibility, edit rights, normalisation, hygiene, zone and client-IP resolution,
+  launch interpolation) live in the pure library `panic_common`, which has no I/O. These boundaries are
+  enforced by import-linter contracts (ARCHITECTURE.md §7).
+- The API is versioned under `/api/v1`. The OpenAPI 3.1 document is generated from the server and
+  committed; the SPA's TypeScript types are generated from it, and CI fails on drift (AR-6.3).
+- Design rationale: [ADR-0001](Documents/Architecture/adr/0001-web-server-mongo-split.md).
 
-## 4. Functional Requirements
+## 3. Concepts
 
-### 4.1 Zabbix-Style Multi-Dashboard, Explicit URL Routing & Default Dashboards
-* **Explicit Browser URLs (No Hidden URLs):**
-  * Every screen and dashboard has an explicit, bookmarkable URL visible in the browser address bar via server-side route registration and HTML5 History (`pushState` / `replaceState` / `popstate`):
-    * `<url>/` and `<url>/dashboard` — Resolve to the active user's effective **Default Dashboard** (`<url>/dashboard/<dash-uuid>`).
-    * `<url>/dashboard/<dash-uuid>` — Specific dashboard in Locked (View) Mode, identified by a canonical UUIDv4 (`<dash-uuid>`).
-    * `<url>/dashboard/<dash-uuid>/edit` — Specific dashboard in Unlocked (Edit) Mode.
-    * `<url>/catalog`, `<url>/lists`, `<url>/sites`, `<url>/teams`, `<url>/zones`, `<url>/settings`, `<url>/profile`, `<url>/audit`.
-    * `<url>/settings/users` (users management), `<url>/settings/users/<user-id>` (edit one user), `<url>/settings/orphans` (orphaned resources), `<url>/settings/client-ip` (client-IP diagnostics). `<url>/rbac` redirects to `<url>/settings/users` (Stage 6).
-* **Default Dashboard Hierarchy (User Default vs. App-Wide Default Global Dashboard):**
-  * **User Default Dashboard (`user.default_dashboard_id`):** Users can select their personal Default Dashboard from the list of dashboards accessible to them (`GLOBAL`, their `TEAM`s, or `PERSONAL`) via the dashboard header (`Set as My Default` / `Reset`), Dashboard Properties modal, `/profile`, or `/settings`.
-  * **App-Wide System Setting — Default Global Dashboard (`system_settings.default_global_dashboard_id`):** Global Admins can configure the application-wide **Default Global Dashboard** (must be a `GLOBAL` scope dashboard) on `/settings` or in Dashboard Properties. Any user who has not set a personal override automatically inherits the Default Global Dashboard. The active Default Global Dashboard is protected against deletion, unpinning, and scope demotion.
-* **Full-Width Zabbix-Style 12-Column Grid:**
-  * The main content panel spans 100% of available viewport width and resizes widget cards proportionally across a 12-column grid.
-  * Dashboards load in **Locked (View) Mode** by default: clean, zero drag handles, zero resize grips, instant one-click launch actions.
-  * Clicking **Edit Dashboard** (`/dashboard/<dash-uuid>/edit`) unlocks the layout grid, enabling drag-and-drop widget card reordering via the widget header bar, interactive width (`3..12` columns) and height (`1..6` rows) resizing via a bottom-right corner drag-resize handle (`.widget-resize-handle`), a **+ Add Widget** modal, **⚙ Dashboard Properties**, and **Save** / **Cancel** actions.
-* **Dashboard Properties & Navigation Menu Pinning:**
-  * Dashboards carry `id` (UUIDv4), `title`, `description`, `scope` (`GLOBAL`, `TEAM`, `PERSONAL`), `team_ids`, `owner_usernames`, and `always_display` (`bool`).
-  * When `always_display` is enabled on a `GLOBAL` or `TEAM` dashboard, it is automatically pinned onto the left-hand Dashboards menu for all users in scope and cannot be removed while enabled.
-  * Clicking `+` next to `Dashboards` in the left navigation rail opens a modal supporting both **Add Existing (Global / Team)** and **+ Create New** dashboards.
-* **Two Dashboard Widget Types (`HOST` and `LIST`):**
-  1. **Individual Host Card (`HOST`):** Displays protocol badge + icon (`WEB`, `SSH`, `RDP`, `LOCAL_APP`), Title, protocol-aware target row (`URL` for `WEB`, `Command` for `LOCAL_APP`, `Host` for `SSH`/`RDP`), `Site` code, `Zone(s)`, `Type` (`Global` / `Team` / `Personal`), and a right-aligned `Launch` button.
-  2. **Endpoint List Card (`LIST`):** Displays the List Title, Scope badge, item count, and a structured table (`Type+Icon | Target (Host / URL / Command) | Site | Zone(s) | Type | Launch`). Rows cannot be reordered on the card; order changes only in the Edit List modal. A very long list shows its first `PANIC_LIST_WIDGET_MAX_ITEMS` rows and a "Show all" link (Stage 6).
-* **Modern Operations UX:**
-  * **Command Palette (`Ctrl+K` or `/`):** Instant keyboard-driven search across dashboards, catalog items, and endpoint lists. From Stage 6 the search runs on the server (`GET /api/v1/ui/search`, about 20 results at most), so the client never holds the full catalog. Pressing `Enter` triggers the primary launch/copy action immediately.
-  * **Density & Theme Toggles:** Switch between *Comfort* and *Compact* density, and between *Dark* (default) and *Light* themes.
+| Concept | Meaning |
+|---|---|
+| **Catalog item** | One launchable endpoint: protocol (`WEB`, `SSH`, `RDP`, `LOCAL_APP`), target, site, zones, tags, scope. |
+| **Endpoint list** | An ordered list of catalog items of the same scope, shown in dashboard `LIST` widgets. |
+| **Dashboard** | A 12-column grid of `HOST` (one item) and `LIST` (one endpoint list) widgets. |
+| **Scope** | `GLOBAL` (everyone), `TEAM` (members of the resource's teams) or `PERSONAL` (its owner). Applies to catalog items, lists and dashboards. |
+| **Site** | A short code and name (for example `DC1`, "Primary data centre") attached to catalog items. |
+| **Team** | A named group of users that `TEAM`-scoped resources are shared with. |
+| **Security zone** | A named set of IPv4/IPv6 CIDRs. The caller's zone decides which items are reachable. |
+| **Permission** | `GLOBAL_ADMIN`, `CAN_ADD_GLOBAL`, `CAN_ADD_TEAM`, granted in the app. |
+| **Orphan** | A `TEAM` resource with no teams left, or a `PERSONAL` resource with no enabled owner. |
+| **View As** | A Global Admin previewing the portal as another user, from another zone, or both. |
 
-### 4.2 Supported Endpoint Protocols & Zero-Install Launchers
-Every Catalog Item supports one of four protocols with protocol-specific target fields:
+## 4. Functional requirements
 
-1. **Web Application (`WEB`):**
-   * Fields: Title, Description, Target URL (`http://` or `https://`), Pre-Defined Site (`SiteDefinition.code`), Zone & Scope restrictions, Tags.
-   * Action: Opens in a new browser tab (`target="_blank" rel="noopener noreferrer"`).
-2. **Terminal / SSH (`SSH`):**
-   * Fields: Title, Description, Hostname/IP, SSH Port (default `22`), Pre-Defined Site, Optional SSH Command Line Options / Flags (`path_or_args`), Optional Remote Username Override (`account_override`), Zone & Scope restrictions.
-   * Primary Action (**Copy Command**): Interpolates `{host}`, `{port}`, `{user}`, and `{flags}` into the user's personal SSH Command Template (e.g., `ssh {user}@{host} -p {port} {flags}`) and copies to the clipboard with confirmation toast.
-3. **Remote Desktop (`RDP`):**
-   * Fields: Title, Description, Hostname/IP, RDP Port (default `3389`), Pre-Defined Site, Optional `Domain\Username` Override (`account_override`), Zone & Scope restrictions.
-   * Primary Action (**Download `.rdp`**): Dynamically generates and streams an ephemeral plain-text `.rdp` file (`Content-Type: application/x-rdp`, `Cache-Control: no-store`) pre-populated with sanitized `full address:s:{host}:{port}` and `username:s:{resolved_user}`. Never written to server disk.
-4. **Local Thick-Client / Custom Launcher (`LOCAL_APP`):**
-   * Fields: Title, Description, Command / Executable Path (`host`), Command Line Options / Arguments (`path_or_args`) — with no Host/IP or Port fields — Pre-Defined Site, Optional Custom URI (`custom_uri`), Zone & Scope restrictions.
-   * Primary Action (**Copy Launch Command** / **URI Trigger**): Copies the interpolated command line (`{host}`, `{user}`, `{args}`) or triggers the optional custom URI.
+### 4.1 Dashboards, navigation and URLs
 
-### 4.3 Catalog Items, Endpoint Lists, Pre-Defined Sites & Hygiene
-* **Unified Scope Model (`GLOBAL`, `TEAM`, `PERSONAL`):**
-  * Applied consistently across Catalog Items, Endpoint Lists, and Dashboards.
-  * Both **Catalog Items (`/catalog`)** and **Endpoint Lists (`/lists`)** present two cards: Card 1 for **Global & Team** resources and Card 2 for **Personal** resources.
-* **Endpoint Lists (`/lists`) & Same-Scope Enforcement:**
-  * Operators curate ordered lists of Catalog Items to display inside dashboard `LIST` widgets.
-  * **Strict Same-Scope Rule (`SCOPE_MISMATCH`):** An Endpoint List may only contain Catalog Items with the exact same `ScopeType` (`GLOBAL`, `TEAM`, or `PERSONAL`).
-  * Items within an Endpoint List can be reordered via drag-and-drop (`⠿`) **only** inside the Edit/Define List modal. The modal saves the full ordered `item_ids` (`PUT /api/v1/lists/{id}` with `If-Match`, Stage 6).
-  * From Stage 6 a list may only contain Catalog Items the editor can see.
-* **Pre-Defined Sites (`/sites`):**
-  * Managed directory of site definitions (`code`, `name`, `description`, e.g., `2SYA`, `3MEL`, `4BNE`, `1CBR`) selected via dropdown when creating or editing Catalog Items.
-* **Normalization, Deduplication & Credential Hygiene Engine:**
-  * Computes a deterministic `normalized_key` per protocol (`web://`, `ssh://`, `rdp://`, `local_app://`) by lowercasing hostnames, stripping trailing slashes, and resolving default ports (`80/443/22/3389`), warning on duplicates within the same scope.
-  * Rejects submissions containing embedded credentials (`user:pass@host`) or plaintext password flags (`-pw`, `--password`, `sshpass`).
+- **Bookmarkable URLs.** Every screen has its own URL, handled by the SPA router (history mode;
+  panic-web answers unknown non-API paths with `index.html`) (AR-1.4):
+  - `/` and `/dashboard` resolve to the user's effective default dashboard and canonicalise to
+    `/dashboard/<uuid>`.
+  - `/dashboard/<uuid>` (view) and `/dashboard/<uuid>/edit` (edit).
+  - `/catalog`, `/lists`, `/sites`, `/teams`, `/zones`, `/settings`, `/profile`, `/audit`, `/login`.
+  - `/settings/users`, `/settings/users/<id>`, `/settings/orphans`, `/settings/client-ip`.
+  - `/rbac` redirects to `/settings/users`.
+- **Default dashboard.** Resolved in order (AR-2.6):
+  1. the user's own default, if set and visible (chosen with the star on the dashboard header, on
+     `/profile`, or when creating a dashboard);
+  2. the app-wide default, set by a Global Admin on `/settings`, which must be `GLOBAL`;
+  3. the first visible dashboard.
 
-### 4.4 Security Zones & Source IP Reachability
-* **Security Zone Definitions (`/zones`):**
-  * Global Admins define named **Security Zones** (`name`, `description`, `priority`, and IPv4/IPv6 CIDR blocks).
-  * On each request, PANIC resolves the connecting jump host's source IP against defined Zone CIDRs using longest-prefix match, breaking ties by highest `priority`.
-  * The source IP is always the real client IP. PANIC walks the `X-Forwarded-For` chain from right to left, skipping only configured trusted proxies. There is no simulator or zone override in any environment (Stage 6).
-  * **Default zone (Stage 6):** A built-in zone named **Default** always exists. It has no CIDRs and cannot be deleted. Clients whose location is unknown are placed in it: the direct peer is not a trusted proxy, the forwarding chain is malformed or contains only trusted proxies, or the IP matches no zone CIDR. Catalog Items can include Default in their zone restrictions.
-  * Includes an interactive **Test IP Address** diagnostic tool on `/zones`.
-  * Global Admins also get a **client-IP diagnostics** view. It shows the raw forwarding headers, each hop, each trust decision, and the resolved IP and zone.
-* **Zone Reachability Filtering:**
-  * Catalog Items can be marked **All Zones** (`zone_ids=[]`) or restricted to one or more selected Security Zones.
-  * Items unreachable from the operator's active Zone are either dimmed (`UnreachablePolicy.DIM`) with an `Unavailable from <Zone>` badge or hidden (`UnreachablePolicy.HIDE`) based on user preference.
+  The app-wide default cannot be deleted, unpinned or moved out of `GLOBAL` scope
+  (`409 PROTECTED_RESOURCE`).
+- **Dashboards menu.** The left rail lists the user's pinned dashboards, every visible dashboard
+  marked `always_display`, the app-wide default and the user's default (or every visible dashboard
+  if the user has pinned none). `always_display` dashboards and the app-wide default cannot be
+  unpinned. A `+` control adds an existing `GLOBAL`/`TEAM` dashboard to the menu or creates a new one.
+  New dashboards start empty and are pinned for their creator.
+- **Dashboard properties:** UUIDv4 `id`, title, description, Material icon, scope with teams or
+  owners, `always_display`, sort order.
+- **View and edit modes.** Dashboards open locked: no drag handles, one-click launch. Edit mode
+  (`/dashboard/<uuid>/edit`) allows:
+  - moving widgets by dragging the header and resizing from the corner (width 3–12 columns,
+    height 1–6 rows; overlapping widgets are pushed down);
+  - adding widgets and editing dashboard properties;
+  - saving with optimistic concurrency. A stale save gets `409 VERSION_CONFLICT`, and the user
+    reloads and re-applies.
 
-### 4.5 Teams, In-App RBAC & Admin "View As"
-* **Teams (`/teams`):**
-  * Directory of operational teams (`code`, `name`, `description`) governing visibility of `TEAM`-scoped Catalog Items, Endpoint Lists, and Dashboards. Members are shown read-only; from Stage 6, membership is set only on each user's edit page.
-* **Users Management (`/settings/users`, Stage 6):**
-  * Global Admins list, search, create (pre-provision) and disable users. Users are never deleted, so the audit trail stays intact, and disabled users cannot sign in.
-  * The user edit page (`/settings/users/<user-id>`) sets display name, permission flags, **team membership**, and enabled/disabled. It also offers **View As** for that user.
-  * External identity providers (OIDC, LDAP) are used **for authentication only**. Permissions and team membership are set only here; IdP groups are never mapped to them. A first external sign-in creates the user with no permissions and no teams.
-* **In-App RBAC Permissions (managed on the users pages; `/rbac` redirects there in Stage 6):**
-  * `GLOBAL_ADMIN` (*Global Admin*): Full administrative access to System Settings, Pre-Defined Sites, Teams, Security Zones, RBAC permissions, and all scopes; enables the **"View As"** switcher.
-  * `CAN_ADD_GLOBAL` (*Can Add to Global Scope Items*): Create/edit `GLOBAL` Catalog Items, Endpoint Lists, and Dashboards.
-  * `CAN_ADD_TEAM` (*Can Add Team Scope Items*): Create/edit `TEAM` Catalog Items, Endpoint Lists, and Dashboards for the user's teams.
-  * All authenticated users can create and manage their own `PERSONAL` Catalog Items, Endpoint Lists, and Dashboards. Nobody else can edit or delete them, not even Global Admins.
-* **Orphaned Resources (Stage 6):** A `TEAM` resource with no remaining teams (for example, after its team was deleted), or a `PERSONAL` resource with no enabled owner, is *orphaned*. Orphans are visible only to Global Admins and are read-only. An admin can only **assign** an orphan **to a user**, which makes it that user's `PERSONAL` resource, or **delete** it. Both actions are audited. `/settings/orphans` lists all orphans.
-* **Admin "View As" Perspective Switcher:**
-  * Users with `GLOBAL_ADMIN` permission can preview the entire portal (dashboards, left-rail navigation, catalog items, and endpoint lists) from the perspective of any other user account via the top bar or `/rbac`, with a one-click **Exit View As** banner.
-  * View As changes only the permissions and data perspective, never the Security Zone. It is stored in the admin's server-side session and audited.
-  * View As is read-only: every mutation except leaving View As is refused while it is active (Stage 6).
-* **Identity (Stage 6):** Users are always identified by a real sign-in: the local bootstrap admin, OIDC, or LDAP. The Stage 1 RBAC / source-IP simulator is removed from every environment.
+  The server clamps the grid and checks that every referenced item or list is visible to the editor.
+  A dashboard holds at most 100 widgets.
+- **Widgets.**
+  - `HOST` shows one item: protocol icon, title, target, site, zones, scope and its launch action.
+  - `LIST` shows a list's title, scope and items as table rows, each with its launch action. Rows
+    are ordered as in the list and cannot be reordered on the card. A list longer than
+    `PANIC_LIST_WIDGET_MAX_ITEMS` (default 200) shows the first rows and a "Show all" link to the
+    list on `/lists`.
+  - A widget whose item or list was deleted, or is not visible to the viewer, renders as an
+    "unavailable" placeholder.
+- **Command palette** (`Ctrl+K`, or `/` outside a text field). Searches dashboards, catalog items and
+  lists on the server (`GET /api/v1/ui/search`, at most 20 results, queries of 2+ characters, each
+  word prefix-matched). `Enter` runs the selected item's launch action or opens the dashboard or list.
+- **Theme.** Dark (default) or light, toggled in the top bar and saved per browser and in the user's
+  profile. The layout is always compact; there is no density setting.
 
----
+### 4.2 Protocols and launchers
 
-## 5. Non-Functional & Security Requirements
+Every catalog item has one protocol. Launch actions are computed on the server for the caller
+(their SSH template and default remote user) and returned with each item.
 
-1. **Lean, Scoped Client (Stage 6):** A Vue 3 + Quasar + TypeScript single-page application, served as static files by panic-web.
-   * Each view fetches only the data it shows, from scoped JSON endpoints.
-   * No endpoint returns or loads the full portal state.
-   * Payload sizes are budgeted and tested.
-   * This supersedes Stages 1–4, which used a server-rendered shell hydrated with the full state snapshot and vanilla `panic.js`.
-2. **Injection & File Safety:**
-   * Strict parameter sanitization (`sanitize_launch_param`) strips `\r`, `\n`, NUL, and control characters (`0x00–0x1F`, `0x7F`) from all `.rdp` and CLI template interpolations.
-   * Ephemeral `.rdp` generation in memory (`Cache-Control: no-store`), never written to disk.
-   * Zero storage of user passwords, private SSH keys, or secret tokens in catalog items or lists.
-3. **Observability & Configuration:**
-   * All configuration loaded from `PANIC_*` (and `PANIC_*_FILE`) environment variables (`panic_server.conf`). panic-web needs only `PANIC_SERVER_URL`.
-   * Structured JSON logging with `X-Request-ID` correlation.
-   * Endpoints: `/api/v1/health` (`?ready=1` also checks MongoDB), `/api/v1/version`, and `/metrics` (Prometheus; served by panic-server only, not proxied).
-4. **Scalability & Statelessness (Stage 6):**
-   * panic-server keeps no per-process user state. Sessions, rate-limit counters and audit records live in MongoDB, so any replica can serve any request. A load balancer can move a user to another front end or container mid-session without interrupting the session.
-   * Lists and dashboards use optimistic concurrency (`version` + `If-Match`; `409` on conflict).
-   * Reference load: 5,000 endpoints and 50 concurrent users, within the p95 targets in `Documents/TASKS.md` (`T-S6-14`).
-5. **Authorization (Stage 6):**
-   * Every endpoint declares its access level: public, authenticated, or admin.
-   * A resource the caller cannot see is reported as not found.
-   * Editing requires the scope permission plus team membership or ownership (`Documents/Architecture/DATA_MODEL.md` §6).
+| Protocol | Fields | Launch action |
+|---|---|---|
+| `WEB` | Host or URL, port, path | **Open** in a new tab (`noopener noreferrer`). URL is the item's custom URI if set, otherwise `https://<host>[:<port>]<path>`. |
+| `SSH` | Host, port (default 22), arguments (`{flags}`), account override | **Copy command**: the user's SSH template (default `ssh {user}@{host} -p {port} {flags}`) with `{host}`, `{port}`, `{user}`, `{flags}` filled in. Optionally also a URI `<scheme>://<user>@<host>:<port>` for a local handler; a Global Admin can turn this off or change the scheme (default `panic-ssh`) on `/settings`. |
+| `RDP` | Host, port (default 3389), account override | **Download** `GET /api/v1/launch/rdp/<id>.rdp`: an `.rdp` file with `full address` and `username` set, generated in memory and sent as `application/x-rdp` with `Cache-Control: no-store`. Downloads are audited. |
+| `LOCAL_APP` | Host, port, arguments (command template), account override, custom URI | **Copy command**: the arguments template with `{host}`, `{port}`, `{user}` filled in. If a custom URI is set, it is offered as well. |
 
----
+The remote user (`{user}`) is the item's account override if set, otherwise the caller's default
+remote user. Every interpolated value is sanitised first (§5.2).
 
-## 6. Core Data Model (`panic_common.models`)
+### 4.3 Catalog, endpoint lists, sites and hygiene
 
-> Stage 6 persists these in MongoDB collections. Shapes, indexes, `version` and audit retention are in `Documents/Architecture/DATA_MODEL.md`. Team membership is held only in `UserAccount.team_ids`, set on the user edit page (`TeamDefinition.members` is removed). Users gain `disabled`, and IdP group mapping is removed. Catalog items, lists and dashboards gain an `orphaned` flag. New ids are UUIDv4.
+- **Catalog (`/catalog`) and lists (`/lists`)** each show two server-paged tables: shared
+  (`GLOBAL` and `TEAM`) and personal. Tables support search, sorting, and filters (protocol, site,
+  zone, team for the catalog).
+- **Endpoint lists.**
+  - A list may contain only items of its own scope (`400 SCOPE_MISMATCH`) that the editor can see.
+  - Order is changed only in the list editor, which saves the full ordered item list
+    (`PUT /api/v1/lists/<id>` with `If-Match`).
+  - A list holds at most `PANIC_LIST_MAX_ITEMS` (default 500) items.
+  - Deleting a catalog item removes it from every list.
+- **Sites (`/sites`).** Global Admins manage site definitions (unique upper-case `code`, `name`,
+  `description`). Items pick a site from a drop-down. Renaming a code updates the items that use it;
+  the last site cannot be deleted.
+- **Normalisation and duplicates.** Each item gets a deterministic `normalized_key`
+  (`web://`, `ssh://`, `rdp://`, `local_app://`): host lower-cased, trailing slashes removed, default
+  ports filled in (80/443, 22, 3389). Creating an item whose key matches a visible item of the same
+  scope gives `409 DUPLICATE_CATALOG_ITEM` unless the request is resent with `force_allow_duplicate`.
+  A preview endpoint shows the key, hygiene result and any duplicate before saving.
+- **Credential hygiene (AR-2.1).** Submissions are rejected (`400 CREDENTIAL_HYGIENE_VIOLATION`)
+  when any field contains:
+  - embedded credentials (`user:password@host`);
+  - plaintext password flags (`-pw`, `--password`, `sshpass`, `password=`);
+  - private key material;
+  - an account override containing a colon or a space.
 
-* **`UserAccount`**: `id`, `username`, `display_name`, `default_remote_user`, `ssh_template`, `permissions` (`list[PermissionFlag]`), `team_ids`, `pinned_dashboard_ids`, `default_dashboard_id` (nullable UUID), `density` (`COMFORT`|`COMPACT`), `theme` (`DARK`|`LIGHT`), `unreachable_policy` (`HIDE`|`DIM`)
-* **`SystemSettings`**: `default_global_dashboard_id` (UUID referencing a `GLOBAL` dashboard), `updated_by`, `updated_at`
-* **`SiteDefinition`**: `id`, `code`, `name`, `description`, `created_at`
-* **`TeamDefinition`**: `id`, `code`, `name`, `description`, `members` (`list[str]`; removed in Stage 6, see `UserAccount.team_ids`), `created_at`
-* **`SecurityZone`**: `id`, `name`, `description`, `priority`, `cidrs` (`list[str]`), `created_at`
-* **`CatalogItem`**: `id`, `title`, `description`, `protocol` (`WEB`|`SSH`|`RDP`|`LOCAL_APP`), `host`, `port` (nullable), `site`, `path_or_args`, `custom_uri`, `account_override`, `tags`, `normalized_key`, `scope` (`GLOBAL`|`TEAM`|`PERSONAL`), `team_ids`, `owner_usernames`, `zone_ids`, `created_by`, `created_at`
-* **`EndpointList`**: `id`, `title`, `description`, `scope` (`GLOBAL`|`TEAM`|`PERSONAL`), `team_ids`, `owner_usernames`, `item_ids` (ordered `list[str]` of same-scope `CatalogItem.id`s), `created_by`, `created_at`
-* **`Dashboard`**: `id` (UUIDv4), `title`, `description`, `scope` (`GLOBAL`|`TEAM`|`PERSONAL`), `team_ids`, `owner_usernames`, `always_display` (`bool`), `sort_order`, `widgets` (`list[DashboardWidget]`), `created_by`
-* **`DashboardWidget`**: `id`, `dashboard_id`, `widget_type` (`HOST`|`LIST`), `title`, `grid_x` (1–12), `grid_y`, `grid_w` (3–12), `grid_h` (1–6), `catalog_item_id` (nullable), `list_id` (nullable)
-* **`AuditLogEntry`**: `id`, `actor_username`, `action`, `target_type`, `target_id`, `summary`, `details`, `created_at`
+  A user's SSH template and default remote user are checked too (no password flags; the remote
+  user may not contain credentials, colons or spaces).
+
+### 4.4 Security zones and client IP
+
+- **Zones (`/zones`).** Global Admins define zones (`name`, `description`, `priority`, up to 64
+  IPv4/IPv6 CIDRs, validated and canonicalised). A **Test IP address** tool shows which zone an
+  address resolves to and how many items it can reach.
+- **Default zone.** A built-in zone named **Default** (`zone-default`) always exists. It has no CIDRs,
+  cannot be deleted or renamed, and only its description can change. Every request has exactly one
+  zone: a client whose location is unknown, or whose IP matches no zone, is in Default.
+- **Zone resolution** (AR-2.4). The client IP is matched against zone CIDRs: longest prefix first,
+  then the zone with the smallest total address space, then the higher `priority`, then the name.
+- **Client IP resolution** (AR-5.3). The client IP always comes from the real connection; there is
+  no simulator or override.
+  1. If proxy headers are disabled (`PANIC_TRUST_PROXY_HEADERS=false`), the client is the direct
+     peer.
+  2. If the direct peer is not in `PANIC_TRUSTED_PROXY_CIDRS`, its headers are ignored. With the
+     default policy the client is the peer, the location is unknown and the zone is Default; with
+     `PANIC_UNTRUSTED_PEER_POLICY=reject` the request gets `403 UNTRUSTED_PEER` (health and version
+     from loopback excepted).
+  3. Otherwise PANIC reads `X-Forwarded-For` (or `Forwarded`, per `PANIC_PROXY_IP_HEADER`), limited
+     to the right-most `PANIC_XFF_MAX_HOPS` hops and `PANIC_XFF_MAX_BYTES` bytes, and walks right to
+     left, skipping trusted hops. The first untrusted hop is the client.
+  4. A malformed hop (`unknown`, an obfuscated identifier, garbage) reached before an untrusted hop,
+     a missing header, or a chain of only trusted hops means the location is unknown: zone Default.
+
+  Every proxy tier must append to `X-Forwarded-For`, and `PANIC_TRUSTED_PROXY_CIDRS` must list every
+  tier and nothing that can be a client (AR-5.1, AR-5.2).
+- **Diagnostics.** Global Admins can open `/settings/client-ip`, which shows the raw headers, each
+  hop and its trust decision, the decision reached, the resolved IP, the zone and the candidate zones.
+- **Reachability.** An item is reachable from all zones (`zone_ids` empty) or from listed zones only
+  (Default can be listed). Unreachable items follow the user's preference:
+  - `DIM` (default): returned with a reason; dashboard widgets hide them until the widget's
+    "Show Unavailable Items" box is ticked.
+  - `HIDE`: omitted by the server.
+
+### 4.5 Teams, users, permissions and View As
+
+- **Teams (`/teams`).** Global Admins manage teams (unique `code`, `name`, `description`). Members are
+  shown read-only; membership is set only on each user's page. Deleting a team removes it from users
+  and resources and reports how many resources it orphaned.
+- **Users (`/settings/users`, Global Admin).**
+  - List, search, filter and pre-provision users. Users are never deleted; they are disabled.
+    Disabled users cannot sign in and their sessions are ended.
+  - The user page (`/settings/users/<id>`) sets display name, permissions, team membership and
+    enabled/disabled, shows counts of owned resources, and starts View As for that user.
+  - The last enabled Global Admin cannot lose that permission or be disabled.
+- **Permissions.**
+  - `GLOBAL_ADMIN`: sites, teams, zones, users, orphans, settings, audit, export, client-IP
+    diagnostics and View As. Sees every `TEAM` resource.
+  - `CAN_ADD_GLOBAL`: create and edit `GLOBAL` items, lists and dashboards.
+  - `CAN_ADD_TEAM`: create and edit `TEAM` items, lists and dashboards for teams the user belongs to.
+  - Every signed-in user can create and manage their own `PERSONAL` resources.
+- **Edit rights** (AR-2.7, DATA_MODEL.md §6).
+
+  | Scope | Create | Edit or delete |
+  |---|---|---|
+  | `GLOBAL` | `CAN_ADD_GLOBAL` | `CAN_ADD_GLOBAL` |
+  | `TEAM` | `CAN_ADD_TEAM` and member of every chosen team (Global Admin: any team) | `CAN_ADD_TEAM` and member of at least one of the resource's teams, before and after the change (Global Admin: any) |
+  | `PERSONAL` | everyone (owner is self) | an owner only; Global Admins cannot edit other users' personal resources |
+  | orphan | – | nobody |
+- **Orphans (`/settings/orphans`).** Orphans are visible only to Global Admins and are read-only
+  (`403 ORPHANED_RESOURCE` on edit). An admin can **assign** one to an enabled user, which makes it that
+  user's `PERSONAL` resource (a list keeps only items that are that user's personal items), or
+  **delete** it. Both are audited.
+- **View As** (AR-2.9). A Global Admin can preview the portal as another user, from a chosen zone, or
+  both (bootstrap reports `zone_source: VIEW_AS` when a zone is chosen). It is held in the admin's
+  server-side session and shown as a banner with an exit action. While it is active every mutation
+  except leaving View As is refused (`403 VIEW_AS_READ_ONLY`). Start and stop are audited, and audit
+  entries written during View As record both users.
+
+### 4.6 Authentication
+
+- **Methods.**
+  - **Local:** the bootstrap admin from `PANIC_BOOTSTRAP_ADMIN_USER` / `_PASSWORD` (a Global Admin,
+    password hashed at rest). Can be turned off with `PANIC_AUTH_LOCAL_ENABLED=false`.
+  - **LDAP / LDAPS:** username and password checked by bind after local accounts; certificates are
+    always validated.
+  - **OIDC:** authorization code flow with PKCE, `state` and `nonce`; `iss`, `aud`, `exp` validated.
+    The redirect URI is `https://<panic-web host><PANIC_BASE_PATH>/auth/oidc/callback`.
+- **Authentication only.** OIDC and LDAP establish identity and nothing else. A first external sign-in
+  creates the user with no permissions and no teams; later sign-ins refresh only the display name and
+  last sign-in time. IdP groups and claims are never mapped to permissions or teams (AR-2.11). An SSO
+  or LDAP user can be promoted to Global Admin from the shell (`panic_user_admin promote`).
+- **Sessions.** Server-side sessions in MongoDB; cookie `panic_sessionid` (`HttpOnly`,
+  `SameSite=Lax`, `Secure` in production), lifetime `PANIC_SESSION_AGE_S` (default 8 hours).
+- The sign-in page is an SPA route (`/login`); providers are discovered from
+  `GET /api/v1/auth/providers`.
+
+### 4.7 Administration and user settings
+
+- **User settings (`/profile`):** display name, default remote user, SSH template, default dashboard,
+  theme, unreachable-item policy.
+- **Application settings (`/settings`):** app-wide default dashboard, SSH URI handler on/off and
+  scheme, export, links to the admin pages.
+- **Audit log (`/audit`, Global Admin).** Append-only record of every successful mutation, sign-in,
+  View As change, `.rdp` download and export, with actor, View As subject, target, client IP, zone and
+  request id. Filterable by actor, action, target, text and time range; keyset-paged, newest first.
+  Retained for `PANIC_AUDIT_RETENTION_DAYS` (default 365; `0` keeps entries forever). Each entry is
+  also logged as JSON.
+- **Export and import.** A portable JSON format (`format: panic-export`, `schema_version: 2`) covering
+  sites, teams, zones, users (with permissions and teams, without credentials), catalog, lists,
+  dashboards and settings. Global Admins can download it (`GET /api/v1/export`, optionally shared
+  resources only). `manage.py panic_export` / `panic_import` do the same from the shell; import upserts
+  by id, or replaces everything with `--replace`. Password hashes, sessions, rate limits and the audit
+  log are never exported.
+
+## 5. Non-functional requirements
+
+### 5.1 Scoped client and API
+
+- No endpoint returns, and no request loads, the whole portal (AR-6.1). Each screen calls a scoped
+  endpoint: `GET /api/v1/ui/bootstrap` once per page load, `GET /api/v1/ui/dashboards/<id>` per
+  dashboard (each referenced item appears once), paged tables (page size at most 100), and the
+  palette search.
+- Mutations return only the changed resource with its new `version` and `ETag` (AR-6.6).
+- Dashboard views send a weak `ETag` and answer `If-None-Match` with `304` (AR-6.7).
+- Response sizes and MongoDB round trips per endpoint are budgeted and tested against a reference
+  dataset of 5,000 catalog items, 50 users, 200 lists and 60 dashboards (AR-6.2, API.md §8).
+- Errors use one JSON envelope: `error_code`, `detail`, optional `fields` (AR-3.4).
+
+### 5.2 Injection and file safety
+
+- Every value interpolated into an `.rdp` file or a command template passes through
+  `sanitize_launch_param`, which strips CR, LF, NUL and other control characters
+  (`0x00–0x1F`, `0x7F`) (AR-2.2).
+- `.rdp` files are generated in memory per request, sent with `Cache-Control: no-store`, and never
+  written to disk (AR-2.3).
+- No user passwords for external accounts, private keys or secret tokens are stored with catalog
+  items or lists.
+- panic-web refuses paths with dot segments, encoded separators or empty segments, and limits request
+  bodies to 1 MB.
+
+### 5.3 Authorization and web security
+
+- Every endpoint declares its access level: public, authenticated or admin. A test walks every URL
+  and checks anonymous, user and admin outcomes (AR-2.8).
+- A resource the caller cannot see is `404 NOT_FOUND`, never `403` (AR-2.7).
+- CSRF: every unsafe method needs `X-CSRFToken` matching the `panic_csrftoken` cookie;
+  `PANIC_CSRF_TRUSTED_ORIGINS` lists the public origin of every panic-web instance (AR-2.10).
+- A strict `Content-Security-Policy` (`default-src 'self'`; overridable with `PANIC_CSP`),
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy` and `Permissions-Policy` on every response.
+- Rate limits, stored in MongoDB and keyed by resolved client IP: sign-in `PANIC_RATE_LIMIT_LOGIN`
+  (default 10 per 60 s, per IP and per username) and unsafe API calls `PANIC_RATE_LIMIT_API`
+  (default 300 per 60 s). Exceeding one gives `429` with `Retry-After`.
+- In production (`PANIC_ENV=prod`) the server refuses to start with a weak or placeholder secret key.
+
+### 5.4 Statelessness, scale and concurrency
+
+- panic-server keeps no per-process user state. Sessions, rate-limit counters and the audit log are
+  in MongoDB, so any replica serves any request and a load balancer may move a user between panic-web
+  or panic-server instances mid-session without signing them out; no sticky sessions (AR-4.6, AR-4.7).
+  The zone list may be cached per process for `PANIC_ZONE_CACHE_TTL_S` (default 10 s).
+- Every mutable document carries a `version`; writes are compare-and-set. Dashboards and lists require
+  `If-Match` (`428` if missing, `409 VERSION_CONFLICT` if stale); other resources honour it when sent
+  (AR-4.5).
+- **Performance targets** (p95, 50 concurrent users, 5,000 endpoints), measured by the load test in
+  `Build/LoadTest`. Current results are in
+  [`Documents/Operations/PERFORMANCE.md`](Documents/Operations/PERFORMANCE.md).
+
+  | Request | p95 target |
+  |---|---|
+  | Bootstrap | ≤ 75 ms |
+  | Dashboard view, typical | ≤ 150 ms |
+  | Dashboard view, largest | ≤ 300 ms |
+  | Dashboard view, `304` | ≤ 50 ms |
+  | Palette search (per query) | ≤ 100 ms |
+  | Catalog page | ≤ 120 ms |
+  | List detail | ≤ 200 ms |
+  | Mutations | ≤ 200 ms |
+
+  Also: error rate below 0.1%, p99 at most 3 × p95, and panic-server CPU below 70% per replica at
+  steady state.
+
+### 5.5 Observability
+
+- Structured JSON logs on stdout (`ts`, `level`, `component`, `logger`, `msg`, `request_id`), one
+  access line per request. `X-Request-ID` is accepted or generated by panic-web, logged by the server
+  and echoed in the response (AR-3.2).
+- `GET /api/v1/health` (liveness; `?ready=1` adds a MongoDB ping and returns `503` on failure),
+  `GET /api/v1/version`, and `GET /healthz` on panic-web (AR-3.3).
+- `GET /metrics` (Prometheus: `panic_http_requests_total`, `panic_http_request_duration_seconds`)
+  on panic-server's port only, never proxied by panic-web.
+
+## 6. Deployment and configuration
+
+- **Images.** `panic-web` and `panic-server`, both non-root on a read-only root filesystem with a
+  health check. Compose files: `Build/Containers/compose.yaml` (full stack, configurable server
+  replicas, optional bundled single-node MongoDB for demos) and standalone files for running web and
+  server in different network zones. See
+  [`Documents/Operations/DEPLOYMENT.md`](Documents/Operations/DEPLOYMENT.md).
+- **Configuration.** Every setting is an environment variable (`PANIC_*`), and any of them can be
+  supplied as `<NAME>_FILE` for secrets (AR-3.1). panic-web needs only `PANIC_SERVER_URL` (origin only,
+  validated at start) and, if used, `PANIC_BASE_PATH`. panic-server needs at least `PANIC_MONGO_URI`;
+  production also needs a strong `PANIC_DJANGO_SECRET_KEY`, `PANIC_ALLOWED_HOSTS`,
+  `PANIC_CSRF_TRUSTED_ORIGINS` and `PANIC_TRUSTED_PROXY_CIDRS`. Full reference:
+  [`Documents/Operations/CONFIGURATION.md`](Documents/Operations/CONFIGURATION.md).
+- **URL prefix.** `PANIC_BASE_PATH` (for example `/panic`) runs PANIC below a path on a host name
+  shared with other applications. It must be the same on panic-web and panic-server. The SPA, the API
+  and `/auth/oidc/*` all move below it; the SPA learns the prefix from `<base href>`, so one image
+  serves any prefix. The server puts the prefix on its redirects and `.rdp` links and scopes the
+  session and CSRF cookies to it, and still answers unprefixed paths for health checks and `/metrics`.
+  A prefix shares the origin with the other applications on that host name; use a dedicated host name
+  where that matters.
+- **MongoDB.** A replica set in production. Connection details, TLS and read preference go in the
+  URI; the database is the URI path (default `panic`). On start each server replica ensures indexes
+  and, when `PANIC_MIGRATE_ON_START=true`, runs the idempotent data migrations. Sessions read from the
+  primary and write with `w=majority`.
+- **Backup.** `mongodump` for full fidelity; the export format for provisioning and promotion between
+  environments.
+
+## 7. Data model
+
+Domain models are Pydantic classes in `panic_common.models`, stored in MongoDB collections. Every
+document has a string `_id` (UUIDv4 for new documents; exposed as `id`), and mutable documents carry
+`version`, `created_at`/`updated_at` and `created_by`/`updated_by`. Field-level detail and indexes:
+[`DATA_MODEL.md`](Documents/Architecture/DATA_MODEL.md).
+
+| Collection | Main fields |
+|---|---|
+| `users` | `username`, `display_name`, `auth_source` (`LOCAL`/`OIDC`/`LDAP`), `default_remote_user`, `ssh_template`, `permissions`, `team_ids`, `disabled`, `pinned_dashboard_ids`, `default_dashboard_id`, `prefs` (`theme`, `unreachable_policy`), `last_login_at` |
+| `sites` | `code`, `name`, `description` |
+| `teams` | `code`, `name`, `description` (membership is `users.team_ids`) |
+| `zones` | `name`, `description`, `priority`, `cidrs`, `builtin` |
+| `catalog_items` | `title`, `description`, `protocol`, `host`, `port`, `site`, `path_or_args`, `custom_uri`, `account_override`, `tags`, `normalized_key`, `scope`, `team_ids`, `owner_usernames`, `zone_ids`, `orphaned`, `search_keys` |
+| `endpoint_lists` | `title`, `description`, `scope`, `team_ids`, `owner_usernames`, `item_ids` (ordered), `orphaned`, `search_keys` |
+| `dashboards` | `title`, `description`, `icon`, `scope`, `team_ids`, `owner_usernames`, `always_display`, `sort_order`, `widgets` (embedded: `id`, `widget_type`, `title`, `grid_x`, `grid_y`, `grid_w`, `grid_h`, `catalog_item_id` or `list_id`), `orphaned`, `search_keys` |
+| `system_settings` | single document: `default_global_dashboard_id`, `ssh_uri_enabled`, `ssh_uri_scheme` |
+| `audit_log` | `actor_username`, `view_as_username`, `action`, `target_type`, `target_id`, `summary`, `details`, `client_ip`, `zone_id`, `request_id` (TTL on `created_at`) |
+| `sessions`, `rate_limits`, `schema_meta` | Server-side sessions, rate-limit windows, data-migration version |
+
+Enumerations: `Protocol` (`WEB`, `SSH`, `RDP`, `LOCAL_APP`), `ScopeType` (`GLOBAL`, `TEAM`,
+`PERSONAL`), `PermissionFlag` (`GLOBAL_ADMIN`, `CAN_ADD_GLOBAL`, `CAN_ADD_TEAM`), `WidgetType`
+(`HOST`, `LIST`), `ThemeMode` (`DARK`, `LIGHT`), `UnreachablePolicy` (`HIDE`, `DIM`).

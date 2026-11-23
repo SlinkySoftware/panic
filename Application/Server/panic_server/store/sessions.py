@@ -3,8 +3,7 @@
 Reads ``ReadPreference.PRIMARY`` and writes ``w=majority``, overriding whatever the configured
 ``PANIC_MONGO_URI`` says, so a session created or updated through one panic-server
 process/replica is read-your-write visible to another immediately -- a load balancer can move a
-user between instances mid-session without a re-login. Not wired into ``settings.SESSION_ENGINE``
-here (T-S6-04 does that cutover); exercise it by instantiating :class:`SessionStore` directly.
+user between instances mid-session without a re-login. Configured as ``settings.SESSION_ENGINE``.
 """
 
 from __future__ import annotations
@@ -21,7 +20,7 @@ from panic_server.store.client import get_db
 
 COLLECTION = "sessions"
 #: The session-data key holding the signed-in user's id (DATA_MODEL.md §4.11); mirrored into the
-#: document's ``uid`` field so a later task can ``delete_many({"uid": ...})`` on user disable.
+#: document's ``uid`` field so :func:`delete_sessions_for_user` can ``delete_many`` on user disable.
 _UID_SESSION_KEY = "panic_user_id"
 
 
@@ -99,7 +98,7 @@ class SessionStore(SessionBase):
 
 
 def delete_sessions_for_user(uid: str, *, db_name: str | None = None) -> int:
-    """``delete_many({"uid": uid})`` -- a later task calls this when a user is disabled."""
+    """``delete_many({"uid": uid})`` -- called when a user is disabled."""
     result = _collection(db_name).delete_many({"uid": str(uid)})
     return result.deleted_count
 

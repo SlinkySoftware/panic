@@ -1,9 +1,8 @@
-"""Declarative portable JSON export / import of the Mongo-backed portal state (T-S6-03).
+"""Declarative portable JSON export / import of the Mongo-backed portal state.
 
-Mongo-backed sibling of the (deliberately untouched, Stage 1-4) root-level
-``panic_server.portability``: same shape, but ``schema_version: 2``, reading and writing
-only through ``panic_server.store.repos.*`` (never a raw pymongo document) so the never-export
-rules -- no password hashes, no sessions, no rate limits, no audit log -- hold structurally:
+The format is ``schema_version: 2``. Reads and writes go only through
+``panic_server.store.repos.*`` (never a raw pymongo document) so the never-export rules -- no
+password hashes, no sessions, no rate limits, no audit log -- hold structurally:
 ``UserAccount`` has no ``password_hash`` field to begin with, and the other three collections
 are simply never in ``_SECTIONS``.
 """

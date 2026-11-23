@@ -1,9 +1,8 @@
-# PANIC — API Contract (Stage 6 draft)
+# PANIC — API Contract
 
-> **Status:** Draft for owner review ([ADR-0001](adr/0001-web-server-mongo-split.md)). In Phase B the
-> authoritative contract becomes the generated `openapi/server.yaml` (AR-6.3). This page describes
-> intent and semantics; field lists are indicative and may gain fields, but must not lose any
-> without an ADR.
+> The authoritative contract is the generated [`openapi/server.yaml`](openapi/server.yaml)
+> (AR-6.3). This page describes intent and semantics; field lists are indicative and may gain
+> fields, but must not lose any without an ADR.
 >
 > All paths are served by **panic-server** and reached by the browser through **panic-web** (§9).
 > Bodies are JSON (`application/json; charset=utf-8`) unless stated. Timestamps are RFC 3339 UTC.
@@ -15,7 +14,7 @@
 | Auth | Session cookie `panic_sessionid` (`HttpOnly`, `SameSite=Lax`, `Secure` in prod). Everything except §4.1 public endpoints requires a session; otherwise `401 UNAUTHENTICATED`. |
 | CSRF | Unsafe methods need `X-CSRFToken` = cookie `panic_csrftoken`. `GET /api/v1/auth/csrf` sets/rotates the cookie. On `403 CSRF_FAILED` the client refreshes once and retries once. |
 | Request id | Client may send `X-Request-ID` (`^[A-Za-z0-9._:-]{1,128}$`); always echoed. |
-| Identity | "Caller" = effective user (the View As subject when active, otherwise the signed-in user). Zone always comes from the real client IP. |
+| Identity | "Caller" = effective user (the View As subject when active, otherwise the signed-in user). The zone comes from the real client IP, unless an admin's View As selects a zone. |
 | Ids | Opaque strings; dashboards are UUIDv4. Unknown or **invisible** ids → `404 NOT_FOUND`. |
 | Paging (tables) | `?page=1&page_size=50` (max 100). Response envelope: `{"results": [...], "page": 1, "page_size": 50, "total": 4873, "has_next": true}`. |
 | Paging (audit) | Keyset: `?limit=100&cursor=<opaque>` → `{"results": [...], "next_cursor": "…" \| null}`. |
@@ -158,7 +157,7 @@ title-prefix > token-prefix, then type order. `q` shorter than 2 characters → 
 | Method & path | Access | Notes |
 |---|---|---|
 | `GET /api/v1/dashboards?scope=&q=&page=` | A | Summaries `{id, title, scope, team_ids, always_display, sort_order, in_menu}` for the "Add existing" and default-dashboard pickers |
-| `POST /api/v1/dashboards` | A + scope rights | `{title, description, scope, team_ids?, owner_usernames?, always_display?, icon?, set_as_user_default?, set_as_global_default?}` (`icon`: Material icon name, default `dashboard`) → `201` dashboard resource; pinned to creator's menu. Starts empty (no hard-coded "Routers" widget) |
+| `POST /api/v1/dashboards` | A + scope rights | `{title, description, scope, team_ids?, owner_usernames?, always_display?, icon?, set_as_user_default?, set_as_global_default?}` (`icon`: Material icon name, default `dashboard`) → `201` dashboard resource; pinned to creator's menu. Starts empty |
 | `GET /api/v1/dashboards/{id}` | A | Editable resource: properties + `widgets` + `version` (no resolved items) |
 | `PATCH /api/v1/dashboards/{id}` | `can_edit` · If-Match | Properties: `title, description, scope, team_ids, owner_usernames, always_display, sort_order, icon` |
 | `PUT /api/v1/dashboards/{id}/layout` | `can_edit` · If-Match | `{"widgets": [...]}` full replacement; server clamps grid (`x 1..12`, `w 3..12`, `h 1..6`, `x+w-1 ≤ 12`), checks each referenced item/list is visible, ≤ 100 widgets |
@@ -232,13 +231,14 @@ Writes under `/me` act on the **real** signed-in user and are refused during Vie
 | `GET /api/v1/version` | P | `{"name": "panic-server", "version": "…", "revision": "…"}` |
 | `GET /metrics` | server port only | Prometheus; **not proxied** by panic-web |
 
-## 5. Removed endpoints (Stage 1–4)
+## 5. Removed endpoints
 
-`GET/POST /api/v1/state`, `POST /api/v1/simulator`, `POST /api/v1/profile`,
+These endpoints of the first implementation no longer exist: `GET/POST /api/v1/state`, `POST /api/v1/simulator`, `POST /api/v1/profile`,
 action-multiplexed `POST /api/v1/{dashboards,catalog,lists,sites,teams,zones,rbac}`,
 `PUT /api/v1/dashboards/{id}/layout` (old shape), `POST /api/v1/catalog/preview-share`,
 `POST /login` / `POST /logout` (HTML forms), all server-rendered UI routes and `/static/`.
-The response headers `X-Client-IP` / `X-Security-Zone` are dropped (diagnostics endpoint instead).
+Every response still carries `X-Client-IP` and `X-Security-Zone` (resolved client IP and zone id);
+the full trust chain is in the diagnostics endpoint (§6).
 
 ## 6. Client-IP diagnostics shape
 
@@ -275,8 +275,8 @@ is Default and `zone_source` is `DEFAULT`. The response includes `"zone_source"`
 ## 7. Rate limits
 
 Mongo-backed fixed windows (AR-4.6), keyed by resolved client IP (and username for login):
-`PANIC_RATE_LIMIT_LOGIN` (default `10/60` per IP, `5/60` per username via
-`PANIC_RATE_LIMIT_LOGIN_USER`), `PANIC_RATE_LIMIT_API` (`300/60` per IP, unsafe methods only).
+`PANIC_RATE_LIMIT_LOGIN` (default `10/60`, applied per IP and per submitted username to sign-in
+requests), `PANIC_RATE_LIMIT_API` (`300/60` per IP, unsafe methods only).
 Exceeded → `429 RATE_LIMITED` + `Retry-After`. Callers whose location is unknown share the bucket of the IP recorded for them (peer or last trusted hop).
 
 ## 8. Payload budgets (uncompressed JSON, reference dataset)
@@ -315,11 +315,12 @@ panic-web gzips JSON responses (`gzip_types application/json`); budgets are meas
 
 - Validation (generator and a unit test): paths match `^/(api/v1|auth)/[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*/?$`,
   prefixes end in `/`, exact paths do not, no duplicates, `/metrics` never present.
-- Anything else under `/api/` or `/auth/` → `404 {"error_code": "NOT_FOUND", "source": "web"}` from nginx.
-- Requests with dot segments, encoded `.`/`/`/`\`, or empty segments are refused (`404`) by both nginx
-  and the dev proxy.
+- Anything else under `/api/` or `/auth/` → `404` from nginx; the server is not contacted.
+- nginx normalises the path before matching. The dev proxy refuses (`404`) dot segments, encoded
+  `.`/`/`/`\` and empty segments.
 - Proxied requests carry: `Host` (original), `X-Forwarded-For: $proxy_add_x_forwarded_for`,
-  `X-Forwarded-Proto` (from the corporate proxy if `http`/`https`, else `$scheme`), `X-Forwarded-Host`,
-  `X-Request-ID` (validated or generated). **No** `X-Real-IP`. Body limit 1 MB, read timeout 30 s.
+  `X-Forwarded-Proto` (the upstream proxy's value when it sent one, else `$scheme`), `X-Forwarded-Host`
+  and the browser's `X-Request-ID`. **No** `X-Real-IP`. Body limit 2 MB, read timeout 60 s.
+- With `PANIC_BASE_PATH` set, every path above sits below the prefix and is forwarded with it.
 - panic-web serves itself: `/` + SPA routes (`try_files … /index.html`, `Cache-Control: no-cache`),
   `/assets/` (immutable, 1 year), `/healthz`.

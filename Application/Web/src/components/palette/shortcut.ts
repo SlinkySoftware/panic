@@ -1,4 +1,4 @@
-/** Palette shortcut (T-S6-09): Ctrl/Cmd+K anywhere; `/` only when the user is not typing in a field. */
+/** Palette shortcut: Ctrl/Cmd+K anywhere; `/` only when the user is not typing in a field. */
 export function isPaletteShortcut(
   e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'target'>,
 ): boolean {

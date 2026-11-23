@@ -1,4 +1,4 @@
-<!-- /settings/orphans (T-S6-11): resources left with no team / owner; assign to an enabled user, or delete. -->
+<!-- /settings/orphans: resources left with no team / owner; assign to an enabled user, or delete. -->
 <template>
   <q-page class="q-pa-lg">
     <q-table

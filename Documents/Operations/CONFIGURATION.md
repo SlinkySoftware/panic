@@ -23,7 +23,7 @@ All examples use reserved documentation names and addresses (`example.com`, RFC 
 | `PANIC_TZ` | `UTC` | Display time zone. |
 | `PANIC_LOG_LEVEL` | `INFO` | Python log level. |
 | `PANIC_LOG_FORMAT` | `json` | `json` (structured, with request id) or `console`. |
-| `PANIC_SERVER_BIND` | `0.0.0.0:8120` (`./panic`), `0.0.0.0:8210` (container) | Gunicorn / dev server bind address. |
+| `PANIC_SERVER_BIND` | `0.0.0.0:8121` (`./panic`), `0.0.0.0:8210` (container) | Gunicorn / dev server bind address. |
 
 ## Container init (panic-server image)
 
@@ -53,7 +53,7 @@ Settings live in `panic_server/gunicorn_conf.py`; `PANIC_SERVER_BIND` sets the l
 |---|---|---|
 | `PANIC_TRUST_PROXY_HEADERS` | `true` | Honour the client-IP header **only** from `PANIC_TRUSTED_PROXY_CIDRS` peers. |
 | `PANIC_TRUSTED_PROXY_CIDRS` | `127.0.0.1/32,::1/128` | Reverse proxies allowed to set the client-IP header, e.g. `192.0.2.10/32,2001:db8::10/128`. |
-| `PANIC_PROXY_IP_HEADER` | `X-Forwarded-For` | `X-Forwarded-For` (right-most untrusted hop wins) or `Forwarded`. The `X-Real-IP` option is removed (T-S6-04): panic-web never sets it and the hop-chain resolver only understands the two forms above. |
+| `PANIC_PROXY_IP_HEADER` | `X-Forwarded-For` | `X-Forwarded-For` (right-most untrusted hop wins) or `Forwarded`. There is no `X-Real-IP` option: panic-web never sets it, and a single-value header cannot describe a multi-hop chain. |
 | `PANIC_UNTRUSTED_PEER_POLICY` | `default` | `default` (unknown-location, Default zone) or `reject` (`403 UNTRUSTED_PEER`, except loopback `health`/`version`) when the direct peer is not a trusted proxy (AR-5.3). |
 | `PANIC_XFF_MAX_HOPS` | `16` | Only the right-most this-many hops of the proxy header are considered. |
 | `PANIC_XFF_MAX_BYTES` | `4096` | A proxy header longer than this is truncated from the left. |
@@ -105,7 +105,7 @@ Settings live in `panic_server/gunicorn_conf.py`; `PANIC_SERVER_BIND` sets the l
 | `PANIC_LDAP_DISPLAY_NAME_ATTR` | `displayName` | Display name attribute. |
 | `PANIC_LDAP_TIMEOUT_S` | `5` | Connect/receive timeout. |
 
-External identity (OIDC and LDAP) is for authentication only (T-S6-04, ADR-0001 decision 11):
+External identity (OIDC and LDAP) is for authentication only (ADR-0001 decision 11):
 there is no group -> RBAC/team mapping. A first external sign-in creates the user with no
 permissions and no teams; a later sign-in only refreshes `display_name` and `last_login_at`.
 Permissions and team membership are granted solely on the `/settings/users` page.
@@ -116,13 +116,13 @@ Permissions and team membership are granted solely on the `/settings/users` page
 |---|---|---|
 | `PANIC_CSP` | built-in strict policy | Override the `Content-Security-Policy` header. |
 | `PANIC_RATE_LIMIT_ENABLED` | `true` | Per-client-IP limits (`429` + `Retry-After`). |
-| `PANIC_RATE_LIMIT_LOGIN` | `10/60` | `count/seconds` for `POST /login`. |
+| `PANIC_RATE_LIMIT_LOGIN` | `10/60` | `count/seconds` for sign-in requests (`POST /api/v1/auth/login`, OIDC login), per client IP and per submitted username. |
 | `PANIC_RATE_LIMIT_API` | `300/60` | `count/seconds` for state-changing `/api/*` requests. |
 
-Rate-limit counters live in MongoDB's `rate_limits` collection (T-S6-04), shared by every
+Rate-limit counters live in MongoDB's `rate_limits` collection, shared by every
 worker/node automatically -- there is no separate cache setting.
 
-## MongoDB (Stage 6)
+## MongoDB
 
 See [`DATA_MODEL.md`](../Architecture/DATA_MODEL.md) §2. `panic_server.store` is the only package
 that opens a connection.
@@ -134,7 +134,7 @@ that opens a connection.
 | `PANIC_AUDIT_RETENTION_DAYS` | `365` | `audit_log` TTL, in days. `0` disables expiry (no TTL index). |
 | `PANIC_TEST_MONGO_URI` | *(empty)* | Test-only override so `pytest` never touches a dev/prod database; falls back to `PANIC_MONGO_URI`, then the local dev-mongo container. |
 
-## UI read views (Stage 6, T-S6-06)
+## UI read views
 
 See [`API.md`](../Architecture/API.md) §4.2 and [`DATA_MODEL.md`](../Architecture/DATA_MODEL.md) §4.7.
 
@@ -169,9 +169,9 @@ server's `PANIC_TRUSTED_PROXY_CIDRS` so the server resolves the real client IP a
 | `PANIC_WEB_PORT` | `8120` | `./panic start` dev web server port. |
 | `PANIC_WEB_ALLOWED_HOSTS` | *(this machine's hostname and FQDN)* | Extra hostnames the Vite dev server accepts (comma-separated; leading dot = subdomains). |
 
-## Removed in Stage 6
+## Removed settings
 
-These are no longer read; delete them from env files.
+Earlier versions read these. They are ignored now; delete them from env files.
 
 | Variable | Why |
 |---|---|

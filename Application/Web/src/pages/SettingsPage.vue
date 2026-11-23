@@ -1,4 +1,4 @@
-<!-- /settings (T-S6-11): the app-wide default dashboard (GLOBAL only), export, and links to the admin pages. -->
+<!-- /settings: the app-wide default dashboard (GLOBAL only), export, and links to the admin pages. -->
 <template>
   <q-page class="q-pa-lg q-gutter-y-lg">
     <div class="text-h5">Application Settings</div>

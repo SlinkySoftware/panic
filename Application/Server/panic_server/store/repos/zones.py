@@ -159,7 +159,7 @@ def delete_zone(db: Database[dict[str, Any]], zone_id: str, expected_version: in
 
 
 def upsert_zone(db: Database[dict[str, Any]], model: SecurityZone) -> SecurityZone:
-    """Insert-or-fully-replace a zone by ``model.id`` (T-S6-03), including the builtin Default zone."""
+    """Insert-or-fully-replace a zone by ``model.id``, including the builtin Default zone."""
     doc = {
         "name": model.name,
         "description": model.description,

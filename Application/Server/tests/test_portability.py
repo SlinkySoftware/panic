@@ -1,9 +1,6 @@
-"""``panic_seed`` / ``panic_export`` / ``panic_import`` against the Mongo-backed store (T-S6-03).
+"""``panic_seed`` / ``panic_export`` / ``panic_import`` against the Mongo-backed store.
 
-Supersedes two Stage 1-4, SQL-backed CLI tests that pinned the exact behaviour this task
-replaces (``tests/test_store_db.py::test_panic_seed_is_idempotent`` and
-``tests/test_server.py::test_export_then_import_on_clean_database_reproduces_state``), both
-deleted alongside this file. See DATA_MODEL.md §7 and Documents/TASKS.md T-S6-03.
+See DATA_MODEL.md §7.
 """
 
 from __future__ import annotations

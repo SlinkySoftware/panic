@@ -1,4 +1,4 @@
-"""Bridges ``request.context`` (T-S6-04's per-request identity) into DRF, plus CSRF enforcement.
+"""Bridges ``request.context`` (the per-request identity) into DRF, plus CSRF enforcement.
 
 Identity resolution itself already happened once per request, in
 ``panic_server.middleware.RequestContextMiddleware`` (before any DRF code runs). This

@@ -88,7 +88,7 @@ def set_password_hash(
     *,
     auth_source: str | None = None,
 ) -> None:
-    """Set the raw LOCAL-auth password hash for ``username`` (T-S6-04).
+    """Set the raw LOCAL-auth password hash for ``username``.
 
     Not CAS-protected: ``password_hash`` is never exposed on :class:`UserAccount`, so there is no
     client-visible ``version`` for a concurrent editor to race against.
@@ -150,7 +150,7 @@ def update_user(
 
 
 def upsert_user(db: Database[dict[str, Any]], model: UserAccount) -> UserAccount:
-    """Insert-or-fully-replace a user by ``model.id`` (T-S6-03: portable import, byte-stable).
+    """Insert-or-fully-replace a user by ``model.id`` (portable import, byte-stable).
 
     Never touches ``password_hash``: it is not on :class:`UserAccount` to begin with, and using
     ``$set`` (not a whole-document ``replace_one``) leaves any existing hash on the stored
@@ -191,7 +191,7 @@ def delete_all_users(db: Database[dict[str, Any]]) -> int:
 
 
 def remove_dashboard_references(db: Database[dict[str, Any]], dashboard_id: str) -> int:
-    """``$pull`` ``dashboard_id`` from every user's pins and clear it as their default (T-S6-07).
+    """``$pull`` ``dashboard_id`` from every user's pins and clear it as their default.
 
     Called by the dashboard-delete cascade (API.md §4.3: "removes it from users' pins/defaults").
     Not CAS-protected: like ``touch_last_login``, this never touches a field a concurrent editor

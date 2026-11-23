@@ -1,4 +1,4 @@
-<!-- /catalog (T-S6-10): Shared (GLOBAL + TEAM) and Personal cards, plus the item modal. -->
+<!-- /catalog: Shared (GLOBAL + TEAM) and Personal cards, plus the item modal. -->
 <template>
   <q-page class="q-pa-lg q-gutter-y-lg">
     <div class="row items-center">

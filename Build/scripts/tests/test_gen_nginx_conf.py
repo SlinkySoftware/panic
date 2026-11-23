@@ -1,4 +1,4 @@
-"""T-S6-12: the nginx template proxies exactly the allow-list (AR-6.4) and never /metrics."""
+"""The nginx template proxies exactly the allow-list (AR-6.4) and never /metrics."""
 
 from __future__ import annotations
 

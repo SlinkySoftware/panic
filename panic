@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PANIC dev control script (aligned with reference-app control script conventions).
+# PANIC dev control script.
 #
 #   ./panic setup                         idempotent venv + editable package setup + pinned Node + npm ci + .env
 #   ./panic start|stop|restart [server|web|all] [--prod]
@@ -13,7 +13,7 @@
 #                                          OpenAPI contract, Documents/Architecture/openapi/server.yaml
 #
 # Overrides:
-#   PANIC_WEB_PORT      web dev server port (default 8120; T-S6-08 moved Server off this port)
+#   PANIC_WEB_PORT      web dev server port (default 8120)
 #   PANIC_WEB_ALLOWED_HOSTS  extra comma-separated hostnames for the web dev server, e.g. .example.com
 #                       (this machine's own hostname and FQDN are always allowed)
 #   PANIC_SERVER_BIND   Server bind address (default 0.0.0.0:8121)
@@ -153,7 +153,7 @@ cmd_setup() {
     setup_npm
 }
 
-#: One dev-only MongoDB container, shared by ``start``/``test``/``load`` (T-S6-02). Never stopped
+#: One dev-only MongoDB container, shared by ``start``/``test``/``load``. Never stopped
 #: by this script so it survives across those runs; `docker compose ... down` to remove it.
 DEV_MONGO_COMPOSE="$ROOT/Build/Containers/compose.dev-mongo.yaml"
 DEV_MONGO_CONTAINER="panic-dev-mongo"
@@ -200,9 +200,8 @@ start_one() {
         server)
             ensure_venv
             ensure_dev_mongo
-            # T-S6-04 removed the relational DATABASES entirely (Mongo-backed store/sessions): no
-            # `manage.py migrate` step here (there is no relational schema left to migrate) --
-            # instead ensure Mongo indexes and run data migrations (idempotent, T-S6-02+).
+            # No relational DATABASES (Mongo-backed store/sessions), so no `manage.py migrate` step:
+            # instead ensure Mongo indexes and run data migrations (both idempotent).
             (cd "$SERVER_DIR" && "$VENV/bin/python" manage.py panic_ensure_indexes >"$log" 2>&1 \
                 && "$VENV/bin/python" manage.py panic_migrate >>"$log" 2>&1) \
                 || { tail -20 "$log" >&2; die "panic-server Mongo setup failed"; }
@@ -326,8 +325,8 @@ cmd_logs() {
 
 #: ./panic contracts [--check]: regenerate (default) or, with --check, verify that
 #: Documents/Architecture/openapi/server.yaml (drf-spectacular's AutoSchema walking
-#: panic_server.api.urls) is up to date. Mirrors reference-app's cmd_contracts (same spectacular.args
-#: file shape); PANIC has no JSON-Schema-export step (no panic_common.schema_export). The web
+#: panic_server.api.urls) is up to date. Arguments come from a spectacular.args file;
+#: there is no JSON-Schema-export step (no panic_common.schema_export). The web
 #: API types (`src/api/generated/openapi.ts`) are regenerated separately with
 #: `(cd Application/Web && npm run gen:api)` -- `npm run gen:api:check` is its own staleness check,
 #: also enforced by test/unit/apiGenerated.spec.ts.

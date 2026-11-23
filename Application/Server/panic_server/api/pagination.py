@@ -1,7 +1,6 @@
-"""Reusable paging envelopes (API.md §1). No endpoint in T-S6-06 is paged (search is a flat,
-capped list; bootstrap/dashboard views are single resources) -- this module is built now, as a
-required owned file, purely as infra for T-S6-07's table (catalog/lists/users) and audit list
-endpoints, which import it directly rather than reinventing paging envelopes twice.
+"""Reusable paging envelopes (API.md §1), shared by the table (catalog/lists/users) and audit
+list endpoints. Search is a flat, capped list and bootstrap/dashboard views are single
+resources, so neither is paged.
 """
 
 from __future__ import annotations

@@ -1,10 +1,8 @@
 """``RequestContextMiddleware``: trusted-proxy IP resolution, Security Zone binding, anti-spoofing,
-and the AR-5.3 ``reject`` untrusted-peer policy (T-S6-04).
+and the AR-5.3 ``reject`` untrusted-peer policy.
 
-Rewritten against ``panic_server.store.repos.zones`` (Mongo) now that the Stage 1-5 in-memory
-``STORE.zones`` fixture is gone; the resolution logic under test (``resolve_client_chain`` +
-``resolve_ip_zone`` wiring in ``panic_server.context``/``middleware``) is exactly what T-S6-04
-built, so this suite is a rewrite, not a deletion.
+Zones come from ``panic_server.store.repos.zones`` (Mongo); the logic under test is the
+``resolve_client_chain`` + ``resolve_ip_zone`` wiring in ``panic_server.context``/``middleware``.
 """
 
 from __future__ import annotations

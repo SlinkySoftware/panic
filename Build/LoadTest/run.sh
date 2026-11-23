@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
-# T-S6-14 load test on the development host: built images via compose (1x panic-web, 2x panic-server,
+# Load test on the development host: built images via compose (1x panic-web, 2x panic-server,
 # 2 workers x 8 threads each) against the shared dev MongoDB container, in its own `panic_loadtest`
 # database (the dev data in `panic` is never touched). Seeds `--profile loadtest`, mints one session per
 # load user, then runs Locust headless: a steady run and a stress run. Results land in $OUT.

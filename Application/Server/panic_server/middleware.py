@@ -77,11 +77,9 @@ class RequestIdMiddleware:
 class RequestContextMiddleware:
     """Resolve :class:`panic_server.context.RequestContext` once per request.
 
-    Replaces the Stage 1-5 ``ClientIpZoneMiddleware`` (which resolved client IP/zone only) and
-    the deleted ``PortalStoreMiddleware`` (which loaded/persisted the process-wide ``STORE``
-    under a global lock -- there is no store-wide lock or simulator concept left: identity
-    always comes from a real session, and the zone always comes from the real client IP,
-    AR-5.3/ADR-0001 decision 6). Downstream code reads ``request.context``; ``request.client_ip``
+    There is no store-wide lock or simulator concept: identity always comes from a real
+    session, and the zone always comes from the real client IP (AR-5.3/ADR-0001 decision 6).
+    Downstream code reads ``request.context``; ``request.client_ip``
     and ``request.resolved_zone`` are kept as convenience aliases some tests/call sites expect.
     """
 
@@ -104,7 +102,7 @@ class RequestContextMiddleware:
         request.resolved_zone = context.zone
 
         response = self.get_response(request)
-        # Kept for backward compatibility (cheap; the diagnostic admin endpoint is a later task).
+        # Kept for backward compatibility (cheap; the full diagnostics are GET /api/v1/admin/client-ip).
         response[CLIENT_IP_HEADER] = context.client_ip
         response[SECURITY_ZONE_HEADER] = context.zone.id if context.zone else "UNZONED"
         return response

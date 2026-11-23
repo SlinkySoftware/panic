@@ -1,10 +1,10 @@
-"""OIDC and LDAP adapters, and external-identity provisioning (T-S3-02, T-S6-04).
+"""OIDC and LDAP adapters, and external-identity provisioning.
 
-``panic_common.claim_mapping`` is gone (ADR-0001 decision 11): external identity is for
-authentication only, so there is no group -> RBAC/team mapping left to test. What remains is
+External identity is for authentication only (ADR-0001 decision 11), so there is no
+group -> RBAC/team mapping to test. What remains is
 provisioning itself (first sign-in gets no permissions/teams; a later sign-in only refreshes
 ``display_name``/``last_login_at``) plus the adapters' own protocol-level behaviour (OIDC state/
-nonce/PKCE, LDAP filter escaping -- unchanged, still pure/mocked, no STORE dependency).
+nonce/PKCE, LDAP filter escaping -- pure/mocked).
 """
 
 from __future__ import annotations
@@ -96,7 +96,7 @@ def test_oidc_first_sign_in_provisions_user_with_no_permissions_or_teams(
     user = users_repo.get_user_by_username(mongo_db, "casey.sso")
     assert user is not None
     assert user.display_name == "Casey SSO"
-    # The directory sent groups ("panic-global", "network-engineers"), but T-S6-04 deletes every
+    # The directory sent groups ("panic-global", "network-engineers"), but there is no
     # group -> RBAC/team mapping: a first external sign-in always gets no permissions, no teams.
     assert user.permissions == []
     assert user.team_ids == []

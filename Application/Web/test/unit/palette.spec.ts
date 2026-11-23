@@ -1,4 +1,4 @@
-/** T-S6-09: palette keyboard handling. */
+/** Palette keyboard handling. */
 import { describe, expect, it } from 'vitest';
 import { isPaletteShortcut } from '@/components/palette/shortcut';
 

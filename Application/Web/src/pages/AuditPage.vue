@@ -1,4 +1,4 @@
-<!-- /audit (T-S6-11): filters live in the URL query; keyset "Load more" (newest first). -->
+<!-- /audit: filters live in the URL query; keyset "Load more" (newest first). -->
 <template>
   <q-page class="q-pa-lg">
     <div class="text-h5 q-mb-md">Audit</div>

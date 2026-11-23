@@ -1,11 +1,10 @@
 """``GET /api/v1/admin/client-ip`` -- trust-chain + zone diagnostics (API.md §6).
 
-``request.context.chain`` (T-S6-04/05) already carries everything except the config actually in
+``request.context.chain`` already carries everything except the config actually in
 effect (``policy``) and every zone CIDR candidate, not just the winner (``candidates``) --
 ``RequestContext`` deliberately only keeps the *winning* zone. Both are cheap to re-derive here
 (admin diagnostics, not a budgeted UI read): ``policy`` straight from settings, ``candidates`` by
 calling ``panic_common.zones.resolve_ip_zone`` again with the already-known ``chain.client_ip``.
-No change to ``panic_server.context``/``middleware`` was needed or made.
 """
 
 from __future__ import annotations

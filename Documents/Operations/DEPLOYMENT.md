@@ -1,8 +1,8 @@
 # PANIC Deployment Guide
 
-Stage 6 runs as two images plus MongoDB. Every setting is an environment variable, listed in
+PANIC runs as two images plus MongoDB. Every setting is an environment variable, listed in
 [`CONFIGURATION.md`](CONFIGURATION.md). Examples use reserved names and addresses only
-(`example.com`, RFC 5737, RFC 3849). There is no upgrade path from Stage 4: it was never deployed.
+(`example.com`, RFC 5737, RFC 3849).
 
 ## 1. Topology
 

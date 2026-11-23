@@ -2,10 +2,9 @@
 of ``public``, ``authenticated`` or ``admin``, and each tier behaves correctly for an anonymous
 caller, a plain signed-in user, and a Global Admin.
 
-T-S6-06 ships no ``admin``-tier route (admin-only endpoints are T-S6-07's job, not even a stub
-per the brief) -- :class:`panic_server.api.permissions.IsGlobalAdmin` is exercised directly
-(unit-level) alongside the live walk of the real routes, so the tier's own plain/admin behaviour
-is still proven correct ahead of T-S6-07 wiring it to a real path.
+:class:`panic_server.api.permissions.IsGlobalAdmin` is also exercised directly (unit-level)
+alongside the live walk of the real routes, so the tier's own plain/admin behaviour is proven
+independently of any one path.
 """
 
 from __future__ import annotations
@@ -100,8 +99,8 @@ def _client_as(user_id: str | None) -> Client:
 
 def _routes() -> list[tuple[str, str, str | None]]:
     """``(url_path, http_method, tier)`` for every ``(route, method)`` pair in
-    ``panic_server.api.urls`` -- every declared method, not just one arbitrary one: T-S6-07
-    introduced mixed-tier routes (e.g. ``GET /sites`` is "A", ``POST /sites`` is "G", same path),
+    ``panic_server.api.urls`` -- every declared method, not just one arbitrary one: there are
+    mixed-tier routes (e.g. ``GET /sites`` is "A", ``POST /sites`` is "G", same path),
     so the tier can depend on the method (:func:`tier_of_method`)."""
     routes = []
     for pattern in api_urls.urlpatterns:
@@ -150,8 +149,7 @@ def test_admin_succeeds_on_every_route(admin_user: Any) -> None:
 
 # ---------------------------------------------------------------- IsGlobalAdmin (unit-level)
 #
-# No route in this task declares the "admin" tier (T-S6-07 adds the first ones), so the class's
-# own plain/admin behaviour is proven directly rather than against a live URL.
+# The class's own plain/admin behaviour is proven directly, not only against a live URL.
 
 
 def _fake_request(user: Any) -> SimpleNamespace:

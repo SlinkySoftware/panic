@@ -1,5 +1,5 @@
 <!--
-  /profile (T-S6-11): display name, remote user, SSH template, my default dashboard, theme and the
+  /profile: display name, remote user, SSH template, my default dashboard, theme and the
   unreachable policy. Writes act on the real signed-in user, so they are refused during View As.
 -->
 <template>

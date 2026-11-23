@@ -1,8 +1,8 @@
-"""Shared audit-write helper (T-S6-07) used by every mutation view under ``panic_server.api``.
+"""Shared audit-write helper used by every mutation view under ``panic_server.api``.
 
 Every successful create/update/delete writes one entry via ``store.repos.audit.append_audit``,
 recording the **real** actor (never the View As target), the View As subject when active, the
-caller's client IP/zone and the request id (T-S6-04's ``RequestIdMiddleware``). Centralising this
+caller's client IP/zone and the request id (``RequestIdMiddleware``). Centralising this
 here means no view re-derives that plumbing by hand.
 """
 
@@ -27,7 +27,7 @@ def record_audit(
 ) -> None:
     """Append one audit entry for ``django_request``'s caller (API.md §3 audit fields).
 
-    ``django_request`` must already carry ``.context`` (``RequestContextMiddleware``, T-S6-04)
+    ``django_request`` must already carry ``.context`` (``RequestContextMiddleware``)
     and, when a client sent one, ``.request_id`` (``RequestIdMiddleware``). Safe to call even for
     an anonymous-looking context (falls back to ``"anonymous"``), though in practice every caller
     of this helper is behind an ``IsAuthenticated``/``IsGlobalAdmin`` view.

@@ -1,4 +1,4 @@
-"""Structured JSON logging and request-id context (AR-3.2, mirroring reference_server.logging)."""
+"""Structured JSON logging and request-id context (AR-3.2)."""
 
 from __future__ import annotations
 

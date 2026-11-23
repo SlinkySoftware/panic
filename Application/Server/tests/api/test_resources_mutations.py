@@ -1,4 +1,4 @@
-"""Resources, mutations, concurrency, admin and diagnostics (API.md §4.3-§4.8, §6; T-S6-07).
+"""Resources, mutations, concurrency, admin and diagnostics (API.md §4.3-§4.8, §6).
 
 Covers the F1-F6 regression tests (ADR-0001), the orphan lifecycle, concurrent-edit semantics,
 default-zone protections and the client-IP/zone diagnostics endpoint. Companion to
@@ -147,7 +147,7 @@ def test_f2_audit_is_admin_only(plain: Any, admin: Any) -> None:
     assert "results" in resp.json()
 
 
-# ============================================================================ F3: closed by T-S6-06
+# ============================================================================ F3
 
 
 def test_f3_rdp_download_still_requires_visibility(mongo_db: Any, plain: Any) -> None:
@@ -194,8 +194,8 @@ def test_f4_stranger_cannot_even_see_a_team_item_outside_their_teams(mongo_db: A
     )
     client = _client_as(stranger.id)
     # Invisible (not a member of team_b, and CAN_ADD_TEAM alone doesn't grant visibility): 404,
-    # never 403 (AR-2.7) -- the pre-Stage-6 bug (F4) was that scope permission alone let a
-    # non-member edit *any* team's resources; now they cannot even see one outside their teams.
+    # never 403 (AR-2.7) -- F4: scope permission alone must not let a non-member edit *any*
+    # team's resources; they cannot even see one outside their teams.
     assert client.get(f"/api/v1/catalog/{item.id}").status_code == 404
     resp = _json(client, "patch", f"/api/v1/catalog/{item.id}", {"title": "hijacked"})
     assert resp.status_code == 404

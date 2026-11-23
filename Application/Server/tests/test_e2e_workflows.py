@@ -1,11 +1,5 @@
-"""Documentation guard: every ``PANIC_*`` setting must be documented in CONFIGURATION.md.
-
-The Stage 1-5 STORE-backed end-to-end workflows this file used to cover (session auth + CSRF +
-relational persistence + trusted-proxy zone resolution + RBAC + launchers, T-S4-02) were deleted
-in T-S6-04 along with ``STORE``/``state.py``/the whole server-rendered UI; their replacements
-live in ``tests/test_auth.py`` and ``tests/test_proxy_middleware.py``. This one check is pure
-filesystem/regex logic independent of ``STORE``, so it survives, updated for the settings T-S6-04
-removed/added.
+"""Documentation guard: every ``PANIC_*`` setting must be documented in CONFIGURATION.md, and
+every removed setting must be listed there and no longer read.
 """
 
 from __future__ import annotations
@@ -69,6 +63,6 @@ def test_configuration_doc_covers_every_setting() -> None:
 
 def test_removed_settings_are_listed_and_no_longer_read() -> None:
     doc = (ROOT / "Documents/Operations/CONFIGURATION.md").read_text()
-    removed_section = doc.split("## Removed in Stage 6", 1)[1].split("\n## ", 1)[0]
+    removed_section = doc.split("## Removed settings", 1)[1].split("\n## ", 1)[0]
     assert all(f"`{n}`" in removed_section for n in REMOVED)
     assert not (REMOVED & _read_settings())

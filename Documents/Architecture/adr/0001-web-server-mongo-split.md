@@ -1,37 +1,33 @@
 # ADR-0001: Split panic-web / panic-server, MongoDB only, scoped API
 
-- **Status:** Accepted (owner, 2026-11-14). Decisions 1–9 come from the owner's brief, and
-  decisions 10–12 from the owner's review of Phase A. Points the owner has not answered yet are
-  listed under "Owner review" as *assumed*. Phase B may start on them, and they can still be
-  overridden.
-- **Date:** 2026-11-14
-- **Tasks:** Stage 6 (`T-S6-01` … `T-S6-14` in [`TASKS.md`](../../TASKS.md))
-- **Supersedes:** Stage 2 "relational persistence" and Stage 1 "server-rendered shell + full JSON
-  snapshot" (SPEC §3, §5.1 before Stage 6)
+- **Status:** Accepted. Implemented.
+- **Date:** 2026-11-14 (amended 2026-11-15: View As may also select a zone, decision 6)
+- **Supersedes:** the original design: a server-rendered shell with a full JSON snapshot of the
+  portal, backed by relational persistence
 
 ## Context
 
-Stages 1–4 produced a working portal with the wrong shape for production:
+The first implementation was a working portal with the wrong shape for production:
 
-- Django + Gunicorn renders `templates/panic/index.html` with the **entire** portal snapshot
-  embedded, and the vanilla-JS SPA (`panic.js`, ~4,800 lines) reads `appState.snapshot` everywhere.
-- A process-wide `STORE` (`MockPortalStore` → `DatabasePortalStore`) sits behind one lock.
-  `PortalStoreMiddleware` loads **all** state on every request and diff-persists afterwards. The
-  current user, "View As" and the simulated IP live in that shared object, so requests in one
-  worker are serialised and per-request identity is shared mutable state.
-- Measured with 3,000 endpoints and 44 users: every page load **and** every mutation returns about
-  9.8 MB of JSON and takes about 190 ms of server time. Lists embed full item copies and
-  dashboards are sent three times.
-- A review for this ADR also found authorization gaps in the current API, which the rewrite must
-  close (see "Findings in the current code").
+- Django + Gunicorn rendered `templates/panic/index.html` with the **entire** portal snapshot
+  embedded, and the vanilla-JS SPA (`panic.js`, ~4,800 lines) read `appState.snapshot` everywhere.
+- A process-wide `STORE` (`MockPortalStore` → `DatabasePortalStore`) sat behind one lock.
+  `PortalStoreMiddleware` loaded **all** state on every request and diff-persisted afterwards.
+  The current user, "View As" and the simulated IP lived in that shared object, so requests in
+  one worker were serialised and per-request identity was shared mutable state.
+- Measured with 3,000 endpoints and 44 users: every page load **and** every mutation returned about
+  9.8 MB of JSON and took about 190 ms of server time. Lists embedded full item copies and
+  dashboards were sent three times.
+- A security review for this ADR also found authorization gaps in that API, which the rewrite
+  had to close (see "Security findings").
 
-Production has an existing HA MongoDB replica set. Users reach PANIC through a corporate reverse
-proxy or load balancer. PANIC must run in several network zones, with the server tier behind an
+The target environment already runs an HA MongoDB replica set. Users reach PANIC through a
+corporate reverse proxy or load balancer. PANIC must run in several network zones, with the server tier behind an
 internal load balancer.
 
 ## Decisions
 
-1. **Two deployable units, like reference-app.**
+1. **Two deployable units.**
    - **panic-web** is nginx serving the built SPA, with no Python. It proxies an allow-list of
      `/api/v1/...` and `/auth/...` paths to `PANIC_SERVER_URL`. The browser stays same-origin, so
      there is no CORS.
@@ -48,9 +44,9 @@ internal load balancer.
    - Removed: SQLite/PostgreSQL support, the Django ORM domain models (`models.py`, migrations),
      `store_db.py`, `state.py` (`MockPortalStore`, global `STORE` and its lock) and
      `PortalStoreMiddleware`.
-   - **No data migration.** PANIC is a new application with no production deployments, so
-     there is no upgrade path from Stage 1–4 data. `panic_export` / `panic_import` stay as
-     backup and provisioning tools, using the Stage 6 format only.
+   - **No data migration.** The first implementation was never deployed, so there is no upgrade
+     path from its data. `panic_export` / `panic_import` stay as backup and provisioning tools,
+     using the new export format (`schema_version: 2`) only.
 
 3. **A pymongo repository layer (`panic_server.store`).**
    - It is the only package allowed to import `pymongo` / `bson`. import-linter enforces this (AR-4.1).
@@ -61,7 +57,7 @@ internal load balancer.
    - **Sessions** use a small `SessionStore` (subclass of
      `django.contrib.sessions.backends.base.SessionBase`) inside `panic_server.store`, writing to
      a `sessions` collection with a TTL index.
-   - **Session continuity** (owner requirement, 2026-11-14): when a load balancer moves a user to
+   - **Session continuity:** when a load balancer moves a user to
      another panic-web or panic-server instance or container, the session must keep working
      without interruption.
      - There are no sticky sessions and no per-process session state. Every replica reads the
@@ -82,8 +78,7 @@ internal load balancer.
      - Gunicorn's graceful shutdown lets in-flight requests finish during rolling restarts.
      - Tests and the CI smoke run two server replicas behind panic-web. They create a session
        on one replica and use it on the other, before and after restarting a replica.
-     - *Alternative:* `django-mongodb-backend` with `sessions.backends.db`, as reference-app does. It
-       meets the same requirement, but was not chosen because it is an ORM-on-Mongo backend
+     - *Alternative:* `django-mongodb-backend` with `sessions.backends.db`. It meets the same requirement, but was not chosen because it is an ORM-on-Mongo backend
        just for one table. It needs a Django `DATABASES` entry and migrations, pins the Django
        minor version, and would be a second Mongo client and connection pool.
 
@@ -101,13 +96,13 @@ internal load balancer.
      turns that spec into a Mongo query.
    - Tests enforce payload-size budgets ([`API.md`](../API.md) §8).
 
-5. **Frontend rewritten in Vue 3 + Quasar + TypeScript** (`Application/Web`, like reference-app).
+5. **Frontend rewritten in Vue 3 + Quasar + TypeScript** (`Application/Web`).
    - The typed client is generated from the committed OpenAPI file
      (drf-spectacular → `Documents/Architecture/openapi/server.yaml` → openapi-typescript +
      openapi-fetch). It sends the CSRF header and retries once on CSRF failure.
    - Each view fetches its own data. There is no global client cache of collections.
    - Kept:
-     - the reference-ui-aligned look
+     - the visual design ([`UI_DESIGN.md`](../../UI_DESIGN.md))
      - the explicit URLs: `/dashboard/<uuid>`, `/dashboard/<uuid>/edit`, `/catalog`, `/lists`,
        `/sites`, `/teams`, `/zones`, `/rbac` (now redirecting), `/settings`, `/profile`,
        `/audit`, `/login`, plus the new `/settings/users` and `/settings/users/<id>`
@@ -119,11 +114,13 @@ internal load balancer.
    `/api/v1/simulator`, `PANIC_AUTH_MODE=simulator`, `PANIC_DEV_SIMULATOR_ENABLED`).
    - Identity always comes from a real sign-in: local bootstrap admin, OIDC or LDAP.
    - The zone always comes from the real client IP.
-   - Admin **View As** stays as a real, audited admin feature. It is stored per session and
-     changes only the permissions and data perspective, never the zone.
-   - **View As is read-only** (owner, 2026-11-14): while it is active every mutation returns
-     `403 VIEW_AS_READ_ONLY`, except leaving View As. In Stages 1–4, mutations made during
-     View As ran as the impersonated user.
+   - Admin **View As** stays as a real, audited admin feature, stored per session. As decided
+     on 2026-11-14 it changed only the permissions and data perspective. Amended 2026-11-15: an
+     admin may also choose a zone, to see reachability from that zone (`client.zone_source:
+     VIEW_AS`), with or without a user. The real client IP is still resolved and audited.
+   - **View As is read-only:** while it is active every mutation returns
+     `403 VIEW_AS_READ_ONLY`, except leaving View As. In the first implementation, mutations
+     made during View As ran as the impersonated user.
 
 7. **X-Forwarded-For is security-critical.**
    - The chain is: user → corporate reverse proxy/LB → panic-web nginx → internal LB → panic-server.
@@ -152,14 +149,15 @@ internal load balancer.
    - Python checks run first: ruff, mypy, import-linter and pytest. Web checks follow: ESLint,
      Prettier, vue-tsc and Vitest.
    - Mongo-backed tests run against a real Mongo container, started with `docker run` and a
-     network alias as reference-app does, because act_runner `services:` lack health waits.
+     readiness wait (`Build/ci/mongo_service.sh`), because act_runner `services:` lack health
+     waits.
    - An OpenAPI and generated-types drift check runs.
    - **Two images**, `panic-web` and `panic-server`, are built, smoke-tested together and published.
      - They keep the existing tag scheme: `:main` and `:sha-<short>` on main, and `:X.Y.Z`, `:X.Y`
        and `:latest` on `vX.Y.Z` tags.
-     - Publishing uses the org secrets `REGISTRY_USER` / `REGISTRY_TOKEN`.
+     - Publishing uses the Actions secrets `REGISTRY_USER` / `REGISTRY_TOKEN`.
 
-10. **Orphaned resources are read-only** (owner, 2026-11-14).
+10. **Orphaned resources are read-only.**
     - An orphan is one of:
       - a `TEAM` catalog item, list or dashboard with no `team_ids` (for example, after its
         last team was deleted)
@@ -174,7 +172,7 @@ internal load balancer.
     - Both actions are audited. Nobody can edit an orphan, including admins.
     - An admin screen lists all orphans. Deleting a team reports how many resources it orphaned.
 
-11. **Users management in settings** (owner, 2026-11-14).
+11. **Users management in settings.**
     - `/settings/users` lists, searches, creates and disables users.
     - `/settings/users/<id>` edits one user: display name, permission flags, team membership,
       enable/disable, and "View As" for that user.
@@ -183,7 +181,7 @@ internal load balancer.
     - `/rbac` redirects to `/settings/users`.
     - Users are disabled, never deleted, so that the audit trail stays intact. A disabled user
       cannot sign in.
-    - **External identity is for authentication only** (owner, 2026-11-14). OIDC and LDAP
+    - **External identity is for authentication only.** OIDC and LDAP
       prove who the user is, and nothing else.
       - Permissions and team membership come only from the users pages.
       - IdP groups and claims are never mapped to permissions or teams.
@@ -198,29 +196,30 @@ internal load balancer.
         more. Later sign-ins update only `display_name` and `last_login_at`.
       - The local bootstrap admin keeps `GLOBAL_ADMIN`, so there is always a way in.
 
-12. **Default Security Zone** (owner, 2026-11-14).
+12. **Default Security Zone.**
     - A built-in zone named **Default** (`_id: "zone-default"`) always exists. It has no CIDRs,
       cannot be deleted, and only its description can be edited.
     - Any client whose location is unknown is placed in it: see decision 7, plus an IP that
       matches no zone CIDR.
     - Catalog items can include Default in their zone restrictions like any other zone. "All
       Zones" items are reachable from Default too.
-    - Stages 1–4 called this state "unzoned", which no longer exists.
+    - The first implementation called this state "unzoned", which no longer exists.
 
-## Findings in the current code (fixed by design in Stage 6)
+## Security findings
 
-| # | Finding | Stage 6 rule |
+The review of the first implementation found these gaps. Each one shaped a rule of the new design.
+
+| # | Finding | Rule now |
 |---|---|---|
-| F1 | `POST /api/v1/rbac` (`update_user`, `create_user`) has **no Global Admin check**: any signed-in user can grant themselves `GLOBAL_ADMIN`. | All `/api/v1/users*` mutations require `GLOBAL_ADMIN`. `tests/test_authz_matrix.py` walks every URL pattern (as reference-app AR-6.3 does). |
-| F2 | `GET /api/v1/audit` is readable by every signed-in user. | Audit is Global Admin only. |
-| F3 | `GET /api/v1/launch/rdp/<id>.rdp` does not check the item's visibility (IDOR). | `.rdp` requires visibility; with `HIDE` policy also zone reachability. |
-| F4 | Catalog/list/dashboard edit and delete check only the *scope* permission, not ownership or team membership. Any user can edit another user's `PERSONAL` items. | `panic_common.rbac.can_edit` ([`DATA_MODEL.md`](../DATA_MODEL.md) §6). Invisible resources return 404. |
-| F5 | `POST /api/v1/catalog/preview-share` duplicate detection returns the full matching item even when the caller cannot see it. `zones test_ip` lists every catalog item. | Duplicate checks report only visible matches. `test-ip` is admin only and returns counts. |
-| F6 | List saves accept item ids the editor cannot see. | Every item must be visible and same-scope. |
+| F1 | `POST /api/v1/rbac` (`update_user`, `create_user`) had **no Global Admin check**: any signed-in user could grant themselves `GLOBAL_ADMIN`. | All `/api/v1/users*` mutations require `GLOBAL_ADMIN`. `tests/test_authz_matrix.py` walks every URL pattern (AR-2.8). |
+| F2 | `GET /api/v1/audit` was readable by every signed-in user. | Audit is Global Admin only. |
+| F3 | `GET /api/v1/launch/rdp/<id>.rdp` did not check the item's visibility (IDOR). | `.rdp` requires visibility; with `HIDE` policy also zone reachability. |
+| F4 | Catalog/list/dashboard edit and delete checked only the *scope* permission, not ownership or team membership. Any user could edit another user's `PERSONAL` items. | `panic_common.rbac.can_edit` ([`DATA_MODEL.md`](../DATA_MODEL.md) §6). Invisible resources return 404. |
+| F5 | `POST /api/v1/catalog/preview-share` duplicate detection returned the full matching item even when the caller could not see it. `zones test_ip` listed every catalog item. | Duplicate checks report only visible matches. `test-ip` is admin only and returns counts. |
+| F6 | List saves accepted item ids the editor could not see. | Every item must be visible and same-scope. |
 
-**F1–F3 were hotfixed on `main` on 2026-11-14 at the owner's request** (commit `0d55160`, tests in
-`Application/Server/tests/test_authz_hotfix.py`). F4–F6 stay open in the Stage 1–4 code until
-Stage 6 replaces it.
+F1–F3 were also fixed in the first implementation as soon as they were found. F4–F6 were closed
+by the new design.
 
 ## Rejected alternatives
 
@@ -234,12 +233,11 @@ Stage 6 replaces it.
   query shapes (`$or` visibility filters, multikey prefix search, keyset paging,
   `find_one_and_update` versioning) behind an abstraction that fits them poorly. It adds Django
   version coupling and migration machinery for schemaless documents. Rejected in favour of
-  explicit pymongo repositories (reference-app AR-3.2 fallback). It is also rejected for sessions
-  (decision 3, assumed).
+  explicit pymongo repositories. It is also rejected for sessions (decision 3).
 - **Keep the vanilla-JS SPA** and change only its data access. `panic.js` assumes the full
   snapshot in about 4,800 lines. There are no types, no tests, no generated client, and no
-  component model for the grid editor and modals. A rewrite on the reference-app stack costs less and
-  lets the two products share patterns. Rejected.
+  component model for the grid editor and modals. A rewrite on a typed component framework with
+  a generated API client costs less. Rejected.
 - **Server-rendered HTML with htmx-style partials.** It would keep Python in the edge tier and
   break the panic-web/panic-server split (Decision 1). Rejected.
 - **Redis/Valkey for rate limits and sessions.** It adds a new HA dependency for small counters
@@ -252,7 +250,7 @@ Stage 6 replaces it.
 - `panic.js`, `app.css`, the HTML templates, the simulator, `PANIC_DB_*`, `PANIC_SQLITE_PATH`,
   `PANIC_AUTH_MODE`, `PANIC_DEV_SIMULATOR_ENABLED`, `PANIC_CACHE_URL`, `PANIC_STATIC_ROOT` /
   `PANIC_SERVE_STATIC` and the `postgres` / `redis` extras all go away.
-- The dev workflow needs Node (pinned in `.tools/`, like reference-app, with no host packages) and one
+- The dev workflow needs Node (pinned in `.tools/`, with no host packages) and one
   local Mongo container. `./panic start` keeps `http://<host>:8120/` as the UI URL: it runs the
   Quasar dev server on 8120 and Django on 8121, with the same `proxy-paths.json` allow-list.
 - Tests need Mongo. `./panic test` uses `PANIC_TEST_MONGO_URI` or starts the single dev Mongo
@@ -260,19 +258,17 @@ Stage 6 replaces it.
 - The API contract becomes a reviewed artefact (`openapi/server.yaml`). A breaking change needs
   `/api/v2` alongside v1 after the first release.
 
-## Owner review (2026-11-14)
+## Questions resolved during review
 
 | # | Question | Outcome |
 |---|---|---|
-| 1 | Hotfix F1–F3 on current `main`? | **Yes.** Done in `0d55160`. |
-| 2 | Visibility of orphaned `TEAM` / `PERSONAL` resources | **Admins only, read-only; only "assign to user" or delete** (decision 10). |
-| 3 | Sessions | **Must survive the load balancer moving a user to another front end or container.** This is met by the shared Mongo `SessionStore` with primary reads and majority writes (decision 3). |
-| 4 | Is View As read-only? | **Yes** (decision 6). |
-| 5 | May admins edit or delete other users' `PERSONAL` resources? | **No.** Admins act only on orphans (decision 10). |
-| 6 | Where is team membership managed? | **On the user editing page in settings; a users management page is required** (decision 11). **The IdP is used for authentication only, never for permissions or teams.** |
-| 7 | What happens to unknown client locations? | **They get the built-in Default zone** (decision 12). |
-| 8 | Limits: 500 items per list, 100 widgets, 200 rows per LIST widget, 100 nav dashboards | **OK.** |
-| 9 | Audit retention default | *Assumed:* 365 days (TTL), with `0` meaning keep forever. |
-| 10 | Load-test p95 targets and topology (`T-S6-14`) | *Assumed:* as proposed in [`TASKS.md`](../../TASKS.md). |
-| 11 | Existing data to migrate? | **None.** This is a new app with no production deployments, so there are no migrations or v1 import (decision 2). |
-| 12 | Transition while building | **No working system is needed in the interim. Keep `main` up to date only when it makes sense.** Phase B runs on a `stage6` branch, pushed to both remotes, and merges into `main` at coherent milestones. No `stage4-final` tag. |
+| 1 | Visibility of orphaned `TEAM` / `PERSONAL` resources | Admins only, read-only; only "assign to user" or delete (decision 10). |
+| 2 | Sessions | Must survive the load balancer moving a user to another front end or container. Met by the shared Mongo `SessionStore` with primary reads and majority writes (decision 3). |
+| 3 | Is View As read-only? | Yes (decision 6). |
+| 4 | May admins edit or delete other users' `PERSONAL` resources? | No. Admins act only on orphans (decision 10). |
+| 5 | Where is team membership managed? | On the user page in settings, which needs a users management page (decision 11). The IdP is used for authentication only, never for permissions or teams. |
+| 6 | What happens to unknown client locations? | They get the built-in Default zone (decision 12). |
+| 7 | Limits | 500 items per list, 100 widgets per dashboard, 200 rows per LIST widget, 100 dashboards in the menu. |
+| 8 | Audit retention default | 365 days (TTL), with `0` meaning keep forever. |
+| 9 | Load-test targets | p95 targets per request type, measured on a 50-user, 5,000-endpoint dataset; results in [`PERFORMANCE.md`](../../Operations/PERFORMANCE.md). |
+| 10 | Existing data to migrate? | None. There are no earlier deployments, so there are no migrations or v1 import (decision 2). |

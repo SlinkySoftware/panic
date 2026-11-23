@@ -1,5 +1,5 @@
 <!--
-  /settings/users/<id> (T-S6-11): display name, manual permissions, team membership, enable / disable, View As.
+  /settings/users/<id>: display name, manual permissions, team membership, enable / disable, View As.
   `/rbac` redirects to the users list.
 -->
 <template>

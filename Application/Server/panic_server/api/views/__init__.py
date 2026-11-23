@@ -1,3 +1,3 @@
-"""DRF views for the PANIC API (T-S6-06): ``auth``, ``ui``, ``launch``."""
+"""DRF views for the PANIC API, one module per resource group."""
 
 from __future__ import annotations

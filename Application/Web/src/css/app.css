@@ -1,12 +1,12 @@
 /*
- * reference-ui design tokens (Documents/UI_DESIGN.md §1), ported as real CSS custom properties -- unlike a plain
+ * PANIC design tokens (Documents/UI_DESIGN.md §1), ported as real CSS custom properties -- unlike a plain
  * Quasar-defaults app, PANIC's own design doc specifies brand tokens, so the shell uses them directly rather
  * than leaning on `$primary`/`$dark` alone. Dark is the default operations theme (`body.body--dark`, Quasar's
  * `dark: 'auto'`); the light variant below is the explicit override for `body:not(.body--dark)`.
  *
- * Full component-level styling (dashboard grid, protocol pill components, two-card resource screens, etc.) is
- * later tasks' job (T-S6-09/10/11); this file only establishes the token system plus the few structural
- * utility classes the shell itself (MainLayout, LoginPage) needs.
+ * Component-level styling (dashboard grid, protocol pills, two-card resource screens, etc.) lives with the
+ * components; this file holds the token system plus the few structural utility classes the shell itself
+ * (MainLayout, LoginPage) needs.
  */
 
 /* ---------------------------------------------------------------------------------------- Dark (default) theme */

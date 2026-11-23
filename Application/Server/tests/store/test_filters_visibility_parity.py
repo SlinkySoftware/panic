@@ -85,7 +85,7 @@ def _generate_docs(rng: random.Random) -> list[dict]:
             if rng.random() < 0.15:
                 # Deliberate orphan case: no owner at all. (A PERSONAL doc whose owners are all
                 # disabled but the list is non-empty is also an orphan per is_orphan(), but
-                # panic_common.rbac.is_visible_in_scope -- the pre-Stage-6 function this test
+                # panic_common.rbac.is_visible_in_scope -- the reference function this test
                 # holds the Mongo filter to -- has no admin-sees-all-orphans bypass for a
                 # non-empty PERSONAL owner_usernames list, only for TEAM and for "no owner at
                 # all"; that sub-case is covered directly in tests/store/test_repos_orphans.py

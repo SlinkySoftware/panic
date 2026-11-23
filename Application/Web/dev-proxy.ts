@@ -2,7 +2,7 @@
  * Dev-server proxy for the Quasar/Vite dev server (AR-1.6, AR-6.4, API.md §9).
  *
  * The allow-list has exactly one source: `proxy-paths.json`, which the prod nginx template
- * generator (a later task) also consumes. Allow-listed paths are proxied to Server; anything else
+ * generator (Build/scripts/gen_nginx_conf.py) also consumes. Allow-listed paths are proxied to Server; anything else
  * under `/api/` or `/auth/` is a 404 at Web, exactly like nginx. `/metrics` is never proxied.
  *
  * Kept out of `quasar.config.ts` so the unit tests can import it directly (test/unit/devProxy.spec.ts).
