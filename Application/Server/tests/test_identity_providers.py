@@ -103,6 +103,32 @@ def test_oidc_first_sign_in_provisions_user_with_no_permissions_or_teams(
     assert user.auth_source == "OIDC"
 
 
+def test_oidc_redirects_stay_under_the_base_path(mongo_db: Database, oidc_settings: None) -> None:
+    client = Client(SCRIPT_NAME="/panic")
+    q = _start(client)
+    id_token = _jwt(
+        {
+            "iss": "https://idp.example.com",
+            "aud": "panic",
+            "exp": time.time() + 300,
+            "nonce": q["nonce"],
+            "sub": "prefixed",
+            "preferred_username": "pat.prefixed",
+        }
+    )
+    with (
+        override_settings(PANIC_BASE_PATH="/panic"),
+        mock.patch.object(oidc, "_http_post_form", return_value={"id_token": id_token, "access_token": "at"}),
+        mock.patch.object(oidc, "_http_get_json", return_value={"sub": "prefixed"}),
+    ):
+        resp = client.get(f"/auth/oidc/callback?state={q['state']}&code=xyz")
+    assert resp.status_code == 302 and resp["Location"] == "/panic/lists"
+
+    with override_settings(PANIC_BASE_PATH="/panic", PANIC_OIDC_ENABLED=False):
+        resp = client.get("/auth/oidc/login")
+    assert resp.status_code == 302 and resp["Location"] == "/panic/login"
+
+
 def test_oidc_resignin_updates_only_display_name_and_last_login(mongo_db: Database, oidc_settings: None) -> None:
     client = Client()
     q = _start(client)

@@ -22,6 +22,7 @@ from panic_common.models import UserAccount
 from panic_server.auth import oidc
 from panic_server.auth.backends import provision_external_user
 from panic_server.context import SESSION_USER_KEY, SESSION_VIEW_AS_KEY
+from panic_server.paths import app_path
 from panic_server.store.client import get_db
 from panic_server.store.repos import audit as audit_repo
 from panic_server.store.repos import users as users_repo
@@ -30,7 +31,8 @@ log = logging.getLogger("panic_server.auth")
 
 
 def safe_next(request: HttpRequest, candidate: str | None) -> str:
-    if candidate and url_has_allowed_host_and_scheme(
+    """A post-sign-in SPA route (``/lists``), without the URL prefix; ``/`` when unsafe or absent."""
+    if candidate and candidate.startswith("/") and url_has_allowed_host_and_scheme(
         candidate, allowed_hosts={request.get_host()}, require_https=request.is_secure()
     ):
         return candidate if not candidate.startswith(("/login", "/logout", "/auth/")) else "/"
@@ -74,7 +76,7 @@ def sign_in(request: HttpRequest, user: UserAccount, method: str) -> None:
 @require_GET
 def oidc_login_view(request: HttpRequest) -> HttpResponse:
     if not settings.PANIC_OIDC_ENABLED:
-        return HttpResponseRedirect("/login")
+        return HttpResponseRedirect(app_path("/login"))
     try:
         url = oidc.build_authorization_url(request.session, safe_next(request, request.GET.get("next")))
     except (oidc.OidcError, httpx.HTTPError) as e:
@@ -86,7 +88,7 @@ def oidc_login_view(request: HttpRequest) -> HttpResponse:
 @require_GET
 def oidc_callback_view(request: HttpRequest) -> HttpResponse:
     if not settings.PANIC_OIDC_ENABLED:
-        return HttpResponseRedirect("/login")
+        return HttpResponseRedirect(app_path("/login"))
     try:
         claims, next_url = oidc.complete_flow(request.session, request.GET.dict())
     except oidc.OidcError as e:
@@ -97,4 +99,4 @@ def oidc_callback_view(request: HttpRequest) -> HttpResponse:
     if user is None:
         return _login_methods_json(request, status=401, error="Single sign-on returned an unusable username.")
     sign_in(request, user, "oidc")
-    return HttpResponseRedirect(safe_next(request, next_url))
+    return HttpResponseRedirect(app_path(safe_next(request, next_url)))

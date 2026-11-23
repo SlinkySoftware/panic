@@ -15,6 +15,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect, JsonRes
 
 from panic_common.errors import ErrorCode
 from panic_server.context import SESSION_USER_KEY, SESSION_VIEW_AS_KEY
+from panic_server.paths import app_path
 
 #: "/login"/"/logout" are kept here even though T-S6-06 deletes those routes: without the
 #: carve-out, an anonymous request to either (e.g. a stale bookmark or old frontend build) would
@@ -38,7 +39,7 @@ class PanicAuthMiddleware:
         self.get_response = get_response
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
-        if request.path.startswith(PUBLIC_PREFIXES):
+        if request.path_info.startswith(PUBLIC_PREFIXES):
             return self.get_response(request)
 
         context = request.context
@@ -47,11 +48,11 @@ class PanicAuthMiddleware:
             # disabled (AR-2.11): either way the session is no longer valid.
             if request.session.get(SESSION_USER_KEY):
                 request.session.flush()
-            if request.path.startswith("/api/"):
+            if request.path_info.startswith("/api/"):
                 return JsonResponse(
                     {"error_code": ErrorCode.UNAUTHENTICATED, "detail": "Authentication required"}, status=401
                 )
-            return HttpResponseRedirect(f"/login?next={quote(request.get_full_path())}")
+            return HttpResponseRedirect(f"{app_path('/login')}?next={quote(request.get_full_path_info())}")
 
         request.panic_user = context.real_user
         request.panic_effective_user = context.effective_user

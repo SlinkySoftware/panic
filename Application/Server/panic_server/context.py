@@ -101,7 +101,7 @@ def resolve_client_and_zone(request: HttpRequest) -> tuple[ChainResolution, Secu
     chain = resolve_client_chain(peer, request.headers, config)
 
     if chain.decision == "UNTRUSTED_PEER" and config.untrusted_peer_policy == "reject":
-        exempt = request.path in _HEALTH_VERSION_PATHS and chain.remote_addr in _LOOPBACK_IPS
+        exempt = request.path_info in _HEALTH_VERSION_PATHS and chain.remote_addr in _LOOPBACK_IPS
         if not exempt:
             raise UntrustedPeerRejected(chain.remote_addr)
 

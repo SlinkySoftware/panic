@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 from django.conf import settings as django_settings
-from django.test import Client
+from django.test import Client, override_settings
 from pymongo.database import Database
 
 from panic_common.models import PermissionFlag, Protocol, ScopeType, UnreachablePolicy
@@ -276,6 +276,15 @@ def test_search_never_returns_invisible_personal_item(scenario: dict[str, Any]) 
 
 
 # ---------------------------------------------------------------- .rdp download
+
+
+def test_rdp_href_carries_the_base_path(scenario: dict[str, Any]) -> None:
+    client = _client_as(scenario["plain"].id)
+    rdp_id = scenario["rdp_item"].id
+    with override_settings(PANIC_BASE_PATH="/panic"):
+        resp = client.get(f"/api/v1/ui/dashboards/{scenario['dashboard'].id}", SCRIPT_NAME="/panic")
+    assert resp.status_code == 200
+    assert resp.json()["items"][rdp_id]["launch"]["href"] == f"/panic/api/v1/launch/rdp/{rdp_id}.rdp"
 
 
 def test_rdp_download_succeeds_and_is_audited(mongo_db: Database, scenario: dict[str, Any]) -> None:

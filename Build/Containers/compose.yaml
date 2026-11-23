@@ -33,6 +33,7 @@ x-server-env: &server-env
   PANIC_LOG_LEVEL:
   PANIC_LOG_FORMAT:
   PANIC_INSTANCE_NAME:
+  PANIC_BASE_PATH:
   PANIC_SESSION_AGE_S:
   PANIC_SESSION_COOKIE_SECURE:
   PANIC_SECURE_PROXY_SSL_HEADER:
@@ -102,6 +103,7 @@ services:
     tmpfs: ["/tmp"]
     environment:
       PANIC_SERVER_URL: ${PANIC_SERVER_URL:-http://panic-server:8210}
+      PANIC_BASE_PATH: ${PANIC_BASE_PATH:-}
     ports:
       - "${PANIC_WEB_PUBLISH:-8080}:8080"
     depends_on:

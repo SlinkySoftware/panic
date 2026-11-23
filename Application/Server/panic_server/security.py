@@ -54,9 +54,9 @@ _LOGIN_PATHS = frozenset({"/login", "/auth/oidc/login", "/api/v1/auth/login"})
 def _bucket(request: HttpRequest) -> str | None:
     if request.method not in _STATE_CHANGING:
         return None
-    if request.path in _LOGIN_PATHS:
+    if request.path_info in _LOGIN_PATHS:
         return "login"
-    if request.path.startswith("/api/"):
+    if request.path_info.startswith("/api/"):
         return "api"
     return None
 
@@ -140,7 +140,7 @@ class RateLimitMiddleware:
 
 def csrf_failure(request: HttpRequest, reason: str = "") -> HttpResponse:
     """``CSRF_FAILURE_VIEW``: JSON for API clients, plain page for browsers."""
-    if request.path.startswith("/api/"):
+    if request.path_info.startswith("/api/"):
         return JsonResponse(
             {"error_code": ErrorCode.CSRF_FAILED, "detail": "CSRF token missing or invalid. Reload the page."},
             status=403,

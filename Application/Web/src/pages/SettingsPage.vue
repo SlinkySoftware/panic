@@ -77,7 +77,7 @@
             <q-item-label caption>{{ l.caption }}</q-item-label>
           </q-item-section>
         </q-item>
-        <q-item clickable tag="a" href="/api/v1/export">
+        <q-item clickable tag="a" :href="appPath('/api/v1/export')">
           <q-item-section avatar><q-icon name="download" /></q-item-section>
           <q-item-section>
             <q-item-label>Export</q-item-label>
@@ -92,6 +92,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useQuasar } from 'quasar';
+import { appPath } from '@/api/basePath';
 import { listDashboards } from '@/api/dashboards';
 import { getSettings, updateSettings } from '@/api/settings';
 import { useSessionStore } from '@/stores/session';

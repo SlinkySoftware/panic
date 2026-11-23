@@ -14,14 +14,21 @@ import {
   isAllowedApiPath,
   loadProxyPaths,
   PROXY_PATHS_FILE,
+  type DevProxyRule,
   type ProxyPaths,
 } from '../../dev-proxy';
 
 const RULE_KEY = '^/(api|auth)/';
 const fileContents = JSON.parse(readFileSync(PROXY_PATHS_FILE, 'utf8')) as ProxyPaths & { $comment?: string };
 
-function proxied(url: string): boolean {
-  const rule = buildDevProxy('http://server.invalid')[RULE_KEY];
+function ruleOf(proxy: Record<string, DevProxyRule>, key: string): DevProxyRule {
+  const rule = proxy[key];
+  if (!rule) throw new Error(`no proxy rule ${key}`);
+  return rule;
+}
+
+function proxied(url: string, basePath = ''): boolean {
+  const rule = ruleOf(buildDevProxy('http://server.invalid', loadProxyPaths(), basePath), `^${basePath}/(api|auth)/`);
   return rule.bypass({ url } as IncomingMessage, undefined, rule) === undefined;
 }
 
@@ -88,8 +95,17 @@ describe('buildDevProxy', () => {
   it('has exactly one rule, for /api/ and /auth/, targeting the configured Server', () => {
     const proxy = buildDevProxy('http://127.0.0.1:8230');
     expect(Object.keys(proxy)).toEqual([RULE_KEY]);
-    expect(proxy[RULE_KEY].target).toBe('http://127.0.0.1:8230');
-    expect(proxy[RULE_KEY].xfwd).toBe(true);
+    expect(ruleOf(proxy, RULE_KEY).target).toBe('http://127.0.0.1:8230');
+    expect(ruleOf(proxy, RULE_KEY).xfwd).toBe(true);
+  });
+
+  it('under a base path, proxies the allow-list below the prefix and nothing outside it', () => {
+    const proxy = buildDevProxy('http://127.0.0.1:8230', loadProxyPaths(), '/panic');
+    expect(Object.keys(proxy)).toEqual(['^/panic/(api|auth)/']);
+    expect(proxied('/panic/api/v1/ui/bootstrap', '/panic')).toBe(true);
+    expect(proxied('/panic/auth/oidc/login?next=/', '/panic')).toBe(true);
+    expect(proxied('/panic/api/v1/not-listed', '/panic')).toBe(false);
+    expect(proxied('/panic/metrics', '/panic')).toBe(false);
   });
 
   it('proxies every allow-listed prefix and exact path', () => {

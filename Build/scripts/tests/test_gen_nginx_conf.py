@@ -23,7 +23,7 @@ def _conf() -> tuple[str, list[str], list[str]]:
 
 def test_every_allow_listed_path_is_proxied_and_nothing_else() -> None:
     conf, prefixes, exact = _conf()
-    proxied = re.findall(r"location (\^~|=) (\S+) \{\n\s+proxy_pass", conf)
+    proxied = re.findall(r"location (\^~|=) \$\{PANIC_BASE_PATH\}(\S+) \{\n\s+proxy_pass", conf)
     assert sorted(p for kind, p in proxied if kind == "^~") == sorted(prefixes)
     assert sorted(p for kind, p in proxied if kind == "=") == sorted(exact)
     assert conf.count("proxy_pass") == len(prefixes) + len(exact)
@@ -31,14 +31,14 @@ def test_every_allow_listed_path_is_proxied_and_nothing_else() -> None:
 
 def test_metrics_is_blocked_and_unlisted_api_paths_404() -> None:
     conf, _, _ = _conf()
-    assert "location = /metrics { return 404; }" in conf
-    assert "location ^~ /api/ { return 404; }" in conf
+    assert "location = ${PANIC_BASE_PATH}/metrics { return 404; }" in conf
+    assert "location ^~ ${PANIC_BASE_PATH}/api/ { return 404; }" in conf
     assert not re.search(r"location[^{]*/metrics[^{]*\{\s*proxy_pass", conf)
 
 
-def test_only_panic_server_url_is_an_envsubst_variable() -> None:
+def test_only_the_server_url_and_base_path_are_envsubst_variables() -> None:
     conf, _, _ = _conf()
-    assert set(re.findall(r"\$\{(\w+)\}", conf)) == {"PANIC_SERVER_URL"}
+    assert set(re.findall(r"\$\{(\w+)\}", conf)) == {"PANIC_SERVER_URL", "PANIC_BASE_PATH"}
     assert "X-Forwarded-For $proxy_add_x_forwarded_for" in conf
 
 
@@ -54,3 +54,12 @@ def test_rejects_metrics_and_unsafe_paths(tmp_path: Path) -> None:
 def test_committed_allow_list_is_what_the_dev_proxy_reads() -> None:
     data = json.loads(gen.DEFAULT_PATHS.read_text())
     assert "/metrics" not in data["exact"] and all("/metrics" not in p for p in data["prefixes"])
+
+
+def test_every_location_but_healthz_is_under_the_base_path() -> None:
+    conf, _, _ = _conf()
+    plain = re.findall(r"location (?:\^~|=) (/\S*) \{", conf)
+    assert plain == ["/healthz"]
+    assert "rewrite ^${PANIC_BASE_PATH}(/.*)$ $1 break;" in conf
+    assert conf.count("""sub_filter '<base href="/">' '<base href="${PANIC_BASE_PATH}/">';""") == 2
+    assert "location ~ ^${PANIC_BASE_PATH}$ { return 301 ${PANIC_BASE_PATH}/; }" in conf

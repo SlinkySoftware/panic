@@ -9,6 +9,7 @@ from django.core.exceptions import ImproperlyConfigured
 from panic_server import __version__
 from panic_server.conf import env_bool, env_int, env_list, env_str
 from panic_server.logging import logging_config
+from panic_server.paths import normalise_base_path
 
 PANIC_ENV = env_str("PANIC_ENV", "dev")
 if PANIC_ENV not in {"dev", "test", "prod"}:
@@ -25,6 +26,9 @@ ALLOWED_HOSTS = env_list("PANIC_ALLOWED_HOSTS", "127.0.0.1,localhost,testserver,
 CSRF_TRUSTED_ORIGINS = env_list("PANIC_CSRF_TRUSTED_ORIGINS")
 
 PANIC_INSTANCE_NAME = env_str("PANIC_INSTANCE_NAME", "PANIC")
+
+#: URL prefix ('' or e.g. '/panic'); must equal panic-web's PANIC_BASE_PATH (panic_server.paths).
+PANIC_BASE_PATH = normalise_base_path(env_str("PANIC_BASE_PATH", ""))
 
 # ---------------------------------------------------------------- Reverse proxy / Security Zones (AR-5)
 PANIC_TRUST_PROXY_HEADERS = env_bool("PANIC_TRUST_PROXY_HEADERS", True)
@@ -116,6 +120,8 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_SECURE = env_bool("PANIC_SESSION_COOKIE_SECURE", IS_PROD)
 SESSION_COOKIE_AGE = env_int("PANIC_SESSION_AGE_S", 8 * 3600)
+# Under a prefix, cookies stay inside it: the other applications on the host name never receive them.
+SESSION_COOKIE_PATH = f"{PANIC_BASE_PATH}/"
 
 LANGUAGE_CODE = "en-au"
 TIME_ZONE = "UTC"
@@ -133,6 +139,7 @@ if env_bool("PANIC_SECURE_PROXY_SSL_HEADER", False):
 CSRF_COOKIE_NAME = "panic_csrftoken"
 CSRF_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SECURE = SESSION_COOKIE_SECURE
+CSRF_COOKIE_PATH = SESSION_COOKIE_PATH
 CSRF_FAILURE_VIEW = "panic_server.security.csrf_failure"
 PANIC_CSP = env_str("PANIC_CSP", "")
 PANIC_RATE_LIMIT_ENABLED = env_bool("PANIC_RATE_LIMIT_ENABLED", True)

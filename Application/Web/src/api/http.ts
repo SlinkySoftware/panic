@@ -1,7 +1,8 @@
 /**
  * Core HTTP layer for every Server call made by the SPA.
  *
- * - AR-1.6: only relative `/api/v1/...` and `/auth/...` URLs. `apiUrl()` resolves them against the page's own
+ * - AR-1.6: only relative `/api/v1/...` and `/auth/...` URLs. `apiUrl()` puts them under the URL prefix
+ *   (`basePath.ts`) and resolves them against the page's own
  *   origin (needed because `Request` wants an absolute URL); the SPA never knows Server's address.
  * - Django session auth: cookies are sent with `credentials: 'same-origin'`.
  * - CSRF (AR-2.10, API.md §1): unsafe methods carry `X-CSRFToken` (cookie `panic_csrftoken`, else the token from
@@ -9,6 +10,8 @@
  * - A `401` from any endpoint other than the auth endpoints is reported to the registered unauthorized handler (a
  *   boot file sends the user to `/login?next=...`); API.md's `401 UNAUTHENTICATED` means "no/expired session".
  */
+
+import { appPath } from './basePath';
 
 export const API_BASE = '/api/v1';
 export const CSRF_COOKIE = 'panic_csrftoken';
@@ -61,7 +64,7 @@ export function apiUrl(path: string): string {
     path.startsWith(API_BASE) || path.startsWith('/auth/')
       ? path
       : `${API_BASE}${path.startsWith('/') ? '' : '/'}${path}`;
-  return new URL(p, globalThis.location.href).toString();
+  return new URL(appPath(p), globalThis.location.href).toString();
 }
 
 export function readCookie(name: string): string | null {
@@ -170,7 +173,7 @@ export async function apiFetch(input: Request): Promise<Response> {
     throw new ApiError(0, { detail: `Server unreachable: ${e instanceof Error ? e.message : String(e)}` }, null);
   }
   const path = new URL(input.url).pathname;
-  if (res.status === 401 && !path.startsWith(AUTH_PATH_PREFIX)) {
+  if (res.status === 401 && !path.startsWith(appPath(AUTH_PATH_PREFIX))) {
     unauthorizedHandler?.(res);
   }
   return res;

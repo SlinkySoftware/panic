@@ -9,6 +9,7 @@
  * navigates the browser to it directly rather than fetching it.
  */
 import { api, unwrap, type components } from './client';
+import { appPath } from './basePath';
 import { resetCsrfToken, refreshCsrfToken, toApiError } from './http';
 
 export type Profile = components['schemas']['Profile'];
@@ -39,5 +40,5 @@ export async function logout(): Promise<void> {
 
 /** `GET /auth/oidc/login?next=...`: a real browser navigation, never fetched (API.md §4.1). */
 export function oidcLoginUrl(next: string): string {
-  return `/auth/oidc/login?next=${encodeURIComponent(next)}`;
+  return `${appPath('/auth/oidc/login')}?next=${encodeURIComponent(next)}`;
 }

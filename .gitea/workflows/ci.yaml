@@ -139,6 +139,13 @@ jobs:
           PANIC_IMAGE_TAG: smoke
         run: Build/ci/container_smoke.sh
 
+      - name: Joint smoke test under a URL prefix (PANIC_BASE_PATH=/panic)
+        env:
+          PANIC_IMAGE_PREFIX: panic-ci
+          PANIC_IMAGE_TAG: smoke
+          SMOKE_BASE_PATH: /panic
+        run: Build/ci/container_smoke.sh
+
       # The built-in job token cannot push packages (see header).
       - name: Check registry credentials
         if: steps.meta.outputs.publish == 'true'

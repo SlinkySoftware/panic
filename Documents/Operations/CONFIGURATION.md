@@ -19,6 +19,7 @@ All examples use reserved documentation names and addresses (`example.com`, RFC 
 | `PANIC_ALLOWED_HOSTS` | `127.0.0.1,localhost,testserver,*` | Accepted `Host` headers. Set explicitly in prod, e.g. `panic.example.com`. |
 | `PANIC_CSRF_TRUSTED_ORIGINS` | *(empty)* | Origins trusted for CSRF behind TLS-terminating proxies, e.g. `https://panic.example.com`. |
 | `PANIC_INSTANCE_NAME` | `PANIC` | Name shown in the top bar and login page. |
+| `PANIC_BASE_PATH` | *(empty: `/`)* | URL prefix when PANIC shares a host name with other applications, e.g. `/panic` (`panic`, `/panic/` are the same). Letters, digits, `-` and `_` per segment. **Set the same value on panic-server and panic-web.** The server strips it from incoming paths (it still answers without it, for the health check and `/metrics`), puts it on its redirects and `.rdp` links, and scopes the session and CSRF cookies to `<prefix>/`. See DEPLOYMENT.md §2. |
 | `PANIC_TZ` | `UTC` | Display time zone. |
 | `PANIC_LOG_LEVEL` | `INFO` | Python log level. |
 | `PANIC_LOG_FORMAT` | `json` | `json` (structured, with request id) or `console`. |
@@ -82,7 +83,7 @@ Settings live in `panic_server/gunicorn_conf.py`; `PANIC_SERVER_BIND` sets the l
 | `PANIC_OIDC_AUTHORIZE_URL` | discovered | Override the authorization endpoint. |
 | `PANIC_OIDC_TOKEN_URL` | discovered | Override the token endpoint. |
 | `PANIC_OIDC_USERINFO_URL` | discovered | Override the userinfo endpoint (claims merged over the ID token). |
-| `PANIC_OIDC_REDIRECT_URI` | *(empty)* | Must be `https://<panic host>/auth/oidc/callback`. |
+| `PANIC_OIDC_REDIRECT_URI` | *(empty)* | Must be `https://<panic host><PANIC_BASE_PATH>/auth/oidc/callback`, e.g. `https://ops.example.com/panic/auth/oidc/callback`. |
 | `PANIC_OIDC_SCOPES` | `openid profile email groups` | Requested scopes. |
 | `PANIC_OIDC_USERNAME_CLAIM` | `preferred_username` | Claim used as PANIC username. |
 | `PANIC_OIDC_DISPLAY_NAME_CLAIM` | `name` | Claim used as display name. |
@@ -151,6 +152,7 @@ panic-web serves the SPA and proxies **only** the allow-listed paths in
 | Variable | Default | Description |
 |---|---|---|
 | `PANIC_SERVER_URL` | *(required)* | panic-server origin, `scheme://host[:port]` with no path, e.g. `http://panic-server:8210`. Validated at start; `PANIC_SERVER_URL_FILE` is also accepted. The dev proxy (`./panic start`) reads it too (default `http://127.0.0.1:8121`). |
+| `PANIC_BASE_PATH` | *(empty: `/`)* | URL prefix, as on the server (must match). Everything is served below it and forwarded to the server with the prefix; the SPA learns it from `<base href>`, rewritten per request, so one image serves any prefix. Outside the prefix only `/healthz` answers (`<prefix>` alone redirects to `<prefix>/`). `./panic start` serves the dev UI under it too. |
 
 panic-web appends the browser's address to `X-Forwarded-For`; list panic-web's address in the
 server's `PANIC_TRUSTED_PROXY_CIDRS` so the server resolves the real client IP and zone.

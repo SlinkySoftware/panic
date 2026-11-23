@@ -34,6 +34,7 @@ from panic_common.launchers import (
 from panic_common.models import CatalogItem, Protocol, SecurityZone, UnreachablePolicy, UserAccount
 from panic_common.visibility import matches, visibility_spec
 from panic_common.zones import check_item_reachability
+from panic_server.paths import app_path
 from panic_server.store.client import get_db
 from panic_server.store.errors import NotFound
 from panic_server.store.repos import audit as audit_repo
@@ -81,7 +82,7 @@ def _local_app_launch(item: CatalogItem, caller: UserAccount) -> dict[str, Any]:
 
 
 def _rdp_launch(item: CatalogItem) -> dict[str, Any]:
-    return {"kind": "DOWNLOAD", "href": f"/api/v1/launch/rdp/{item.id}.rdp"}
+    return {"kind": "DOWNLOAD", "href": app_path(f"/api/v1/launch/rdp/{item.id}.rdp")}
 
 
 def build_item_view(

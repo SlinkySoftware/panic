@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # panic-web: the Vue/Quasar SPA served by nginx as uid 101 (port 8080), proxying only the allow-listed
-# server paths (Application/Web/proxy-paths.json, AR-6.4) to PANIC_SERVER_URL.
+# server paths (Application/Web/proxy-paths.json, AR-6.4) to PANIC_SERVER_URL, all under PANIC_BASE_PATH.
 
 FROM docker.io/library/node:26-alpine AS spa
 WORKDIR /src/Application/Web
@@ -18,7 +18,7 @@ RUN python /src/Build/scripts/gen_nginx_conf.py --out /default.conf.template
 # (HTTP/2); nginx-unprivileged had no 1.30.7 build when this was set, and its 1.29 branch gets no fix.
 FROM docker.io/library/nginx:1.30.7-alpine
 # Render the template into /tmp (writable on a read-only root fs) and include it from there.
-ENV NGINX_ENVSUBST_FILTER=^PANIC_SERVER_URL$ \
+ENV NGINX_ENVSUBST_FILTER=^PANIC_(SERVER_URL|BASE_PATH)$ \
     NGINX_ENVSUBST_OUTPUT_DIR=/tmp
 USER root
 # Run as uid 101 the way nginx-unprivileged does: no `user` directive, pid and temp files in /tmp.
@@ -33,7 +33,7 @@ USER 101
 COPY --from=spa /src/Application/Web/dist/spa /usr/share/nginx/html
 COPY --from=conf /default.conf.template /etc/nginx/templates/default.conf.template
 COPY Build/Containers/common/panic-env.sh /usr/local/lib/panic/panic-env.sh
-COPY --chmod=0755 Build/Containers/web/10-panic-server-url.envsh /docker-entrypoint.d/10-panic-server-url.envsh
+COPY --chmod=0755 Build/Containers/web/10-panic-env.envsh /docker-entrypoint.d/10-panic-env.envsh
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1

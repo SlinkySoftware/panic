@@ -49,6 +49,30 @@ server's checks `/api/v1/health?ready=1`, which includes a MongoDB ping, so a re
 database turns unhealthy. Published images: `panic-web` and `panic-server`, tagged `:main`,
 `:sha-<short>`, and `:X.Y.Z` / `:X.Y` / `:latest` for releases.
 
+### Under a URL prefix (a host name shared with other applications)
+
+Set `PANIC_BASE_PATH=/panic` for **both** containers (the env file covers both in `compose.yaml`;
+with the standalone files set it on each). Everything moves below the prefix: the SPA, the API and
+`/auth/oidc/*`; the session and CSRF cookies are scoped to `/panic/`, and `PANIC_OIDC_REDIRECT_URI`
+becomes `https://<host>/panic/auth/oidc/callback`. The front proxy passes the path through unchanged
+(`proxy_pass` without a URI part) and must append to `X-Forwarded-For`:
+
+```nginx
+location = /panic { return 301 /panic/; }
+location ^~ /panic/ {
+    resolver 127.0.0.11 valid=30s ipv6=off;    # resolved per request: the proxy starts without panic-web
+    set $panic_web http://panic-web:8080;
+    proxy_pass $panic_web;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+Add that proxy's address to `PANIC_TRUSTED_PROXY_CIDRS` along with panic-web's (§3). A prefix shares
+the host name's origin with the other applications: their pages can read PANIC's non-HttpOnly CSRF
+cookie and call its API in a signed-in user's browser. Use a host name of its own when that matters.
+
 ### Replicas and migrations
 
 On start every server replica runs `panic_ensure_indexes` (idempotent), then `panic_migrate` when

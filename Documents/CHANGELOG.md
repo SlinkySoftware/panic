@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-23 — URL prefix (`PANIC_BASE_PATH`)
+- PANIC can run under a path such as `/panic/` on a host name it shares with other applications (e.g. behind
+  another application's nginx). One setting, the same on both tiers; empty keeps today's behaviour at `/`.
+- panic-web: every location sits below the prefix and forwards the full path; index.html's `<base href="/">`
+  is rewritten to `<base href="/panic/">` (`sub_filter`). The SPA is built with relative asset URLs and takes
+  the router base and API URLs from `<base href>` (`src/api/basePath.ts`), so one image serves any prefix.
+  Outside the prefix only `/healthz` answers. Entry script renamed `10-panic-env.envsh` (validates both vars).
+- panic-server: a WSGI mount moves the prefix into `SCRIPT_NAME` (`panic_server.paths`); path checks use
+  `path_info`; the login and OIDC redirects and the `.rdp` link carry the prefix; cookies are scoped to it.
+  Requests without the prefix still work (health check, `/metrics`).
+- CI runs the joint smoke test a second time with `SMOKE_BASE_PATH=/panic`.
+
 ## 2026-11-19 — panic-web on nginx 1.30.7 (CVE-2026-123007, CVE-2026-123633)
 - `panic-web` is built on the official `nginx:1.30.7-alpine` image instead of `nginx-unprivileged:1.29-alpine`.
   1.30.7 fixes two HTTP/2 bugs (flow-control heap overflow, proxy use-after-free); the 1.29 branch gets no fix

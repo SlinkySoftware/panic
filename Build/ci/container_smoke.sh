@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Joint smoke test of the built images (T-S6-12): browser -> panic-web -> 2x panic-server -> MongoDB.
 #   PANIC_IMAGE_PREFIX / PANIC_IMAGE_TAG select the images (default panic-local/*:latest).
+#   SMOKE_BASE_PATH runs the stack under a URL prefix (PANIC_BASE_PATH on both tiers, e.g. /panic).
 # Proves: SPA + healthz served, /metrics and unlisted API paths 404 at web, sign-in through web, sessions
 # work across both replicas (round-robin) and after a replica restart, and the server sees the browser's
 # IP through the web tier (client-IP diagnostics: FIRST_UNTRUSTED_HOP with the client container's IP).
@@ -17,17 +18,21 @@ WORK="$ROOT/.run/smoke-$$"
 mkdir -p "$WORK"
 chmod 777 "$WORK"
 ADMIN_PW="smoke-$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+BASE="${SMOKE_BASE_PATH:-}"
 
 cat > "$WORK/override.yaml" <<YAML
 services:
   web:
     ports: !reset []
+    environment:
+      PANIC_BASE_PATH: "${BASE}"
     networks:
       default:
         ipv4_address: ${SUBNET_PREFIX}.10
   server:
     environment:
       PANIC_ENV: prod
+      PANIC_BASE_PATH: "${BASE}"
       PANIC_DJANGO_SECRET_KEY: smoke-$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
       PANIC_ALLOWED_HOSTS: web,localhost
       PANIC_CSRF_TRUSTED_ORIGINS: http://web:8080
@@ -60,25 +65,35 @@ trap cleanup EXIT
 
 client() {  # run a shell snippet in a curl container at the fixed client IP; $WORK is /w (cookie jar)
     docker run --rm --network "${PROJECT}_default" --ip "$CLIENT_IP" -v "$WORK:/w" \
-        -e ADMIN_PW="$ADMIN_PW" --entrypoint sh docker.io/curlimages/curl:8.11.1 -ec "$1"
+        -e ADMIN_PW="$ADMIN_PW" -e BASE="$BASE" --entrypoint sh docker.io/curlimages/curl:8.11.1 -ec "$1"
 }
 
-echo "== starting stack (web, 2x server, mongo)"
+echo "== starting stack (web, 2x server, mongo)${BASE:+ under $BASE/}"
 compose up -d --wait --wait-timeout 180
 
 echo "== web tier, allow-list and sign-in"
 client '
-B=http://web:8080
+B=http://web:8080$BASE
 code() { curl -s -o /dev/null -w "%{http_code}" "$@"; }
-[ "$(code $B/healthz)" = 200 ]
+[ "$(code http://web:8080/healthz)" = 200 ]
 curl -fsS $B/ | grep -q "q-app"
-curl -fsS $B/catalog | grep -q "q-app"                        # SPA fallback
+curl -fsS $B/ | grep -qF "<base href=\"$BASE/\">"
+curl -fsS $B/catalog | grep -qF "<base href=\"$BASE/\">"      # SPA fallback, deep link
+ASSET=$(curl -fsS $B/ | sed -n "s#.*src=\"\./\(assets/[^\"]*\.js\)\".*#\1#p" | head -1)
+[ "$(code $B/$ASSET)" = 200 ]
+if [ -n "$BASE" ]; then
+  [ "$(curl -s -o /dev/null -w "%{http_code} %{redirect_url}" $B)" = "301 http://web:8080$BASE/" ]
+  [ "$(code http://web:8080/)" = 404 ]                          # outside the prefix
+  [ "$(code http://web:8080/api/v1/health)" = 404 ]
+  [ "$(code http://web:8080/$ASSET)" = 404 ]
+fi
 [ "$(code $B/metrics)" = 404 ]
 [ "$(code $B/api/v1/not-listed)" = 404 ]
 [ "$(code $B/api/v1/health)" = 200 ]
 [ "$(code $B/api/v1/ui/bootstrap)" = 401 ]
 curl -fsS -c /w/jar -b /w/jar $B/api/v1/auth/csrf -o /dev/null
 TOKEN=$(awk "\$6 == \"panic_csrftoken\" {print \$7}" /w/jar)
+[ "$(awk "\$6 == \"panic_csrftoken\" {print \$3}" /w/jar)" = "$BASE/" ]   # cookie stays inside the prefix
 curl -fsS -c /w/jar -b /w/jar -H "X-CSRFToken: $TOKEN" -H "Content-Type: application/json" \
   -d "{\"username\":\"smoke-admin\",\"password\":\"$ADMIN_PW\"}" $B/api/v1/auth/login -o /dev/null
 for i in $(seq 1 20); do [ "$(code -b /w/jar $B/api/v1/ui/bootstrap)" = 200 ]; done
@@ -99,6 +114,6 @@ done
 echo "== session survives a replica restart"
 docker restart "$(compose ps -q server | head -1)" >/dev/null
 compose up -d --wait --wait-timeout 120 server >/dev/null
-client 'for i in $(seq 1 10); do [ "$(curl -s -o /dev/null -w "%{http_code}" -b /w/jar http://web:8080/api/v1/ui/bootstrap)" = 200 ]; done'
+client 'for i in $(seq 1 10); do [ "$(curl -s -o /dev/null -w "%{http_code}" -b /w/jar http://web:8080$BASE/api/v1/ui/bootstrap)" = 200 ]; done'
 
 echo "smoke ok"

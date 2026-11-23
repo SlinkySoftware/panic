@@ -70,20 +70,24 @@ export function ensureRequestId(proxyReq: Pick<ClientRequest, 'setHeader'>, req:
   proxyReq.setHeader('X-Request-ID', id);
 }
 
+export type DevProxyRule = ProxyOptions & { target: string; bypass: NonNullable<ProxyOptions['bypass']> };
+
 /**
- * One rule for both `/api/` and `/auth/`: allow-listed paths are proxied to Server, anything else is a 404 at
- * Web (like prod nginx). A single rule avoids depending on proxy-key ordering.
+ * One rule for both `<basePath>/api/` and `<basePath>/auth/`: allow-listed paths are proxied to Server (prefix
+ * included, as panic-web does), anything else is a 404 at Web (like prod nginx). A single rule avoids depending
+ * on proxy-key ordering. `basePath` is the normalised `PANIC_BASE_PATH` (`''` or e.g. `/panic`).
  */
 export function buildDevProxy(
   serverUrl: string,
   paths: ProxyPaths = loadProxyPaths(),
-): { '^/(api|auth)/': ProxyOptions & { target: string; bypass: NonNullable<ProxyOptions['bypass']> } } {
+  basePath = '',
+): Record<string, DevProxyRule> {
   return {
-    '^/(api|auth)/': {
+    [`^${basePath}/(api|auth)/`]: {
       target: serverUrl,
       changeOrigin: false,
       xfwd: true, // X-Forwarded-For / -Proto / -Host; no X-Real-IP (API.md §9)
-      bypass: (req) => (isAllowedApiPath(req.url ?? '', paths) ? undefined : false),
+      bypass: (req) => (isAllowedApiPath((req.url ?? '').slice(basePath.length), paths) ? undefined : false),
       configure: (proxy) => {
         proxy.on('proxyReq', (proxyReq, req) => ensureRequestId(proxyReq, req));
       },

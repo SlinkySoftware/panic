@@ -16,6 +16,7 @@ services:
     tmpfs: ["/tmp"]
     environment:
       PANIC_SERVER_URL: ${PANIC_SERVER_URL:?set PANIC_SERVER_URL to the panic-server origin}
+      PANIC_BASE_PATH: ${PANIC_BASE_PATH:-}   # URL prefix, e.g. /panic; must equal the server's
     ports:
       - "${PANIC_WEB_PUBLISH:-8080}:8080"
     logging:
