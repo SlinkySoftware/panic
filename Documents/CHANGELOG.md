@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-23 — 0.1.0, first public release
+- Source published under GPL-3.0-or-later; images on GHCR: `ghcr.io/slinkysoftware/panic-web` and
+  `ghcr.io/slinkysoftware/panic-server` (`0.1.0`, `0.1`, `latest`). A `vX.Y.Z` tag builds, smoke-tests (at `/`
+  and under a URL prefix) and publishes both.
+
 ## 2026-11-23 — URL prefix (`PANIC_BASE_PATH`)
 - PANIC can run under a path such as `/panic/` on a host name shared with other applications. One setting,
   the same on both tiers; empty keeps the previous behaviour at `/`.

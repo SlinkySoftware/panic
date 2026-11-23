@@ -46,8 +46,10 @@ docker compose --env-file /etc/panic/panic.env -f Build/Containers/compose.yaml 
 
 Both images run as non-root users on a read-only root filesystem, and both have a `HEALTHCHECK`. The
 server's checks `/api/v1/health?ready=1`, which includes a MongoDB ping, so a replica that loses the
-database turns unhealthy. Published images: `panic-web` and `panic-server`, tagged `:main`,
-`:sha-<short>`, and `:X.Y.Z` / `:X.Y` / `:latest` for releases.
+database turns unhealthy. Release images are public on GHCR: `ghcr.io/slinkysoftware/panic-web` and
+`ghcr.io/slinkysoftware/panic-server`, tagged `:X.Y.Z`, `:X.Y` and `:latest`
+(`.github/workflows/release.yml`, on a `vX.Y.Z` tag). The Gitea CI (`.gitea/workflows/ci.yaml`) also
+publishes `:main` and `:sha-<short>` to its own registry.
 
 ### Under a URL prefix (a host name shared with other applications)
 
