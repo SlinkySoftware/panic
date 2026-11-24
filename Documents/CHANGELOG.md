@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-24 — 0.2.1: View As refreshes the dashboard
+- Starting or leaving View As (a zone, a user, or both) while on the dashboard it returns to left that
+  dashboard as loaded before: items, including those in list widgets, kept showing as unavailable when the
+  emulated zone allowed them. The dashboard now reloads whenever the effective user or zone changes. Web
+  only; the server already applied the emulated zone.
+
 ## 2026-11-24 — 0.2.0: multi-protocol catalog items, Copy, side-by-side dialog buttons
 - A catalog item can have more than one protocol, chosen as checkboxes in the item dialog, so a device
   with a web UI and SSH is one item. SSH and RDP are mutually exclusive. Each protocol has its own port and

@@ -120,7 +120,10 @@ const toggleDefault = () =>
 const togglePin = () =>
   pinned.value ? act(() => unpinDashboard(props.id), 'Unpinned') : act(() => pinDashboard(props.id), 'Pinned');
 
-watch(() => props.id, load, { immediate: true });
+// Reload on a new dashboard and on a new perspective: starting or leaving View As (a user or a zone) changes
+// what is visible and reachable, often while staying on the same dashboard route.
+const perspective = computed(() => `${session.me?.id ?? ''}|${session.zone?.id ?? ''}`);
+watch([() => props.id, perspective], load, { immediate: true });
 </script>
 
 <style scoped>

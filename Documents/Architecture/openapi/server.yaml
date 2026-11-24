@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: PANIC Server API
-  version: 0.2.0
+  version: 0.2.1
   description: |-
     All paths are under /api/v1 (AR-6.3). JSON only except the .rdp download (application/x-rdp). Times are RFC 3339 UTC.
     panic-web proxies only /api/v1/{ui,auth,me,dashboards,catalog,lists,sites,teams,zones,users,admin,launch/rdp}/*, /auth/oidc/*, /api/v1/health and /api/v1/version (Documents/Architecture/API.md §9); /metrics and /api/v1/schema are server-only.

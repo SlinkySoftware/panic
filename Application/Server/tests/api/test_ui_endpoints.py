@@ -67,14 +67,14 @@ def scenario(mongo_db: Database) -> dict[str, Any]:
 
     ssh_item = catalog_repo.create_catalog_item(
         mongo_db,
-        title="core-sw-01",
+        title=f"core-sw-01-{suffix}",
         host="core-sw-01.example.com",
         connections=[{"protocol": Protocol.SSH, "port": 22}],
         site="2SYA",
         normalized_keys=["ssh://core-sw-01.example.com:22"],
         created_by="system",
         tags=["network"],
-        search_keys=search_keys("core-sw-01", "core-sw-01.example.com", "2SYA", ["network"]),
+        search_keys=search_keys(f"core-sw-01-{suffix}", "core-sw-01.example.com", "2SYA", ["network"]),
     )
     restricted_item = catalog_repo.create_catalog_item(
         mongo_db,
@@ -112,10 +112,10 @@ def scenario(mongo_db: Database) -> dict[str, Any]:
 
     endpoint_list = lists_repo.create_list(
         mongo_db,
-        title="Core Switches",
+        title=f"Core Switches {suffix}",
         created_by="system",
         item_ids=[ssh_item.id, restricted_item.id],
-        search_keys=search_keys("Core Switches", "", ""),
+        search_keys=search_keys(f"Core Switches {suffix}", "", ""),
     )
 
     dashboard = dashboards_repo.create_dashboard(
@@ -137,6 +137,7 @@ def scenario(mongo_db: Database) -> dict[str, Any]:
     )
 
     return {
+        "suffix": suffix,
         "plain": plain,
         "admin": admin,
         "ssh_item": ssh_item,
@@ -213,6 +214,25 @@ def test_dashboard_view_resolves_items_lists_and_unavailable(scenario: dict[str,
     assert body["lists"][scenario["list"].id]["item_count"] == 2
 
 
+@pytest.mark.parametrize("as_user", [False, True])
+def test_dashboard_view_follows_view_as_zone(scenario: dict[str, Any], as_user: bool) -> None:
+    """View As a zone: list and host items restricted to that zone are reachable on the dashboard."""
+    client = _client_as(scenario["admin"].id)
+    url = f"/api/v1/ui/dashboards/{scenario['dashboard'].id}"
+    restricted_id = scenario["restricted_item"].id
+    before = client.get(url).json()
+    assert before["items"][restricted_id]["reachable"] is False  # the real (Default) zone
+
+    body = {"zone_id": scenario["restricted_item"].zone_ids[0]}
+    if as_user:
+        body["user_id"] = scenario["plain"].id
+    assert client.put("/api/v1/admin/view-as", body, content_type="application/json").status_code == 200
+
+    after = client.get(url).json()
+    assert after["items"][restricted_id]["reachable"] is True
+    assert restricted_id in after["lists"][scenario["list"].id]["item_ids"]
+
+
 def test_dashboard_view_etag_304_on_if_none_match(scenario: dict[str, Any]) -> None:
     client = _client_as(scenario["plain"].id)
     first = client.get(f"/api/v1/ui/dashboards/{scenario['dashboard'].id}")
@@ -256,7 +276,8 @@ def test_search_requires_two_characters(scenario: dict[str, Any]) -> None:
 
 def test_search_finds_item_dashboard_and_list_by_prefix(scenario: dict[str, Any]) -> None:
     client = _client_as(scenario["plain"].id)
-    body = client.get("/api/v1/ui/search?q=core").json()
+    # This run's suffix keeps earlier runs' identical items and lists from crowding out the 20 results.
+    body = client.get(f"/api/v1/ui/search?q=core+{scenario['suffix']}").json()
     types_and_ids = {(r["type"], r["id"]) for r in body["results"]}
     assert ("ITEM", scenario["ssh_item"].id) in types_and_ids
     assert ("LIST", scenario["list"].id) in types_and_ids
