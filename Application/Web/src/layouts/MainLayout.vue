@@ -153,7 +153,7 @@
       </q-list>
       <q-list class="absolute-bottom q-pb-sm">
         <q-item v-if="railPinned && session.instance?.version" dense class="panic-version" data-testid="nav-version">
-          <q-item-section>v{{ session.instance.version }}</q-item-section>
+          <q-item-section class="text-center">v{{ session.instance.version }}</q-item-section>
         </q-item>
         <q-item clickable data-testid="nav-pin" @click="toggleRailPinned">
           <q-item-section avatar>
