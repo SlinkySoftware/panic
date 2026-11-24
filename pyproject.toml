@@ -1,6 +1,6 @@
 [project]
 name = "panic-workspace"
-version = "0.1.0"
+version = "0.1.1"
 description = "PANIC uv workspace root (Portal for Accessing Networks, Infrastructure, and Compute)"
 requires-python = ">=3.13"
 dependencies = [

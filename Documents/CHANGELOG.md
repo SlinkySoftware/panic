@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-24 — 0.1.1: panic-web starts on hosts without IPv6
+- panic-web failed to start on a kernel with IPv6 disabled (`socket() [::]:8080 failed (97: Address family not
+  supported by protocol)`): its nginx config always listened on `[::]:8080`. The entrypoint now adds the IPv6
+  listener only when the kernel supports IPv6. No configuration change; replace the `panic-web` image.
+
 ## 2026-11-23 — 0.1.0, first public release
 - Source published under GPL-3.0-or-later; images on GHCR: `ghcr.io/slinkysoftware/panic-web` and
   `ghcr.io/slinkysoftware/panic-server` (`0.1.0`, `0.1`, `latest`). A `vX.Y.Z` tag builds, smoke-tests (at `/`

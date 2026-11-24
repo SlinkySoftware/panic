@@ -18,7 +18,7 @@ RUN python /src/Build/scripts/gen_nginx_conf.py --out /default.conf.template
 # (HTTP/2); nginx-unprivileged had no 1.30.7 build when this was set, and its 1.29 branch gets no fix.
 FROM docker.io/library/nginx:1.30.7-alpine
 # Render the template into /tmp (writable on a read-only root fs) and include it from there.
-ENV NGINX_ENVSUBST_FILTER=^PANIC_(SERVER_URL|BASE_PATH)$ \
+ENV NGINX_ENVSUBST_FILTER=^PANIC_(SERVER_URL|BASE_PATH|LISTEN_V6)$ \
     NGINX_ENVSUBST_OUTPUT_DIR=/tmp
 USER root
 # Run as uid 101 the way nginx-unprivileged does: no `user` directive, pid and temp files in /tmp.

@@ -36,9 +36,10 @@ def test_metrics_is_blocked_and_unlisted_api_paths_404() -> None:
     assert not re.search(r"location[^{]*/metrics[^{]*\{\s*proxy_pass", conf)
 
 
-def test_only_the_server_url_and_base_path_are_envsubst_variables() -> None:
+def test_only_the_entrypoint_variables_are_envsubst_variables() -> None:
     conf, _, _ = _conf()
-    assert set(re.findall(r"\$\{(\w+)\}", conf)) == {"PANIC_SERVER_URL", "PANIC_BASE_PATH"}
+    assert set(re.findall(r"\$\{(\w+)\}", conf)) == {"PANIC_SERVER_URL", "PANIC_BASE_PATH", "PANIC_LISTEN_V6"}
+    assert "listen 8080;\n    ${PANIC_LISTEN_V6}\n" in conf  # IPv6 listener only where the kernel has IPv6
     assert "X-Forwarded-For $proxy_add_x_forwarded_for" in conf
 
 

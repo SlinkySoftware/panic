@@ -7,6 +7,8 @@
 #   PANIC_BASE_PATH   the URL prefix (empty = /), normalised to '' or /a[/b]: letters, digits, - and _ only, as
 #                     panic_server.paths requires (it lands in nginx locations, one of them a regex). Must equal
 #                     panic-server's PANIC_BASE_PATH. Always exported, so envsubst never leaves it unfilled.
+#   PANIC_LISTEN_V6   not a setting: the [::]:8080 listener, or a comment where the kernel has no IPv6 (nginx
+#                     fails to start on a socket it cannot create; the image's own check covers default.conf only).
 . /usr/local/lib/panic/panic-env.sh
 panic_file_env PANIC_SERVER_URL || exit 1
 
@@ -32,3 +34,10 @@ fi
 PANIC_BASE_PATH="$_pb"
 unset _pb
 export PANIC_BASE_PATH
+
+if [ -e /proc/net/if_inet6 ]; then
+    PANIC_LISTEN_V6='listen [::]:8080;'
+else
+    PANIC_LISTEN_V6='# no IPv6 in this kernel: IPv4 only'
+fi
+export PANIC_LISTEN_V6
