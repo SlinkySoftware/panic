@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — 0.3.1: version in the menu, release tags only move forward
+- The left menu shows the running version ("v0.3.1") just above the pin, while the menu is pinned open.
+- Release workflow: `X.Y` and `latest` move only when the release is the newest of its line / overall (by
+  version), so releasing an older line or re-running an old tag never moves them back. `X.Y.Z` as before.
+
 ## 2026-11-24 — 0.3.0: Super Admin role, config export / merge-import
 - New `SUPER_ADMIN` permission. The bootstrap admin is always a super admin (given the flag at sign-in);
   only super admins can edit it, and nobody can disable it or remove its admin roles. Super admins grant

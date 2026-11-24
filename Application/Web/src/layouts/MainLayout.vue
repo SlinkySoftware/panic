@@ -105,7 +105,7 @@
       @mouseenter="railExpanded = true"
       @mouseleave="railExpanded = false"
     >
-      <q-list padding data-testid="nav" style="padding-bottom: 64px">
+      <q-list padding data-testid="nav" :style="{ paddingBottom: railPinned ? '96px' : '64px' }">
         <q-item-label header class="panic-nav-heading">Dashboards</q-item-label>
         <q-item
           v-for="d in session.navDashboards"
@@ -152,6 +152,9 @@
         </template>
       </q-list>
       <q-list class="absolute-bottom q-pb-sm">
+        <q-item v-if="railPinned && session.instance?.version" dense class="panic-version" data-testid="nav-version">
+          <q-item-section>v{{ session.instance.version }}</q-item-section>
+        </q-item>
         <q-item clickable data-testid="nav-pin" @click="toggleRailPinned">
           <q-item-section avatar>
             <q-icon
@@ -235,6 +238,11 @@ async function onLogout(): Promise<void> {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.panic-version {
+  min-height: 0;
+  font-size: 0.7rem;
+  opacity: 0.6;
 }
 .panic-unpinned {
   transform: rotate(45deg);

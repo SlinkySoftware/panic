@@ -1,5 +1,6 @@
 # Release images to GHCR on a version tag (vX.Y.Z):
-#   ghcr.io/<owner>/panic-web and panic-server, tagged X.Y.Z, X.Y and latest.
+#   ghcr.io/<owner>/panic-web and panic-server, tagged X.Y.Z; also X.Y when it is the newest patch of that
+#   line and latest when it is the newest release overall (by version, not by build order).
 # The tag must equal the version in the code. Both images are smoke-tested together (at / and under a URL
 # prefix) before anything is pushed, and the pushed images are the ones that were tested.
 # Day-to-day CI (checks, :main images) is .gitea/workflows/ci.yaml.
@@ -82,8 +83,18 @@ jobs:
       - name: Publish
         shell: bash
         run: |
+          # X.Y.Z always. X.Y and latest only when this is the newest release of its line / overall, so
+          # releasing an older line (e.g. 0.2.3 after 0.3.0) or re-running an old tag never moves them back.
+          git fetch --quiet --force --tags origin
+          version="${{ steps.meta.outputs.version }}"; minor="${{ steps.meta.outputs.minor }}"
+          releases="$(git tag -l 'v*.*.*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sed 's/^v//' | sort -V)"
+          newest="$(tail -n1 <<<"$releases")"
+          newest_minor="$(grep -E "^${minor//./\\.}\." <<<"$releases" | tail -n1)"
+          tags=("$version")
+          [[ "$version" == "$newest_minor" ]] && tags+=("$minor") || echo "::notice::$minor stays on $newest_minor"
+          [[ "$version" == "$newest" ]] && tags+=(latest) || echo "::notice::latest stays on $newest"
           for image in panic-server panic-web; do
-            for tag in "${{ steps.meta.outputs.version }}" "${{ steps.meta.outputs.minor }}" latest; do
+            for tag in "${tags[@]}"; do
               docker tag "panic-ci/$image:smoke" "${{ steps.meta.outputs.prefix }}/$image:$tag"
               docker push "${{ steps.meta.outputs.prefix }}/$image:$tag"
             done
