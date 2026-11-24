@@ -60,7 +60,6 @@ describe('proxy-paths.json (API.md §9)', () => {
       '/api/v1/users',
       '/api/v1/settings',
       '/api/v1/audit',
-      '/api/v1/export',
       '/api/v1/health',
       '/api/v1/version',
     ]);

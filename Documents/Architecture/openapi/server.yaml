@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: PANIC Server API
-  version: 0.2.2
+  version: 0.3.0
   description: |-
     All paths are under /api/v1 (AR-6.3). JSON only except the .rdp download (application/x-rdp). Times are RFC 3339 UTC.
     panic-web proxies only /api/v1/{ui,auth,me,dashboards,catalog,lists,sites,teams,zones,users,admin,launch/rdp}/*, /auth/oidc/*, /api/v1/health and /api/v1/version (Documents/Architecture/API.md §9); /metrics and /api/v1/schema are server-only.
@@ -12,6 +12,66 @@ paths:
       operationId: admin_client_ip_retrieve
       tags:
       - admin
+      security:
+      - panicSessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /admin/config/export:
+    get:
+      operationId: admin_config_export_retrieve
+      tags:
+      - admin
+      security:
+      - panicSessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+                format: binary
+          description: ''
+  /admin/config/import:
+    post:
+      operationId: admin_config_import_create
+      description: 'Body: ``{document, plan_digest}`` (the digest from the preview
+        the user confirmed).'
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: {}
+      security:
+      - panicSessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /admin/config/import/preview:
+    post:
+      operationId: admin_config_import_preview_create
+      description: 'Body: the export document. Writes nothing.'
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: {}
       security:
       - panicSessionAuth: []
       responses:
@@ -461,26 +521,6 @@ paths:
               schema:
                 type: object
                 additionalProperties: {}
-          description: ''
-  /export:
-    get:
-      operationId: export_retrieve
-      parameters:
-      - in: query
-        name: shared_only
-        schema:
-          type: boolean
-      tags:
-      - admin
-      security:
-      - panicSessionAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: string
-                format: binary
           description: ''
   /launch/rdp/{item_id}.rdp:
     get:
@@ -1501,11 +1541,14 @@ components:
           type: boolean
         can_view_as:
           type: boolean
+        super_admin:
+          type: boolean
       required:
       - can_add_global
       - can_add_team
       - can_view_as
       - global_admin
+      - super_admin
     Prefs:
       type: object
       properties:

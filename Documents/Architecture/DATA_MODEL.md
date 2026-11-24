@@ -68,7 +68,10 @@ External identity (OIDC, LDAP) is used for authentication only. A first external
 creates the user with `permissions: []` and `team_ids: []`. Later sign-ins update only
 `display_name` and `last_login_at`.
 Removing `GLOBAL_ADMIN` from, or disabling, the last enabled admin is refused
-(`409 PROTECTED_RESOURCE`). Disabling a user, or enabling them again, recomputes `orphaned` on
+(`409 PROTECTED_RESOURCE`). `SUPER_ADMIN` always comes with `GLOBAL_ADMIN`. The bootstrap admin
+(`PANIC_BOOTSTRAP_ADMIN_USER`, a `LOCAL` account) is a super admin by identity and is given the flag at
+sign-in; it cannot be disabled or lose either flag, and only super admins may edit it. API responses
+strip `SUPER_ADMIN` from `permissions` for callers who are not super admins (`panic_server.auth.roles`). Disabling a user, or enabling them again, recomputes `orphaned` on
 the `PERSONAL` resources they own (§5.1).
 
 ### 4.2 `sites`
@@ -320,16 +323,22 @@ editable is `403 PERMISSION_DENIED`. A visible orphan is `403 ORPHANED_RESOURCE`
 
 ## 7. Export / import
 
-`manage.py panic_export` / `panic_import` and `GET /api/v1/export` keep the portable JSON format
+`manage.py panic_export` / `panic_import` keep the full portable JSON format
 (`format: panic-export`, `schema_version: 2`). It is used for backup and for provisioning shared
 configuration between environments. Files with `schema_version: 1` (from the first,
 never-deployed implementation) are not accepted. Users export with `team_ids`, `permissions` and `disabled`.
 Password hashes, sessions, rate limits and the audit log are never exported.
 
+The Super Admin config file (`GET /api/v1/admin/config/export`) is a separate, smaller format:
+`format: panic-config`, `schema_version: 1`, with `sites`, `teams`, `zones`, `catalog` and `lists`
+(personal included). Each record is its `id` plus the editable fields only (no versions, timestamps,
+search or normalized keys, orphan flags). Merge-import rules: SPEC §4.7 and
+`panic_server.services.config_transfer`.
+
 ## 8. Domain enums
 
 - `Protocol`: `URL`, `SSH`, `RDP`, `LOCAL_APP` (`URL` was `WEB` before 0.2)
 - `ScopeType`: `GLOBAL`, `TEAM`, `PERSONAL`
-- `PermissionFlag`: `GLOBAL_ADMIN`, `CAN_ADD_GLOBAL`, `CAN_ADD_TEAM`
+- `PermissionFlag`: `SUPER_ADMIN`, `GLOBAL_ADMIN`, `CAN_ADD_GLOBAL`, `CAN_ADD_TEAM`
 - `WidgetType`: `HOST`, `LIST`
 - `DensityMode`: `COMFORT`, `COMPACT` · `ThemeMode`: `DARK`, `LIGHT` · `UnreachablePolicy`: `HIDE`, `DIM`

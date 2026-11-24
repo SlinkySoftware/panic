@@ -28,6 +28,7 @@ class ScopeType(StrEnum):
 
 
 class PermissionFlag(StrEnum):
+    SUPER_ADMIN = "SUPER_ADMIN"  # always with GLOBAL_ADMIN; hidden from non-super admins
     GLOBAL_ADMIN = "GLOBAL_ADMIN"
     CAN_ADD_GLOBAL = "CAN_ADD_GLOBAL"
     CAN_ADD_TEAM = "CAN_ADD_TEAM"

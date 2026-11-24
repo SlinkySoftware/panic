@@ -1226,7 +1226,7 @@ wheels = [
 
 [[package]]
 name = "panic-common"
-version = "0.2.2"
+version = "0.3.0"
 source = { editable = "Application/Common" }
 dependencies = [
     { name = "pydantic" },
@@ -1237,7 +1237,7 @@ requires-dist = [{ name = "pydantic", specifier = ">=2.10.0,<3" }]
 
 [[package]]
 name = "panic-server"
-version = "0.2.2"
+version = "0.3.0"
 source = { editable = "Application/Server" }
 dependencies = [
     { name = "django" },
@@ -1266,7 +1266,7 @@ requires-dist = [
 
 [[package]]
 name = "panic-workspace"
-version = "0.2.2"
+version = "0.3.0"
 source = { virtual = "." }
 dependencies = [
     { name = "panic-common" },

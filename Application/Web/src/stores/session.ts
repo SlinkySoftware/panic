@@ -27,6 +27,8 @@ export const useSessionStore = defineStore('session', () => {
   const instance = computed(() => bootstrap.value?.instance ?? null);
   const permissions = computed(() => bootstrap.value?.permissions ?? null);
   const isAdmin = computed(() => permissions.value?.global_admin === true);
+  // Application settings and config export/import; false while viewing as anyone who is not a super admin.
+  const isSuperAdmin = computed(() => permissions.value?.super_admin === true);
   const canViewAs = computed(() => permissions.value?.can_view_as === true);
   const viewAs = computed(() => bootstrap.value?.view_as ?? null);
   const isViewingAs = computed(() => viewAs.value !== null);
@@ -108,6 +110,7 @@ export const useSessionStore = defineStore('session', () => {
     realUser,
     instance,
     permissions,
+    isSuperAdmin,
     isAdmin,
     canViewAs,
     viewAs,

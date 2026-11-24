@@ -14,8 +14,9 @@ workstation or jump host (`ssh`, PuTTY, `mstsc.exe`, browser tabs, local applica
 - **Scopes:** GLOBAL, TEAM and PERSONAL catalog items, lists and dashboards; lists stay same-scope.
 - **Security zones:** the client IP, resolved through trusted proxies, maps to a zone, and unreachable
   items are dimmed or hidden.
-- **Access:** local bootstrap admin, LDAP and OIDC sign-in. Permissions (`GLOBAL_ADMIN`,
-  `CAN_ADD_GLOBAL`, `CAN_ADD_TEAM`) and team membership are managed in the app. Admins can
+- **Access:** local bootstrap admin, LDAP and OIDC sign-in. Permissions (`SUPER_ADMIN`, `GLOBAL_ADMIN`,
+  `CAN_ADD_GLOBAL`, `CAN_ADD_TEAM`) and team membership are managed in the app. Super admins can export
+  the configuration and merge-import it into another install. Admins can
   "View As" any user.
 - **Command palette:** Ctrl+K or `/` to search and launch items, lists and dashboards.
 

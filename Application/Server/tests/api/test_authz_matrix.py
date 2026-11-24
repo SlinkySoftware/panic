@@ -58,6 +58,14 @@ def _default_zone(mongo_db: Database) -> None:
     zones_repo.ensure_default_zone(mongo_db)
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limits(mongo_db: Database) -> Any:
+    """Each route walk includes ``POST /auth/login``; don't let those attempts use up the login
+    rate limit for later tests that sign in from the same test-client address."""
+    yield
+    mongo_db["rate_limits"].delete_many({})
+
+
 def _unique(prefix: str) -> str:
     """Each test re-invokes these fixtures (function-scoped, deliberately -- some tests mutate
     the user), so a fixed username would collide with ``users.username_unique`` across the many
@@ -85,6 +93,33 @@ def admin_user(mongo_db: Database) -> Any:
     )
 
 
+@pytest.fixture
+def super_user(mongo_db: Database) -> Any:
+    username = _unique("matrix-super")
+    return users_repo.create_user(
+        mongo_db,
+        username=username,
+        display_name="Matrix Super",
+        default_remote_user=username,
+        permissions=[str(PermissionFlag.SUPER_ADMIN), str(PermissionFlag.GLOBAL_ADMIN)],
+    )
+
+
+#: Tier name for :class:`IsRealSuperAdmin` routes (config export/import).
+SUPER_TIER = "super_admin"
+ALL_TIERS = set(TIERS)
+
+
+#: Routes declared at a lower tier whose view additionally requires a super admin.
+_SUPER_IN_VIEW = {("settings", "patch")}
+
+
+def _tier(name: str, permission_classes: Any, method: str) -> str | None:
+    if (name, method) in _SUPER_IN_VIEW:
+        return SUPER_TIER
+    return tier_of_method(permission_classes, method)
+
+
 def _client_as(user_id: str | None) -> Client:
     """A test ``Client`` with ``SESSION_USER_KEY`` pre-seeded (no need to exercise /auth/login
     itself here; that is ``tests/test_auth.py``'s job)."""
@@ -110,13 +145,13 @@ def _routes() -> list[tuple[str, str, str | None]]:
         name = pattern.name
         path = reverse(name, kwargs=_SAMPLE_KWARGS.get(name, {}))
         for method in methods:
-            routes.append((path, method, tier_of_method(cls.permission_classes, method)))
+            routes.append((path, method, _tier(name, cls.permission_classes, method)))
     return routes
 
 
 def test_every_route_declares_a_tier() -> None:
     for path, _method, tier in _routes():
-        assert tier in TIERS, f"{path!r} does not declare one of {sorted(TIERS)}"
+        assert tier in ALL_TIERS, f"{path!r} does not declare one of {sorted(ALL_TIERS)}"
 
 
 def test_anonymous_gets_401_on_authenticated_routes_and_not_401_on_public_routes() -> None:
@@ -141,10 +176,26 @@ def test_plain_user_never_gets_401_on_authenticated_routes(plain_user: Any) -> N
         assert resp.status_code not in (401, 403), f"plain user {method.upper()} {path} got {resp.status_code}"
 
 
-def test_admin_succeeds_on_every_route(admin_user: Any) -> None:
-    for path, method, _tier in _routes():
+def test_admin_succeeds_on_every_non_super_route(admin_user: Any) -> None:
+    for path, method, tier in _routes():
         resp = getattr(_client_as(admin_user.id), method)(path)
-        assert resp.status_code not in (401, 403), f"admin {method.upper()} {path} got {resp.status_code}"
+        if tier == SUPER_TIER:
+            assert resp.status_code == 403, f"plain admin {method.upper()} {path} got {resp.status_code}, want 403"
+        else:
+            assert resp.status_code not in (401, 403), f"admin {method.upper()} {path} got {resp.status_code}"
+
+
+def test_super_admin_succeeds_on_every_route(super_user: Any) -> None:
+    for path, method, _tier_name in _routes():
+        resp = getattr(_client_as(super_user.id), method)(path)
+        assert resp.status_code not in (401, 403), f"super admin {method.upper()} {path} got {resp.status_code}"
+
+
+def test_plain_user_gets_403_on_super_admin_routes(plain_user: Any) -> None:
+    super_routes = [(p, m) for p, m, t in _routes() if t == SUPER_TIER]
+    assert len(super_routes) == 4  # config export, preview, import; PATCH /settings
+    for path, method in super_routes:
+        assert getattr(_client_as(plain_user.id), method)(path).status_code == 403
 
 
 # ---------------------------------------------------------------- IsGlobalAdmin (unit-level)

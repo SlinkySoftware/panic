@@ -76,6 +76,18 @@ def admin(mongo_db: Any) -> Any:
     )
 
 
+@pytest.fixture
+def super_admin(mongo_db: Any) -> Any:
+    username = _unique("mut-super")
+    return users_repo.create_user(
+        mongo_db,
+        username=username,
+        display_name="Mut Super",
+        default_remote_user=username,
+        permissions=[str(PermissionFlag.SUPER_ADMIN), str(PermissionFlag.GLOBAL_ADMIN)],
+    )
+
+
 # ============================================================================ F1: users RBAC
 
 
@@ -726,16 +738,22 @@ def test_unmatched_ip_resolves_to_default_zone(mongo_db: Any, admin: Any) -> Non
 # ============================================================================ Export
 
 
-def test_export_is_admin_only_and_audited(mongo_db: Any, plain: Any, admin: Any) -> None:
-    assert _client_as(plain.id).get("/api/v1/export").status_code == 403
-    resp = _client_as(admin.id).get("/api/v1/export")
+def test_config_export_is_super_admin_only_and_audited(mongo_db: Any, plain: Any, admin: Any, super_admin: Any) -> None:
+    assert _client_as(plain.id).get("/api/v1/admin/config/export").status_code == 403
+    assert _client_as(admin.id).get("/api/v1/admin/config/export").status_code == 403  # Global Admin is not enough
+    resp = _client_as(super_admin.id).get("/api/v1/admin/config/export")
     assert resp.status_code == 200
+    assert resp["Content-Disposition"].startswith('attachment; filename="panic-config-')
     doc = json.loads(resp.content)
-    assert doc["format"] == "panic-export"
+    assert doc["format"] == "panic-config"
 
-    audit_resp = _client_as(admin.id).get("/api/v1/audit?action=admin.export")
+    audit_resp = _client_as(super_admin.id).get("/api/v1/audit?action=admin.config.export")
     assert audit_resp.status_code == 200
-    assert any(e["action"] == "admin.export" for e in audit_resp.json()["results"])
+    assert any(e["action"] == "admin.config.export" for e in audit_resp.json()["results"])
+
+
+def test_old_export_endpoint_is_gone(admin: Any) -> None:
+    assert _client_as(admin.id).get("/api/v1/export").status_code == 404
 
 
 # ============================================================================ Settings
@@ -756,7 +774,7 @@ def _clean_system_settings(mongo_db: Any) -> Any:
 
 
 @pytest.mark.usefixtures("_clean_system_settings")
-def test_settings_get_any_user_patch_admin_only(mongo_db: Any, plain: Any, admin: Any) -> None:
+def test_settings_get_any_user_patch_super_admin_only(mongo_db: Any, plain: Any, admin: Any, super_admin: Any) -> None:
     # Production always has this (panic_migrate step 1, like the Default zone); a fresh test
     # database does not, so this mirrors the _default_zone fixture's role for settings.
     settings_repo.ensure_system_settings(mongo_db, default_global_dashboard_id="", updated_by="system")
@@ -782,12 +800,22 @@ def test_settings_get_any_user_patch_admin_only(mongo_db: Any, plain: Any, admin
         {"default_global_dashboard_id": dashboard.id},
         HTTP_IF_MATCH=str(version),
     )
-    assert admin_patch.status_code == 200
-    assert admin_patch.json()["default_global_dashboard"]["id"] == dashboard.id
+    assert admin_patch.status_code == 403  # a plain Global Admin may no longer change settings
+
+    super_patch = _json(
+        _client_as(super_admin.id),
+        "patch",
+        "/api/v1/settings",
+        {"default_global_dashboard_id": dashboard.id},
+        HTTP_IF_MATCH=str(version),
+    )
+    assert super_patch.status_code == 200
+    assert super_patch.json()["default_global_dashboard"]["id"] == dashboard.id
 
 
 @pytest.mark.usefixtures("_clean_system_settings")
-def test_settings_patch_rejects_non_global_dashboard(mongo_db: Any, admin: Any) -> None:
+def test_settings_patch_rejects_non_global_dashboard(mongo_db: Any, super_admin: Any) -> None:
+    admin = super_admin
     settings_repo.ensure_system_settings(mongo_db, default_global_dashboard_id="", updated_by="system")
     team_dashboard = dashboards_repo.create_dashboard(
         mongo_db, title="Team Dashboard", created_by="system", scope="TEAM", team_ids=["some-team"]
@@ -804,12 +832,12 @@ def test_settings_patch_rejects_non_global_dashboard(mongo_db: Any, admin: Any) 
     assert resp.json()["error_code"] == "VALIDATION_ERROR"
 
 
-def test_settings_ssh_uri_handler_switch_and_scheme(mongo_db: Any, admin: Any) -> None:
+def test_settings_ssh_uri_handler_switch_and_scheme(mongo_db: Any, admin: Any, super_admin: Any) -> None:
     from panic_common.models import CatalogItem
     from panic_server.services.launch import build_item_view
 
     settings_repo.ensure_system_settings(mongo_db, default_global_dashboard_id="", updated_by="system")
-    client = _client_as(admin.id)
+    client = _client_as(super_admin.id)
     item = CatalogItem(
         id="cat-uri",
         title="r1",

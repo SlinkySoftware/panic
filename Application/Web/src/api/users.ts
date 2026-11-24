@@ -2,10 +2,16 @@
 import { requestJson } from './http';
 import type { Page } from './catalog';
 
-export const PERMISSION_FLAGS = ['GLOBAL_ADMIN', 'CAN_ADD_GLOBAL', 'CAN_ADD_TEAM'] as const;
+/** SUPER_ADMIN is only shown to super admins (the server strips it for everyone else). */
+export const PERMISSION_FLAGS = ['SUPER_ADMIN', 'GLOBAL_ADMIN', 'CAN_ADD_GLOBAL', 'CAN_ADD_TEAM'] as const;
 export type PermissionFlag = (typeof PERMISSION_FLAGS)[number];
 
+/** The flags a caller may see and set: SUPER_ADMIN only for super admins. */
+export const permissionFlagsFor = (superAdmin: boolean): PermissionFlag[] =>
+  PERMISSION_FLAGS.filter((p) => superAdmin || p !== 'SUPER_ADMIN');
+
 export const PERMISSION_LABELS: Record<PermissionFlag, string> = {
+  SUPER_ADMIN: 'Super admin',
   GLOBAL_ADMIN: 'Global Admin',
   CAN_ADD_GLOBAL: 'Can add Global items',
   CAN_ADD_TEAM: 'Can add Team items',
@@ -21,6 +27,8 @@ export interface UserSummary {
   disabled: boolean;
   last_login_at: string | null;
   version: number;
+  bootstrap_admin?: boolean;
+  can_edit?: boolean; // false: a regular admin looking at the bootstrap admin
 }
 
 export interface UserDetail extends UserSummary {

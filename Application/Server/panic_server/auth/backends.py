@@ -35,12 +35,17 @@ def valid_username(username: str) -> bool:
 
 
 def ensure_bootstrap_admin() -> UserAccount | None:
-    """Create or update the local bootstrap Global Admin from ``PANIC_BOOTSTRAP_ADMIN_*``."""
+    """Create or update the local bootstrap admin (Super Admin) from ``PANIC_BOOTSTRAP_ADMIN_*``."""
     username = settings.PANIC_BOOTSTRAP_ADMIN_USER
     password = settings.PANIC_BOOTSTRAP_ADMIN_PASSWORD
     if not (settings.PANIC_AUTH_LOCAL_ENABLED and username and password and valid_username(username)):
         return None
-    admin_perms = [PermissionFlag.GLOBAL_ADMIN, PermissionFlag.CAN_ADD_GLOBAL, PermissionFlag.CAN_ADD_TEAM]
+    admin_perms = [
+        PermissionFlag.SUPER_ADMIN,
+        PermissionFlag.GLOBAL_ADMIN,
+        PermissionFlag.CAN_ADD_GLOBAL,
+        PermissionFlag.CAN_ADD_TEAM,
+    ]
     db = get_db()
     user = users_repo.get_user_by_username(db, username)
     if user is None:
@@ -51,8 +56,9 @@ def ensure_bootstrap_admin() -> UserAccount | None:
             default_remote_user=username,
             permissions=[str(p) for p in admin_perms],
         )
-    elif PermissionFlag.GLOBAL_ADMIN not in user.permissions:
-        user = users_repo.update_user(db, user.id, user.version, permissions=[str(p) for p in admin_perms])
+    elif not {PermissionFlag.SUPER_ADMIN, PermissionFlag.GLOBAL_ADMIN} <= set(user.permissions):
+        merged = list(dict.fromkeys([*map(str, user.permissions), *map(str, admin_perms)]))
+        user = users_repo.update_user(db, user.id, user.version, permissions=merged)
     stored_hash = users_repo.get_password_hash(db, username)
     if not stored_hash or not check_password(password, stored_hash):
         users_repo.set_password_hash(db, username, make_password(password), auth_source="LOCAL")

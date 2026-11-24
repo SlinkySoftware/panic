@@ -1,5 +1,6 @@
 <!--
   /settings/users/<id>: display name, manual permissions, team membership, enable / disable, View As.
+  Super admin is offered only to super admins; a regular admin sees the bootstrap admin read-only.
   `/rbac` redirects to the users list.
 -->
 <template>
@@ -11,6 +12,7 @@
         <q-btn flat round dense icon="arrow_back" :to="{ name: 'settings-users' }" aria-label="Back to users" />
         <div class="text-h5">{{ user.username }}</div>
         <q-badge outline color="grey-7" :label="user.auth_source" />
+        <q-badge v-if="user.bootstrap_admin" color="deep-purple" label="Bootstrap admin" />
         <q-badge :color="user.disabled ? 'grey-6' : 'positive'" :label="user.disabled ? 'Disabled' : 'Active'" />
         <q-space />
         <q-btn
@@ -23,15 +25,31 @@
         />
       </div>
 
+      <q-banner v-if="readOnly" class="bg-grey-3 text-grey-9 q-mb-md" rounded dense data-testid="user-read-only">
+        Only super admins can edit the bootstrap admin.
+      </q-banner>
       <div class="row q-col-gutter-lg">
         <div class="col-12 col-md-7">
           <q-card flat bordered>
             <q-form @submit="save">
               <q-card-section class="row q-col-gutter-md">
-                <q-input v-model="form.display_name" class="col-12" label="Display name" v-bind="field" />
+                <q-input
+                  v-model="form.display_name"
+                  class="col-12"
+                  label="Display name"
+                  :disable="readOnly"
+                  v-bind="field"
+                />
                 <div class="col-12">
                   <div class="text-subtitle2 q-mb-xs">Permissions</div>
-                  <q-option-group v-model="form.permissions" type="checkbox" :options="permissionOptions" inline />
+                  <q-option-group
+                    v-model="form.permissions"
+                    type="checkbox"
+                    :options="permissionOptions"
+                    :disable="readOnly"
+                    inline
+                    data-testid="user-permissions"
+                  />
                 </div>
                 <q-select
                   v-model="form.team_ids"
@@ -42,16 +60,23 @@
                   use-chips
                   emit-value
                   map-options
+                  :disable="readOnly"
                   v-bind="field"
                 />
-                <q-toggle v-model="form.enabled" class="col-12" label="Account enabled" color="positive" />
+                <q-toggle
+                  v-model="form.enabled"
+                  class="col-12"
+                  label="Account enabled"
+                  color="positive"
+                  :disable="readOnly"
+                />
                 <div v-if="saveError" class="col-12">
                   <q-banner class="bg-negative text-white" rounded dense>{{ saveError }}</q-banner>
                 </div>
               </q-card-section>
               <q-card-actions align="right">
-                <q-btn flat label="Reset" :disable="!dirty" @click="fill(user)" />
-                <q-btn type="submit" color="primary" label="Save" :loading="saving" :disable="!dirty" />
+                <q-btn flat label="Reset" :disable="readOnly || !dirty" @click="fill(user)" />
+                <q-btn type="submit" color="primary" label="Save" :loading="saving" :disable="readOnly || !dirty" />
               </q-card-actions>
             </q-form>
           </q-card>
@@ -89,7 +114,7 @@ import { computed, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import { listCodeNamed, type CodeNamed } from '@/api/admin';
-import { getUser, PERMISSION_FLAGS, PERMISSION_LABELS, updateUser, type UserDetail } from '@/api/users';
+import { getUser, PERMISSION_LABELS, permissionFlagsFor, updateUser, type UserDetail } from '@/api/users';
 import { useSessionStore } from '@/stores/session';
 
 const props = defineProps<{ id: string }>();
@@ -99,7 +124,9 @@ const router = useRouter();
 const session = useSessionStore();
 
 const field = { outlined: true, dense: true, hideBottomSpace: true } as const;
-const permissionOptions = PERMISSION_FLAGS.map((p) => ({ label: PERMISSION_LABELS[p], value: p }));
+const permissionOptions = computed(() =>
+  permissionFlagsFor(session.isSuperAdmin).map((p) => ({ label: PERMISSION_LABELS[p], value: p })),
+);
 
 const user = ref<UserDetail | null>(null);
 const teams = ref<CodeNamed[]>([]);
@@ -108,6 +135,7 @@ const loading = ref(false);
 const loadError = ref('');
 const saving = ref(false);
 const saveError = ref('');
+const readOnly = computed(() => user.value?.can_edit === false);
 const form = reactive({ display_name: '', permissions: [] as string[], team_ids: [] as string[], enabled: true });
 
 function fill(u: UserDetail) {
@@ -147,13 +175,16 @@ watch(() => props.id, load, { immediate: true });
 
 async function save() {
   const u = user.value;
-  if (!u) return;
+  if (!u || readOnly.value) return;
   saving.value = true;
   saveError.value = '';
   try {
     await updateUser(u.id, u.version, {
       display_name: form.display_name.trim(),
-      permissions: form.permissions as UserDetail['permissions'],
+      // A regular admin never sees SUPER_ADMIN, so never sends it (the server keeps a target's own).
+      permissions: form.permissions.filter(
+        (p) => session.isSuperAdmin || p !== 'SUPER_ADMIN',
+      ) as UserDetail['permissions'],
       team_ids: form.team_ids,
       disabled: !form.enabled,
     });

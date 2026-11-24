@@ -52,12 +52,18 @@
           <q-btn color="primary" icon="person_add" label="Add user" @click="openCreate" />
         </div>
       </template>
+      <template #body-cell-username="cell">
+        <q-td :props="cell">
+          {{ cell.row.username }}
+          <q-badge v-if="cell.row.bootstrap_admin" color="deep-purple" label="Bootstrap admin" class="q-ml-xs" />
+        </q-td>
+      </template>
       <template #body-cell-permissions="cell">
         <q-td :props="cell">
           <q-badge
             v-for="p in cell.row.permissions"
             :key="p"
-            :color="p === 'GLOBAL_ADMIN' ? 'red-7' : 'primary'"
+            :color="p === 'SUPER_ADMIN' ? 'deep-purple' : p === 'GLOBAL_ADMIN' ? 'red-7' : 'primary'"
             class="q-mr-xs"
           >
             {{ PERMISSION_LABELS[p as PermissionFlag] ?? p }}
@@ -75,6 +81,7 @@
       <template #body-cell-actions="cell">
         <q-td :props="cell" class="text-right">
           <q-btn
+            v-if="cell.row.can_edit !== false && !cell.row.bootstrap_admin"
             flat
             dense
             no-caps
@@ -149,14 +156,16 @@ import { ApiError } from '@/api/http';
 import {
   createUser,
   listUsers,
-  PERMISSION_FLAGS,
   PERMISSION_LABELS,
+  permissionFlagsFor,
   updateUser,
   type PermissionFlag,
   type UserSummary,
 } from '@/api/users';
+import { useSessionStore } from '@/stores/session';
 
 const $q = useQuasar();
+const session = useSessionStore();
 const router = useRouter();
 
 const field = { outlined: true, dense: true, hideBottomSpace: true } as const;
@@ -165,7 +174,9 @@ const required = (v: string) => (!!v && v.trim().length > 0) || 'Required';
 const teams = ref<CodeNamed[]>([]);
 const teamName = computed(() => new Map(teams.value.map((t) => [t.id, t.code])));
 const teamOptions = computed(() => teams.value.map((t) => ({ label: `${t.code} - ${t.name}`, value: t.id })));
-const permissionOptions = PERMISSION_FLAGS.map((p) => ({ label: PERMISSION_LABELS[p], value: p }));
+const permissionOptions = computed(() =>
+  permissionFlagsFor(session.isSuperAdmin).map((p) => ({ label: PERMISSION_LABELS[p], value: p })),
+);
 const statusOptions = [
   { label: 'Active', value: 'false' },
   { label: 'Disabled', value: 'true' },

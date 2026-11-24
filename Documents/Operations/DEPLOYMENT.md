@@ -173,8 +173,12 @@ and resolves the client to `198.51.100.23`. That address then matches the zone w
   docker compose -f Build/Containers/compose.yaml exec -T server python -m django panic_import - < panic.json
   ```
 
-  `panic_import` upserts by id; `--replace` wipes the portal data first. Global Admins can also
-  download `GET /api/v1/export` (Settings → Export).
+  `panic_import` upserts by id; `--replace` wipes the portal data first.
+
+- **Config only** (sites, teams, zones, catalog items, lists): a Super Admin uses *Export config* and
+  *Import config* on `/settings`. Import merges with a preview and confirmation and never deletes;
+  importing the same source again (e.g. reloading a test install from production) updates what changed
+  and adds what is new, without duplicates.
 
 ## 7. Monitoring
 

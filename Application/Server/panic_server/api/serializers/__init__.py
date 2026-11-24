@@ -95,6 +95,7 @@ class PermissionsSerializer(serializers.Serializer):
     can_add_global = serializers.BooleanField()
     can_add_team = serializers.BooleanField()
     can_view_as = serializers.BooleanField()
+    super_admin = serializers.BooleanField()
 
 
 class ZoneRefSerializer(serializers.Serializer):

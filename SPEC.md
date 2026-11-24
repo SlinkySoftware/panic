@@ -57,7 +57,7 @@ browser ─► reverse proxy / LB ─► panic-web (nginx, one or more) ─► i
 | **Site** | A short code and name (for example `DC1`, "Primary data centre") attached to catalog items. |
 | **Team** | A named group of users that `TEAM`-scoped resources are shared with. |
 | **Security zone** | A named set of IPv4/IPv6 CIDRs. The caller's zone decides which items are reachable. |
-| **Permission** | `GLOBAL_ADMIN`, `CAN_ADD_GLOBAL`, `CAN_ADD_TEAM`, granted in the app. |
+| **Permission** | `SUPER_ADMIN`, `GLOBAL_ADMIN`, `CAN_ADD_GLOBAL`, `CAN_ADD_TEAM`, granted in the app. |
 | **Orphan** | A `TEAM` resource with no teams left, or a `PERSONAL` resource with no enabled owner. |
 | **View As** | A Global Admin previewing the portal as another user, from another zone, or both. |
 
@@ -76,7 +76,7 @@ browser ─► reverse proxy / LB ─► panic-web (nginx, one or more) ─► i
 - **Default dashboard.** Resolved in order (AR-2.6):
   1. the user's own default, if set and visible (chosen with the star on the dashboard header, on
      `/profile`, or when creating a dashboard);
-  2. the app-wide default, set by a Global Admin on `/settings`, which must be `GLOBAL`;
+  2. the app-wide default, set by a Super Admin on `/settings`, which must be `GLOBAL`;
   3. the first visible dashboard.
 
   The app-wide default cannot be deleted, unpinned or moved out of `GLOBAL` scope
@@ -210,8 +210,13 @@ remote user. Every interpolated value is sanitised first (§5.2).
     enabled/disabled, shows counts of owned resources, and starts View As for that user.
   - The last enabled Global Admin cannot lose that permission or be disabled.
 - **Permissions.**
-  - `GLOBAL_ADMIN`: sites, teams, zones, users, orphans, settings, audit, export, client-IP
-    diagnostics and View As. Sees every `TEAM` resource.
+  - `SUPER_ADMIN`: everything `GLOBAL_ADMIN` can do (it always comes with it), plus application
+    settings and config export/import (§4.7). The bootstrap admin is always a super admin; only super
+    admins can edit it, and nobody can disable it or remove its admin roles. Only super admins see the
+    role or grant it: to other admins a super admin is shown as a plain Global Admin, and their
+    permission edits leave the hidden role in place. View As never grants it.
+  - `GLOBAL_ADMIN`: sites, teams, zones, users, orphans, audit, client-IP diagnostics and View As.
+    Sees every `TEAM` resource.
   - `CAN_ADD_GLOBAL`: create and edit `GLOBAL` items, lists and dashboards.
   - `CAN_ADD_TEAM`: create and edit `TEAM` items, lists and dashboards for teams the user belongs to.
   - Every signed-in user can create and manage their own `PERSONAL` resources.
@@ -236,10 +241,10 @@ remote user. Every interpolated value is sanitised first (§5.2).
 ### 4.6 Authentication
 
 - **Methods.**
-  - **Local:** the bootstrap admin from `PANIC_BOOTSTRAP_ADMIN_USER` / `_PASSWORD` (a Global Admin,
+  - **Local:** the bootstrap admin from `PANIC_BOOTSTRAP_ADMIN_USER` / `_PASSWORD` (a Super Admin,
     password hashed at rest). Can be turned off with `PANIC_AUTH_LOCAL_ENABLED=false`.
   - **LDAP / LDAPS:** username and password checked by bind after local accounts; certificates are
-    always validated.
+    validated unless `PANIC_LDAP_TLS_VERIFY=false`.
   - **OIDC:** authorization code flow with PKCE, `state` and `nonce`; `iss`, `aud`, `exp` validated.
     The redirect URI is `https://<panic-web host><PANIC_BASE_PATH>/auth/oidc/callback`.
 - **Authentication only.** OIDC and LDAP establish identity and nothing else. A first external sign-in
@@ -256,18 +261,27 @@ remote user. Every interpolated value is sanitised first (§5.2).
 - **User settings (`/profile`):** display name, default remote user, SSH template, default dashboard,
   theme, unreachable-item policy.
 - **Application settings (`/settings`):** app-wide default dashboard, SSH URI handler on/off and
-  scheme, export, links to the admin pages.
+  scheme (changed by Super Admins only; shown greyed out to others), config export/import (Super
+  Admin), links to the admin pages.
 - **Audit log (`/audit`, Global Admin).** Append-only record of every successful mutation, sign-in,
-  View As change, `.rdp` download and export, with actor, View As subject, target, client IP, zone and
+  View As change, `.rdp` download, config export and import, with actor, View As subject, target, client IP, zone and
   request id. Filterable by actor, action, target, text and time range; keyset-paged, newest first.
   Retained for `PANIC_AUDIT_RETENTION_DAYS` (default 365; `0` keeps entries forever). Each entry is
   also logged as JSON.
-- **Export and import.** A portable JSON format (`format: panic-export`, `schema_version: 2`) covering
-  sites, teams, zones, users (with permissions and teams, without credentials), catalog, lists,
-  dashboards and settings. Global Admins can download it (`GET /api/v1/export`, optionally shared
-  resources only). `manage.py panic_export` / `panic_import` do the same from the shell; import upserts
-  by id, or replaces everything with `--replace`. Password hashes, sessions, rate limits and the audit
-  log are never exported.
+- **Config export and import (Super Admin, `/settings`).** *Export config* downloads sites, teams,
+  zones, catalog items and lists, personal ones included (`format: panic-config`, `schema_version: 1`).
+  *Import config* merges such a file and never deletes. Each record matches an existing one by id,
+  else by natural key: sites and teams by code, zones by name, items and lists by title within their
+  scope (personal: title and owners). Matched records are updated from the file, unmatched ones added
+  with the file's id, so importing the same source again (e.g. reloading dev from prod) matches by id
+  and adds no duplicates. Ambiguous, clashing or invalid records are skipped as conflicts; references
+  (an item's teams and zones, a list's items) follow the matched records. A preview lists every
+  addition, change (with fields) and conflict, then a confirmation applies it; it is refused if the
+  data changed since the preview. Both are audited.
+- **Full backup.** `manage.py panic_export` / `panic_import` keep the portable JSON format
+  (`format: panic-export`, `schema_version: 2`) of everything including users (permissions and teams,
+  no credentials), dashboards and settings; import upserts by id, or replaces everything with
+  `--replace`. Password hashes, sessions, rate limits and the audit log are never exported.
 
 ## 5. Non-functional requirements
 
@@ -394,5 +408,5 @@ document has a string `_id` (UUIDv4 for new documents; exposed as `id`), and mut
 | `sessions`, `rate_limits`, `schema_meta` | Server-side sessions, rate-limit windows, data-migration version |
 
 Enumerations: `Protocol` (`URL`, `SSH`, `RDP`, `LOCAL_APP`), `ScopeType` (`GLOBAL`, `TEAM`,
-`PERSONAL`), `PermissionFlag` (`GLOBAL_ADMIN`, `CAN_ADD_GLOBAL`, `CAN_ADD_TEAM`), `WidgetType`
+`PERSONAL`), `PermissionFlag` (`SUPER_ADMIN`, `GLOBAL_ADMIN`, `CAN_ADD_GLOBAL`, `CAN_ADD_TEAM`), `WidgetType`
 (`HOST`, `LIST`), `ThemeMode` (`DARK`, `LIGHT`), `UnreachablePolicy` (`HIDE`, `DIM`).

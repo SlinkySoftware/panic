@@ -16,10 +16,13 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from panic_common.errors import ErrorCode
 from panic_server.api.concurrency import expected_version, version_conflict
+from panic_server.api.errors import ApiError
 from panic_server.api.pagination import PageEnvelopePagination
 from panic_server.api.permissions import IsGlobalAdmin, IsRealGlobalAdmin, ReadAuthenticatedWriteAdmin
 from panic_server.api.validation import require
+from panic_server.auth.roles import sees_super_admin
 from panic_server.services import admin as admin_service
 from panic_server.services.audit import record_audit
 from panic_server.services.view_as import assert_not_view_as, exit_view_as, start_view_as
@@ -30,6 +33,13 @@ from panic_server.store.repos import sites as sites_repo
 from panic_server.store.repos import teams as teams_repo
 from panic_server.store.repos import users as users_repo
 from panic_server.store.repos import zones as zones_repo
+
+
+def _viewer_super(request: Request) -> bool:
+    """Whether this request may see and use the super admin role (``auth.roles.sees_super_admin``)."""
+    context = request._request.context
+    return sees_super_admin(context.real_user, context.effective_user)
+
 
 # ======================================================================== sites
 
@@ -174,7 +184,11 @@ def team_detail_view(request: Request, team_id: str) -> Response:
 def team_members_view(request: Request, team_id: str) -> Response:
     page = int(request.query_params.get("page", 1) or 1)
     page_size = min(int(request.query_params.get("page_size", 50) or 50), 100)
-    return Response(admin_service.get_team_members(get_db(), team_id, page=page, page_size=page_size))
+    return Response(
+        admin_service.get_team_members(
+            get_db(), team_id, page=page, page_size=page_size, viewer_super=_viewer_super(request)
+        )
+    )
 
 
 # ======================================================================== zones
@@ -297,6 +311,7 @@ def users_view(request: Request) -> Response:
             permission=qp.get("permission") or None,
             team_id=qp.get("team_id") or None,
             disabled=(qp.get("disabled").lower() == "true") if qp.get("disabled") is not None else None,
+            viewer_super=_viewer_super(request),
         )
         paginator = PageEnvelopePagination()
         page = paginator.paginate_queryset(rows, request)
@@ -312,6 +327,7 @@ def users_view(request: Request) -> Response:
         display_name=body.get("display_name"),
         permissions=body.get("permissions"),
         team_ids=body.get("team_ids"),
+        viewer_super=_viewer_super(request),
     )
     record_audit(
         db,
@@ -321,7 +337,7 @@ def users_view(request: Request) -> Response:
         target_id=user.id,
         summary=f"Pre-provisioned user {user.username}",
     )
-    return Response(admin_service.user_summary(user), status=201)
+    return Response(admin_service.user_summary(user, _viewer_super(request)), status=201)
 
 
 @extend_schema(tags=["admin"], request=OpenApiTypes.OBJECT, responses=OpenApiTypes.OBJECT)
@@ -330,14 +346,14 @@ def users_view(request: Request) -> Response:
 def user_detail_view(request: Request, user_id: str) -> Response:
     db = get_db()
     if request.method == "GET":
-        return Response(admin_service.get_user_detail(db, user_id))
+        return Response(admin_service.get_user_detail(db, user_id, _viewer_super(request)))
 
     django_request = request._request
     assert_not_view_as(django_request.context)
     current = users_repo.get_user(db, user_id)
     version = expected_version(request, current.version, required=False)
     try:
-        updated = admin_service.update_user(db, user_id, version, **request.data)
+        updated = admin_service.update_user(db, user_id, version, viewer_super=_viewer_super(request), **request.data)
     except VersionConflict:
         raise version_conflict(users_repo.get_user(db, user_id).version) from None
     record_audit(
@@ -349,7 +365,7 @@ def user_detail_view(request: Request, user_id: str) -> Response:
         summary=f"Updated user {updated.username}",
         details={"fields": sorted(request.data.keys())},
     )
-    return Response(admin_service.user_summary(updated))
+    return Response(admin_service.user_summary(updated, _viewer_super(request)))
 
 
 # ======================================================================== orphans
@@ -429,6 +445,10 @@ def settings_view(request: Request) -> Response:
 
     django_request = request._request
     assert_not_view_as(django_request.context)
+    if not _viewer_super(request):
+        raise ApiError(
+            ErrorCode.PERMISSION_DENIED, "Only a super admin can change application settings.", status_code=403
+        )
     real = django_request.context.real_user
     assert real is not None
     current_doc = settings_repo.get_system_settings(db)

@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-11-24 — 0.3.0: Super Admin role, config export / merge-import
+- New `SUPER_ADMIN` permission. The bootstrap admin is always a super admin (given the flag at sign-in);
+  only super admins can edit it, and nobody can disable it or remove its admin roles. Super admins grant
+  the role on the user page. Other admins never see it: super admins look like Global Admins to them,
+  and their permission edits leave the role in place. View As never grants it.
+- Application Settings: the default dashboard and SSH system handler can only be changed by super admins
+  (greyed out for other admins; `PATCH /api/v1/settings` gives 403).
+- Application Settings, super admins: **Export config** downloads sites, teams, zones, catalog items and
+  lists (personal included) as `panic-config` JSON. **Import config** merges such a file: a preview lists
+  additions, changes (with fields) and conflicts, a confirmation applies them, nothing is deleted.
+  Records match by id, else by code (sites, teams), name (zones) or title within scope (items, lists);
+  added records keep the file's ids, so re-importing the same source (e.g. prod into dev) never
+  duplicates.
+- Removed: `GET /api/v1/export` and the Settings "Export" link (it was Global Admin and included users).
+  The full backup stays `manage.py panic_export` / `panic_import`.
+
 ## 2026-11-24 — 0.2.2: option to skip LDAP certificate verification
 - New `PANIC_LDAP_TLS_VERIFY` (default `true`). `false` accepts any LDAPS / StartTLS certificate (self-signed,
   expired, wrong host name). The connection stays encrypted but the directory is not authenticated, so a

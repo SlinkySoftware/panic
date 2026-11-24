@@ -14,6 +14,7 @@ from panic_common.models import Dashboard, PermissionFlag, UserAccount
 from panic_common.rbac import can_use_view_as, has_permission
 from panic_common.visibility import DEFAULT_ZONE_ID, visibility_spec
 from panic_server import __version__
+from panic_server.auth.roles import sees_super_admin
 from panic_server.context import RequestContext
 from panic_server.store.repos import dashboards as dashboards_repo
 from panic_server.store.repos import settings as settings_repo
@@ -84,6 +85,8 @@ def build_bootstrap(db: Any, context: RequestContext) -> dict[str, Any]:
         # Only a *real* admin may start View As (AR-2.9); this is deliberately checked on
         # ``real``, not ``effective``, unlike the three permissions above.
         "can_view_as": bool(real and can_use_view_as(real)),
+        # Application settings and config export/import; never true while viewing as a non-super admin.
+        "super_admin": sees_super_admin(real, effective),
     }
 
     zone = context.zone

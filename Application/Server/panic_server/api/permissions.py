@@ -18,6 +18,7 @@ from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 from panic_common.models import PermissionFlag
 from panic_common.rbac import has_permission
+from panic_server.auth.roles import sees_super_admin
 
 if TYPE_CHECKING:
     from rest_framework.request import Request
@@ -73,6 +74,15 @@ class IsRealGlobalAdmin(BasePermission):
         return real is not None and has_permission(real, PermissionFlag.GLOBAL_ADMIN)
 
 
+class IsRealSuperAdmin(BasePermission):
+    """Super admin (``panic_server.auth.roles``) on the real user and on any View As subject."""
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        django_request = getattr(request, "_request", request)
+        context = getattr(django_request, "context", None)
+        return sees_super_admin(getattr(context, "real_user", None), request.user)
+
+
 class ReadAuthenticatedWriteAdmin(BasePermission):
     """Mixed-tier resource: any signed-in user may read (``GET``/``HEAD``/``OPTIONS``,
     API.md's ``A``), but only a Global Admin may write (API.md's ``G``).
@@ -98,6 +108,7 @@ TIERS: dict[str, type[BasePermission] | tuple[type[BasePermission], ...]] = {
     "public": IsPublic,
     "authenticated": IsAuthenticated,
     "admin": (IsGlobalAdmin, IsRealGlobalAdmin),
+    "super_admin": IsRealSuperAdmin,
 }
 
 

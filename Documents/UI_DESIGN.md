@@ -51,6 +51,12 @@ tones and monospace for anything an operator might copy.
 - **Catalog (`/catalog`) & Endpoint lists (`/lists`)**:
   - Both screens show **2 cards**: Card 1 for **Global & Team** items/lists and Card 2 for **Personal** items/lists.
   - List items are reordered only in the Edit List dialog, by dragging rows.
+- **Application Settings (`/settings`)**: app-wide settings are greyed out with "Only super admins can change
+  these settings." for other admins. Super admins also get a **Configuration** card: *Export config* (download)
+  and *Import config* (file picker → preview dialog with per-section added / changed / unchanged / conflicts and
+  the change list, ADD green, UPDATE blue, CONFLICT orange → "Import N changes" → confirmation).
+- **Users**: the Super admin permission, its deep-purple badge and its filter option exist only for super admins;
+  the bootstrap admin carries a "Bootstrap admin" badge and opens read-only for other admins.
 - **Row actions**: Edit, **Copy**, Delete, in that order, on catalog items, sites, teams and zones. Copy opens the
   edit dialog prefilled from the row as a new record (title "Copy …"); Save stays disabled until a field changes.
 - **Edit dialogs** (catalog item, site, team, zone): Save and Cancel sit in a column to the right of the fields

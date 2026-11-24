@@ -1,5 +1,5 @@
 """``/api/v1/...`` DRF routes: auth session, UI reads, the ``.rdp`` download, dashboards CRUD,
-``/me``, catalog/lists CRUD, sites/teams/zones/users/admin/settings/audit/export.
+``/me``, catalog/lists CRUD, sites/teams/zones/users/admin (incl. config export/import)/settings/audit.
 """
 
 from __future__ import annotations
@@ -10,9 +10,9 @@ from panic_server.api.views import admin as admin_views
 from panic_server.api.views import audit as audit_views
 from panic_server.api.views import auth as auth_views
 from panic_server.api.views import catalog as catalog_views
+from panic_server.api.views import config as config_views
 from panic_server.api.views import dashboards as dashboards_views
 from panic_server.api.views import diagnostics as diagnostics_views
-from panic_server.api.views import export as export_views
 from panic_server.api.views import launch as launch_views
 from panic_server.api.views import lists as lists_views
 from panic_server.api.views import me as me_views
@@ -53,8 +53,10 @@ urlpatterns = [
     path("admin/orphans", admin_views.orphans_view, name="orphans-list"),
     path("admin/orphans/<str:kind>/<str:item_id>/assign", admin_views.orphan_assign_view, name="orphan-assign"),
     path("admin/view-as", admin_views.view_as_view, name="admin-view-as"),
+    path("admin/config/export", config_views.config_export_view, name="admin-config-export"),
+    path("admin/config/import/preview", config_views.config_import_preview_view, name="admin-config-import-preview"),
+    path("admin/config/import", config_views.config_import_view, name="admin-config-import"),
     path("admin/client-ip", diagnostics_views.client_ip_view, name="admin-client-ip"),
     path("settings", admin_views.settings_view, name="settings"),
     path("audit", audit_views.audit_view, name="audit"),
-    path("export", export_views.export_view, name="export"),
 ]

@@ -24,6 +24,7 @@ from panic_common.search_keys import search_keys as compute_search_keys
 from panic_common.visibility import assign_orphan_to_user, visibility_spec
 from panic_common.zones import check_item_reachability, resolve_ip_zone, validate_cidr_list
 from panic_server.api.errors import ApiError
+from panic_server.auth.roles import is_bootstrap_admin, visible_permissions, with_implied
 from panic_server.store.cas import iso_z
 from panic_server.store.errors import NotFound
 from panic_server.store.repos import catalog as catalog_repo
@@ -94,14 +95,14 @@ def delete_team(db: Any, team_id: str, expected_version: int) -> dict[str, dict[
     }
 
 
-def get_team_members(db: Any, team_id: str, *, page: int, page_size: int) -> dict[str, Any]:
+def get_team_members(db: Any, team_id: str, *, page: int, page_size: int, viewer_super: bool = False) -> dict[str, Any]:
     teams_repo.get_team(db, team_id)  # 404 for an unknown team
     members = users_repo.list_users(db, team_id=team_id)
     total = len(members)
     start = max(page - 1, 0) * page_size
     page_members = members[start : start + page_size]
     return {
-        "results": [user_summary(u) for u in page_members],
+        "results": [user_summary(u, viewer_super) for u in page_members],
         "page": page,
         "page_size": page_size,
         "total": total,
@@ -201,13 +202,17 @@ def test_ip(db: Any, ip: str) -> dict[str, Any]:
 # ======================================================================== users
 
 
-def user_summary(u: UserAccount) -> dict[str, Any]:
+def user_summary(u: UserAccount, viewer_super: bool = False) -> dict[str, Any]:
+    """One user as the caller may see it: ``SUPER_ADMIN`` only for a super-admin viewer (roles.py)."""
+    bootstrap = is_bootstrap_admin(u)
     return {
         "id": u.id,
         "username": u.username,
         "display_name": u.display_name,
         "auth_source": str(u.auth_source),
-        "permissions": [str(p) for p in u.permissions],
+        "permissions": visible_permissions(u.permissions, viewer_super),
+        "bootstrap_admin": bootstrap,
+        "can_edit": viewer_super or not bootstrap,
         "team_ids": list(u.team_ids),
         "disabled": u.disabled,
         "last_login_at": u.last_login_at,
@@ -222,22 +227,25 @@ def list_users(
     permission: str | None,
     team_id: str | None,
     disabled: bool | None,
+    viewer_super: bool = False,
 ) -> list[dict[str, Any]]:
+    if permission == PermissionFlag.SUPER_ADMIN and not viewer_super:
+        return []  # the role does not exist for this viewer
     users = users_repo.list_users(db, team_id=team_id or None, permission=permission or None, disabled=disabled)
     if q:
         needle = q.strip().lower()
         users = [u for u in users if needle in u.username.lower() or needle in u.display_name.lower()]
-    return [user_summary(u) for u in users]
+    return [user_summary(u, viewer_super) for u in users]
 
 
-def get_user_detail(db: Any, user_id: str) -> dict[str, Any]:
+def get_user_detail(db: Any, user_id: str, viewer_super: bool = False) -> dict[str, Any]:
     user = users_repo.get_user(db, user_id)
     owned_counts = {
         "catalog": count_owned_by(db, catalog_repo.COLLECTION, user.username),
         "lists": count_owned_by(db, lists_repo.COLLECTION, user.username),
         "dashboards": count_owned_by(db, dashboards_repo.COLLECTION, user.username),
     }
-    return {**user_summary(user), "owned_counts": owned_counts}
+    return {**user_summary(user, viewer_super), "owned_counts": owned_counts}
 
 
 def create_user(
@@ -247,8 +255,11 @@ def create_user(
     display_name: str | None = None,
     permissions: list[str] | None = None,
     team_ids: list[str] | None = None,
+    viewer_super: bool = False,
 ) -> UserAccount:
     """``POST /api/v1/users``: pre-provision, no password (local sign-in stays bootstrap-admin only)."""
+    if PermissionFlag.SUPER_ADMIN in (permissions or []) and not viewer_super:
+        raise _super_only()
     name = display_name or username
     keys = compute_search_keys(name, "", "", [], username)
     return users_repo.create_user(
@@ -256,7 +267,7 @@ def create_user(
         username=username,
         display_name=name,
         default_remote_user=username,
-        permissions=list(permissions or []),
+        permissions=with_implied(permissions or []),
         team_ids=list(team_ids or []),
         search_keys=keys,
     )
@@ -265,18 +276,55 @@ def create_user(
 _USER_PATCH_FIELDS = frozenset({"display_name", "permissions", "team_ids", "disabled"})
 
 
-def update_user(db: Any, user_id: str, expected_version: int, **fields: Any) -> UserAccount:
+def _super_only() -> ApiError:
+    return ApiError(ErrorCode.PERMISSION_DENIED, "Only a super admin can grant that permission.", status_code=403)
+
+
+def update_user(
+    db: Any, user_id: str, expected_version: int, *, viewer_super: bool = False, **fields: Any
+) -> UserAccount:
     """``PATCH /api/v1/users/{id}``: the only way to change permissions/team membership (F1).
 
     Refuses to demote or disable the last enabled manual ``GLOBAL_ADMIN`` (``409
     PROTECTED_RESOURCE``). Disabling flushes sessions and recomputes orphans on the user's
     PERSONAL resources; re-enabling recomputes them again.
+
+    Super admin rules (roles.py): only a super admin edits the bootstrap admin, which nobody can
+    disable or demote; only a super admin grants or removes ``SUPER_ADMIN``, and another admin's
+    permission edit keeps a hidden ``SUPER_ADMIN`` in place.
     """
     unknown = set(fields) - _USER_PATCH_FIELDS
     if unknown:
         raise ApiError(ErrorCode.VALIDATION_ERROR, f"Unknown field(s): {', '.join(sorted(unknown))}.", status_code=400)
 
     target = users_repo.get_user(db, user_id)
+    bootstrap = is_bootstrap_admin(target)
+    if bootstrap and not viewer_super:
+        raise ApiError(
+            ErrorCode.PROTECTED_RESOURCE, "Only a super admin can edit the bootstrap admin.", status_code=403
+        )
+    if "permissions" in fields:
+        requested = [str(p) for p in fields["permissions"] or []]
+        if not viewer_super:
+            if PermissionFlag.SUPER_ADMIN in requested:
+                raise _super_only()
+            if PermissionFlag.SUPER_ADMIN in target.permissions:
+                requested.append(str(PermissionFlag.SUPER_ADMIN))
+        fields["permissions"] = with_implied(requested)
+    # Permissions are checked only when the request sets them: a bootstrap admin is a super admin by
+    # identity even before its next sign-in stores the flag, so other edits must still work.
+    if bootstrap and (
+        bool(fields.get("disabled", False))
+        or (
+            "permissions" in fields
+            and not {PermissionFlag.SUPER_ADMIN, PermissionFlag.GLOBAL_ADMIN} <= set(fields["permissions"])
+        )
+    ):
+        raise ApiError(
+            ErrorCode.PROTECTED_RESOURCE,
+            "The bootstrap admin cannot be disabled or lose Super Admin / Global Admin.",
+            status_code=409,
+        )
     was_admin = PermissionFlag.GLOBAL_ADMIN in target.permissions
     will_be_disabled = bool(fields.get("disabled", target.disabled))
     will_be_admin = ("GLOBAL_ADMIN" in fields["permissions"]) if "permissions" in fields else was_admin

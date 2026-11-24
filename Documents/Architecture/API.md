@@ -64,7 +64,7 @@ New codes are added to `panic_common.errors.ErrorCode`; codes are never renamed.
 
 ## 4. Endpoints
 
-Access: **P** public · **A** any signed-in user · **G** `GLOBAL_ADMIN`. "Proxied" = in panic-web allow-list (§9).
+Access: **P** public · **A** any signed-in user · **G** `GLOBAL_ADMIN` · **S** super admin (the real user and any View As subject). "Proxied" = in panic-web allow-list (§9).
 
 ### 4.1 Auth and session
 
@@ -92,7 +92,7 @@ Called once per page load (and after sign-in / View As changes).
   "me": {"id": "usr-…", "username": "jdoe", "display_name": "J. Doe", "auth_source": "OIDC",
          "prefs": {"density": "COMFORT", "theme": "DARK", "unreachable_policy": "DIM"}},
   "view_as": null,                       // or {"id","username","display_name"} of the subject
-  "permissions": {"global_admin": false, "can_add_global": false, "can_add_team": true, "can_view_as": false},
+  "permissions": {"global_admin": false, "can_add_global": false, "can_add_team": true, "can_view_as": false, "super_admin": false},
   "client": {"ip": "198.51.100.23", "zone": {"id": "zone-…", "name": "Jump Hosts"}, "zone_source": "CIDR"},
   "nav": {"dashboards": [{"id": "uuid", "title": "Network Ops", "icon": "router", "default": true, "locked": true}]},
   "default_dashboard": {"id": "uuid", "source": "USER | SYSTEM_GLOBAL | FALLBACK"}
@@ -213,18 +213,20 @@ Writes under `/me` act on the **real** signed-in user and are refused during Vie
 | `GET /api/v1/zones` | A | Always includes the built-in Default zone (`builtin: true`). Non-admins get `{id, name, builtin}`; admins also get `description, priority, cidrs, version` |
 | `POST /api/v1/zones` · `PATCH /api/v1/zones/{id}` · `DELETE /api/v1/zones/{id}` | G | CIDRs are validated and canonicalised. Delete `$pull`s the zone from items' `zone_ids` (reported). For `zone-default`: delete gives `409 PROTECTED_RESOURCE`; renaming or adding CIDRs gives `400 VALIDATION_ERROR`; the description can be edited |
 | `POST /api/v1/zones/test-ip` | G | `{"ip": "192.0.2.10"}` → `{resolution: {winning_zone, zone_source, matched_cidr, candidates[]}, reachable_count, blocked_count}`. An unmatched IP resolves to Default |
-| `GET /api/v1/users?q=&permission=&team_id=&disabled=&page=` | G | Users management page (`/settings/users`): `{id, username, display_name, auth_source, permissions, team_ids, disabled, last_login_at, version}` |
+| `GET /api/v1/users?q=&permission=&team_id=&disabled=&page=` | G | Users management page (`/settings/users`): `{id, username, display_name, auth_source, permissions, team_ids, disabled, last_login_at, version, bootstrap_admin, can_edit}`. For a caller who is not a super admin, `permissions` never contains `SUPER_ADMIN` and `?permission=SUPER_ADMIN` matches nobody; `can_edit` is false on the bootstrap admin |
 | `GET /api/v1/users/{id}` | G | User edit page (`/settings/users/<id>`): the row above plus `owned_counts {catalog, lists, dashboards}` |
-| `POST /api/v1/users` | G | Pre-provision `{username, display_name?, permissions, team_ids}`. No password: local sign-in stays bootstrap-admin only |
-| `PATCH /api/v1/users/{id}` | G | `{display_name?, permissions?, team_ids?, disabled?}`. **The only way to change permissions and team membership.** The IdP never sets them. Removing or disabling the last manual `GLOBAL_ADMIN` gives `409 PROTECTED_RESOURCE`. Disabling flushes the user's sessions and recomputes orphans |
+| `POST /api/v1/users` | G | Pre-provision `{username, display_name?, permissions, team_ids}`. No password: local sign-in stays bootstrap-admin only. `SUPER_ADMIN` needs a super admin caller (`403`) and adds `GLOBAL_ADMIN` |
+| `PATCH /api/v1/users/{id}` | G | `{display_name?, permissions?, team_ids?, disabled?}`. **The only way to change permissions and team membership.** The IdP never sets them. Removing or disabling the last manual `GLOBAL_ADMIN` gives `409 PROTECTED_RESOURCE`. Disabling flushes the user's sessions and recomputes orphans. Granting or removing `SUPER_ADMIN` is super-admin only (`403`); another admin's `permissions` keeps a hidden `SUPER_ADMIN`. The bootstrap admin: `403 PROTECTED_RESOURCE` unless the caller is a super admin; disabling it or removing its `SUPER_ADMIN`/`GLOBAL_ADMIN` gives `409 PROTECTED_RESOURCE` |
 | `GET /api/v1/admin/orphans?kind=catalog\|list\|dashboard&q=&page=` | G | Orphaned resources (`/settings/orphans`): `{kind, id, title, scope, former_team_ids?, former_owners?, updated_at}` |
 | `POST /api/v1/admin/orphans/{kind}/{id}/assign` | G | `{"username": "jdoe"}` (must be enabled) → the resource now `PERSONAL` for that user, plus `dropped_item_ids` for lists. Audited. Deleting an orphan uses the normal `DELETE` endpoint (allowed for admins on orphans only) |
 | `PUT /api/v1/admin/view-as` | G (real user) | `{"user_id": "usr-…"?, "zone_id": "zone-…"?}` (at least one; no user = the admin, no zone = the real client zone) → `200 bootstrap` payload for the new perspective (`client.zone_source: VIEW_AS` when a zone is set); audited |
 | `DELETE /api/v1/admin/view-as` | signed-in admin | Exit View As → `200 bootstrap`; audited. The only mutation allowed during View As |
 | `GET /api/v1/settings` | A | `{default_global_dashboard: {id, title}, ssh_uri_enabled, ssh_uri_scheme, version}` |
-| `PATCH /api/v1/settings` | G | Any of `{default_global_dashboard_id` (must be GLOBAL)`, ssh_uri_enabled, ssh_uri_scheme}`. `ssh_uri_enabled: false` removes `launch.uri` from every SSH item; `ssh_uri_scheme` (default `panic-ssh`) must be a lowercase URI scheme, not a web scheme |
+| `PATCH /api/v1/settings` | S | Any of `{default_global_dashboard_id` (must be GLOBAL)`, ssh_uri_enabled, ssh_uri_scheme}`. `ssh_uri_enabled: false` removes `launch.uri` from every SSH item; `ssh_uri_scheme` (default `panic-ssh`) must be a lowercase URI scheme, not a web scheme |
 | `GET /api/v1/audit?actor=&action=&target_type=&target_id=&q=&since=&until=&limit=&cursor=` | G | Keyset-paged entries (newest first), `limit` ≤ 200 |
-| `GET /api/v1/export?shared_only=` | G | Portable JSON (`schema_version: 2`), audited; attachment |
+| `GET /api/v1/admin/config/export` | S | Config file attachment `panic-config-<UTC stamp>.json` (`format: panic-config`, `schema_version: 1`: sites, teams, zones, catalog, lists incl. personal); audited |
+| `POST /api/v1/admin/config/import/preview` | S | Body: the config file → `{plan_digest, summary: {<section>: {added, changed, unchanged, conflicts}}, changes: [{section, action: ADD\|UPDATE\|CONFLICT, id, label, fields? (UPDATE), reason? (CONFLICT)}], warnings}`. Writes nothing. `400` for a file that is not a config export |
+| `POST /api/v1/admin/config/import` | S · not during View As | `{document, plan_digest}` → `{summary, warnings}`. Re-plans and applies only if the plan still matches `plan_digest`, else `409 VERSION_CONFLICT` (nothing written). Merge only: never deletes. Audited with every change. Request size is capped by panic-web at 2 MB (about 4,000 items) |
 | `GET /api/v1/admin/client-ip` | G | Trust-chain diagnostics (§6), shown at `/settings/client-ip` |
 
 ### 4.8 Operations
@@ -313,7 +315,7 @@ panic-web gzips JSON responses (`gzip_types application/json`); budgets are meas
                "/api/v1/admin/", "/api/v1/launch/rdp/", "/auth/oidc/"],
   "exact":    ["/api/v1/me", "/api/v1/dashboards", "/api/v1/catalog", "/api/v1/lists", "/api/v1/sites",
                "/api/v1/teams", "/api/v1/zones", "/api/v1/users", "/api/v1/settings", "/api/v1/audit",
-               "/api/v1/export", "/api/v1/health", "/api/v1/version"]
+               "/api/v1/health", "/api/v1/version"]
 }
 ```
 

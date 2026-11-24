@@ -167,6 +167,7 @@ def test_bootstrap_shape_for_plain_user(scenario: dict[str, Any]) -> None:
         "can_add_global": False,
         "can_add_team": False,
         "can_view_as": False,
+        "super_admin": False,
     }
     assert body["client"]["zone"]["id"] == zones_repo.DEFAULT_ZONE_ID
     assert body["client"]["zone_source"] == "DEFAULT"
@@ -183,6 +184,7 @@ def test_bootstrap_permissions_for_admin(scenario: dict[str, Any]) -> None:
     body = client.get("/api/v1/ui/bootstrap").json()
     assert body["permissions"]["global_admin"] is True
     assert body["permissions"]["can_view_as"] is True
+    assert body["permissions"]["super_admin"] is False  # a Global Admin is not a super admin
 
 
 # ---------------------------------------------------------------- dashboard view
