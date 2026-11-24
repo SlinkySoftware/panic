@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
+import ssl
 import time
 from collections.abc import Iterator
 from typing import Any
@@ -274,6 +276,32 @@ def test_ldap_refuses_an_ambiguous_match() -> None:
         mock.patch.object(_FakeConn, "search", _search_with([_RILEY, other])),
     ):
         assert ldap_auth.authenticate("riley", "pw") is None
+
+
+def test_ldaps_verifies_the_certificate_by_default() -> None:
+    with override_settings(**LDAP, PANIC_LDAP_TLS_VERIFY=True, PANIC_LDAP_CA_CERT_FILE=""):
+        tls = ldap_auth._server().tls
+    assert tls is not None
+    assert tls.validate == ssl.CERT_REQUIRED
+
+
+@pytest.mark.parametrize(("uri", "start_tls"), [("ldaps://ldap.example.com", False), ("ldap://ldap.example.com", True)])
+def test_ldap_tls_verify_false_accepts_any_certificate_and_warns_once(
+    uri: str, start_tls: bool, caplog: pytest.LogCaptureFixture
+) -> None:
+    with (
+        override_settings(
+            **{**LDAP, "PANIC_LDAP_URI": uri}, PANIC_LDAP_START_TLS=start_tls, PANIC_LDAP_TLS_VERIFY=False
+        ),
+        mock.patch.object(ldap_auth, "_warned_no_verify", False),
+        caplog.at_level(logging.WARNING, logger="panic_server.auth.ldap"),
+    ):
+        first = ldap_auth._server().tls
+        second = ldap_auth._server().tls
+    assert first is not None and second is not None
+    assert first.validate == second.validate == ssl.CERT_NONE
+    assert [r.message for r in caplog.records].count(caplog.records[0].message) == 1
+    assert "verification is OFF" in caplog.records[0].message
 
 
 def test_ldap_filter_escaping() -> None:

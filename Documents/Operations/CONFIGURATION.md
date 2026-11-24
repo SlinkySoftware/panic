@@ -96,7 +96,8 @@ Settings live in `panic_server/gunicorn_conf.py`; `PANIC_SERVER_BIND` sets the l
 | `PANIC_LDAP_ENABLED` | `false` | Try LDAP bind for username/password sign-ins (after local accounts). |
 | `PANIC_LDAP_URI` | *(empty)* | e.g. `ldaps://ldap.example.com`. |
 | `PANIC_LDAP_START_TLS` | `false` | Upgrade `ldap://` with StartTLS. |
-| `PANIC_LDAP_CA_CERT_FILE` | *(system store)* | CA bundle for certificate validation (always required). |
+| `PANIC_LDAP_CA_CERT_FILE` | *(system store)* | CA bundle for certificate validation. |
+| `PANIC_LDAP_TLS_VERIFY` | `true` | `false` accepts any LDAPS/StartTLS certificate (self-signed, expired, wrong host name). The connection is still encrypted but the server is not authenticated, so anyone on the network path can impersonate it and read sign-in passwords; logged as a warning. Prefer `PANIC_LDAP_CA_CERT_FILE` with your CA. |
 | `PANIC_LDAP_BIND_DN` | *(empty)* | Service account DN for user/group search (empty = anonymous). |
 | `PANIC_LDAP_BIND_PASSWORD` | *(empty)* | Service account password (use `_FILE`). |
 | `PANIC_LDAP_USER_BASE_DN` | *(empty)* | e.g. `ou=people,dc=example,dc=com`. |

@@ -71,6 +71,9 @@ PANIC_LDAP_ENABLED = env_bool("PANIC_LDAP_ENABLED", False)
 PANIC_LDAP_URI = env_str("PANIC_LDAP_URI", "")
 PANIC_LDAP_START_TLS = env_bool("PANIC_LDAP_START_TLS", False)
 PANIC_LDAP_CA_CERT_FILE = env_str("PANIC_LDAP_CA_CERT_FILE", "")
+# false = accept any LDAPS/StartTLS certificate (self-signed, expired, wrong name). Still encrypted, but not
+# authenticated: anyone on the path can impersonate the directory and read every sign-in password.
+PANIC_LDAP_TLS_VERIFY = env_bool("PANIC_LDAP_TLS_VERIFY", True)
 PANIC_LDAP_BIND_DN = env_str("PANIC_LDAP_BIND_DN", "")
 PANIC_LDAP_BIND_PASSWORD = env_str("PANIC_LDAP_BIND_PASSWORD", "")
 PANIC_LDAP_USER_BASE_DN = env_str("PANIC_LDAP_USER_BASE_DN", "")

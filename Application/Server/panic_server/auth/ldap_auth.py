@@ -6,6 +6,7 @@ password -> search group memberships. All filter values are escaped (RFC 4515).
 
 from __future__ import annotations
 
+import logging
 import ssl
 from dataclasses import dataclass
 from typing import Any
@@ -14,6 +15,9 @@ from django.conf import settings
 from ldap3 import NONE, SUBTREE, Connection, Server, Tls
 from ldap3.core.exceptions import LDAPException
 from ldap3.utils.conv import escape_filter_chars
+
+log = logging.getLogger("panic_server.auth.ldap")
+_warned_no_verify = False
 
 
 class LdapError(Exception):
@@ -27,14 +31,26 @@ class LdapIdentity:
     groups: list[str]
 
 
+def _tls() -> Tls:
+    """Certificate validation against ``PANIC_LDAP_CA_CERT_FILE`` (or the system store), unless
+    ``PANIC_LDAP_TLS_VERIFY=false`` turns it off (logged once per process)."""
+    global _warned_no_verify
+    if settings.PANIC_LDAP_TLS_VERIFY:
+        return Tls(validate=ssl.CERT_REQUIRED, ca_certs_file=settings.PANIC_LDAP_CA_CERT_FILE or None)
+    if not _warned_no_verify:
+        log.warning(
+            "LDAP TLS certificate verification is OFF (PANIC_LDAP_TLS_VERIFY=false): the directory server "
+            "is not authenticated and sign-in passwords can be intercepted"
+        )
+        _warned_no_verify = True
+    return Tls(validate=ssl.CERT_NONE)
+
+
 def _server() -> Server:
     tls = None
     uri = settings.PANIC_LDAP_URI
     if uri.lower().startswith("ldaps://") or settings.PANIC_LDAP_START_TLS:
-        tls = Tls(
-            validate=ssl.CERT_REQUIRED,
-            ca_certs_file=settings.PANIC_LDAP_CA_CERT_FILE or None,
-        )
+        tls = _tls()
     return Server(uri, get_info=NONE, tls=tls, connect_timeout=settings.PANIC_LDAP_TIMEOUT_S)
 
 

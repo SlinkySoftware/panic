@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-24 — 0.2.2: option to skip LDAP certificate verification
+- New `PANIC_LDAP_TLS_VERIFY` (default `true`). `false` accepts any LDAPS / StartTLS certificate (self-signed,
+  expired, wrong host name). The connection stays encrypted but the directory is not authenticated, so a
+  host on the network path could impersonate it and read sign-in passwords; the server logs a warning once
+  per process. Prefer `PANIC_LDAP_CA_CERT_FILE` with your CA where possible. Server only.
+
 ## 2026-11-24 — 0.2.1: View As refreshes the dashboard
 - Starting or leaving View As (a zone, a user, or both) while on the dashboard it returns to left that
   dashboard as loaded before: items, including those in list widgets, kept showing as unavailable when the
