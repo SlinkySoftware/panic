@@ -1,6 +1,6 @@
 {
   "name": "panic-web",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "PANIC web UI (Vue 3 + Quasar 2). Talks only to Server through allow-listed /api/v1 and /auth paths (AR-1.6).",
   "type": "module",

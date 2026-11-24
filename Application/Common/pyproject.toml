@@ -1,6 +1,6 @@
 [project]
 name = "panic-common"
-version = "0.1.1"
+version = "0.1.2"
 description = "PANIC common data model, normalization/hygiene engine, CIDR zone resolver, and launcher interpolators (pure library, no I/O)"
 requires-python = ">=3.13"
 dependencies = [

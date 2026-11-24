@@ -77,10 +77,13 @@ def authenticate(username: str, password: str) -> LdapIdentity | None:
             attributes=[settings.PANIC_LDAP_USERNAME_ATTR, settings.PANIC_LDAP_DISPLAY_NAME_ATTR],
             size_limit=2,
         )
-        if len(svc.response or []) != 1 or svc.response[0].get("type") != "searchResEntry":
+        # Only real entries count: Active Directory searched from the domain root also returns
+        # referrals (searchResRef) to its other partitions, which are not matches.
+        entries = [r for r in svc.response or [] if r.get("type") == "searchResEntry"]
+        if len(entries) != 1:
             svc.unbind()
             return None
-        entry = svc.response[0]
+        entry = entries[0]
         user_dn = str(entry["dn"])
         attrs = dict(entry.get("attributes") or {})
 
@@ -96,7 +99,7 @@ def authenticate(username: str, password: str) -> LdapIdentity | None:
         groups: list[str] = []
         svc.unbind()
     except LDAPException as e:
-        raise LdapError(type(e).__name__) from e
+        raise LdapError(f"{type(e).__name__}: {e}") from e
     resolved_username = _first(attrs, settings.PANIC_LDAP_USERNAME_ATTR) or username
     return LdapIdentity(
         username=resolved_username,

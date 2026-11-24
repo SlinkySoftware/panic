@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-24 — 0.1.2: LDAP sign-in against Active Directory
+- LDAP sign-in failed with 401 against Active Directory when the user search base was the domain root
+  (e.g. `DC=example,DC=com`): AD adds referrals to its other partitions to the result, and PANIC counted them
+  as extra matches. Only real entries count now; exactly one is still required.
+- The "LDAP authentication unavailable" warning now includes the underlying error message (e.g. the
+  certificate or connection failure), not only its type.
+
 ## 2026-11-24 — 0.1.1: panic-web starts on hosts without IPv6
 - panic-web failed to start on a kernel with IPv6 disabled (`socket() [::]:8080 failed (97: Address family not
   supported by protocol)`): its nginx config always listened on `[::]:8080`. The entrypoint now adds the IPv6

@@ -240,6 +240,42 @@ def test_ldap_login_provisions_user_with_no_permissions(mongo_db: Database) -> N
         assert user.auth_source == "LDAP"
 
 
+def _search_with(response: list[dict[str, Any]]) -> Any:
+    def search(self: _FakeConn, *_: Any, **__: Any) -> None:
+        self.response = response
+
+    return search
+
+
+_RILEY = {
+    "type": "searchResEntry",
+    "dn": "uid=riley,ou=people,dc=example,dc=com",
+    "attributes": {"uid": ["riley"], "displayName": "Riley Directory"},
+}
+
+
+def test_ldap_ignores_referrals_from_a_domain_root_search() -> None:
+    """Active Directory searched from the domain root returns the match plus partition referrals."""
+    refs = [{"type": "searchResRef", "uri": [f"ldaps://{z}.example.com/DC={z},DC=example,DC=com"]} for z in ("a", "b")]
+    with (
+        override_settings(**LDAP),
+        mock.patch.object(ldap_auth, "Connection", _FakeConn),
+        mock.patch.object(_FakeConn, "search", _search_with([_RILEY, *refs])),
+    ):
+        identity = ldap_auth.authenticate("riley", "pw")
+    assert identity is not None and identity.username == "riley"
+
+
+def test_ldap_refuses_an_ambiguous_match() -> None:
+    other = {**_RILEY, "dn": "uid=riley,ou=contractors,dc=example,dc=com"}
+    with (
+        override_settings(**LDAP),
+        mock.patch.object(ldap_auth, "Connection", _FakeConn),
+        mock.patch.object(_FakeConn, "search", _search_with([_RILEY, other])),
+    ):
+        assert ldap_auth.authenticate("riley", "pw") is None
+
+
 def test_ldap_filter_escaping() -> None:
     captured: list[str] = []
 
