@@ -6,7 +6,7 @@ import pytest
 from django.test import override_settings
 from pymongo.database import Database
 
-from panic_server.store.indexes import AUDIT_TTL_INDEX_NAME, INDEXES, ensure_indexes
+from panic_server.store.indexes import AUDIT_TTL_INDEX_NAME, INDEXES, OBSOLETE, ensure_indexes
 
 pytestmark = [pytest.mark.mongo]
 
@@ -72,3 +72,17 @@ def test_ensure_indexes_drops_audit_ttl_when_retention_disabled(mongo_db: Databa
     # Restore it.
     ensure_indexes(mongo_db)
     assert AUDIT_TTL_INDEX_NAME in mongo_db["audit_log"].index_information()
+
+
+def test_ensure_indexes_drops_obsolete_indexes(mongo_db: Database) -> None:
+    ensure_indexes(mongo_db)
+    # Recreate the pre-0.2 single-protocol catalog indexes, as an upgraded database would have them.
+    mongo_db["catalog_items"].create_index([("normalized_key", 1), ("scope", 1)], name="normalized_key_scope")
+    mongo_db["catalog_items"].create_index([("protocol", 1)], name="protocol")
+
+    report = ensure_indexes(mongo_db)
+    assert {f"{c}.{n}" for c, n in OBSOLETE} <= set(report.dropped)
+    info = mongo_db["catalog_items"].index_information()
+    assert "normalized_key_scope" not in info
+    assert "protocol" not in info
+    assert {"normalized_keys_scope", "connections_protocol"} <= set(info)

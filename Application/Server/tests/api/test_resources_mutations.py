@@ -117,9 +117,9 @@ def test_disabling_user_flushes_sessions_and_recomputes_orphans(mongo_db: Any, a
     item = catalog_repo.create_catalog_item(
         mongo_db,
         title="victim-personal",
-        protocol=str(Protocol.SSH),
         host="victim.example.com",
-        normalized_key=_unique("ssh://victim"),
+        connections=[{"protocol": Protocol.SSH}],
+        normalized_keys=[_unique("ssh://victim")],
         created_by=victim.username,
         scope=str(ScopeType.PERSONAL),
         owner_usernames=[victim.username],
@@ -154,10 +154,9 @@ def test_f3_rdp_download_still_requires_visibility(mongo_db: Any, plain: Any) ->
     rdp_item = catalog_repo.create_catalog_item(
         mongo_db,
         title="f3-rdp",
-        protocol=str(Protocol.RDP),
         host="f3.example.com",
-        port=3389,
-        normalized_key=_unique("rdp://f3"),
+        connections=[{"protocol": Protocol.RDP, "port": 3389}],
+        normalized_keys=[_unique("rdp://f3")],
         created_by="system",
         scope=str(ScopeType.PERSONAL),
         owner_usernames=["someone-else"],
@@ -185,9 +184,9 @@ def test_f4_stranger_cannot_even_see_a_team_item_outside_their_teams(mongo_db: A
     item = catalog_repo.create_catalog_item(
         mongo_db,
         title="team-b-only",
-        protocol=str(Protocol.SSH),
         host="teamb.example.com",
-        normalized_key=_unique("ssh://teamb"),
+        connections=[{"protocol": Protocol.SSH}],
+        normalized_keys=[_unique("ssh://teamb")],
         created_by="system",
         scope=str(ScopeType.TEAM),
         team_ids=[team_b.id],
@@ -206,9 +205,9 @@ def test_f4_stranger_cannot_see_another_users_personal_item(mongo_db: Any, plain
     item = catalog_repo.create_catalog_item(
         mongo_db,
         title="someone-elses",
-        protocol=str(Protocol.SSH),
         host="personal.example.com",
-        normalized_key=_unique("ssh://personal"),
+        connections=[{"protocol": Protocol.SSH}],
+        normalized_keys=[_unique("ssh://personal")],
         created_by="system",
         scope=str(ScopeType.PERSONAL),
         owner_usernames=["someone-else"],
@@ -232,9 +231,9 @@ def test_f4_visible_team_member_without_permission_gets_403_not_404(mongo_db: An
     item = catalog_repo.create_catalog_item(
         mongo_db,
         title="team-c-item",
-        protocol=str(Protocol.SSH),
         host="teamc.example.com",
-        normalized_key=_unique("ssh://teamc"),
+        connections=[{"protocol": Protocol.SSH}],
+        normalized_keys=[_unique("ssh://teamc")],
         created_by="system",
         scope=str(ScopeType.TEAM),
         team_ids=[team.id],
@@ -254,10 +253,9 @@ def test_f5_duplicate_check_ignores_an_invisible_match(mongo_db: Any, plain: Any
     catalog_repo.create_catalog_item(
         mongo_db,
         title="someone-elses-dup",
-        protocol=str(Protocol.SSH),
         host="dup-target.example.com",
-        port=22,
-        normalized_key=key,
+        connections=[{"protocol": Protocol.SSH, "port": 22}],
+        normalized_keys=[key],
         created_by="system",
         scope=str(ScopeType.PERSONAL),
         owner_usernames=["someone-else"],
@@ -268,9 +266,8 @@ def test_f5_duplicate_check_ignores_an_invisible_match(mongo_db: Any, plain: Any
         "/api/v1/catalog",
         {
             "title": "my-own-dup",
-            "protocol": "SSH",
             "host": "dup-target.example.com",
-            "port": 22,
+            "connections": [{"protocol": "SSH", "port": 22}],
             "scope": "PERSONAL",
         },
     )
@@ -281,9 +278,9 @@ def test_f5_test_ip_is_admin_only_and_returns_counts_not_items(mongo_db: Any, pl
     catalog_repo.create_catalog_item(
         mongo_db,
         title="reachable-item",
-        protocol=str(Protocol.SSH),
         host="reachable.example.com",
-        normalized_key=_unique("ssh://reachable"),
+        connections=[{"protocol": Protocol.SSH}],
+        normalized_keys=[_unique("ssh://reachable")],
         created_by="system",
     )
     plain_resp = _json(_client_as(plain.id), "post", "/api/v1/zones/test-ip", {"ip": "203.0.113.5"})
@@ -305,9 +302,9 @@ def test_f6_list_save_rejects_invisible_item_and_does_not_mutate(mongo_db: Any, 
     invisible_item = catalog_repo.create_catalog_item(
         mongo_db,
         title="invisible-personal",
-        protocol=str(Protocol.SSH),
         host="invisible.example.com",
-        normalized_key=_unique("ssh://invisible"),
+        connections=[{"protocol": Protocol.SSH}],
+        normalized_keys=[_unique("ssh://invisible")],
         created_by="system",
         scope=str(ScopeType.PERSONAL),
         owner_usernames=["someone-else"],
@@ -340,9 +337,9 @@ def test_f6_list_save_rejects_wrong_scope_item(mongo_db: Any, plain: Any) -> Non
     global_item = catalog_repo.create_catalog_item(
         mongo_db,
         title="global-item",
-        protocol=str(Protocol.SSH),
         host="global.example.com",
-        normalized_key=_unique("ssh://global"),
+        connections=[{"protocol": Protocol.SSH}],
+        normalized_keys=[_unique("ssh://global")],
         created_by="system",
         scope=str(ScopeType.GLOBAL),
     )
@@ -512,9 +509,9 @@ def test_orphan_lifecycle(mongo_db: Any, admin: Any) -> None:
     item = catalog_repo.create_catalog_item(
         mongo_db,
         title="orphan-candidate",
-        protocol=str(Protocol.SSH),
         host="orphan.example.com",
-        normalized_key=_unique("ssh://orphan"),
+        connections=[{"protocol": Protocol.SSH}],
+        normalized_keys=[_unique("ssh://orphan")],
         created_by="system",
         scope=str(ScopeType.TEAM),
         team_ids=[team.id],
@@ -522,9 +519,9 @@ def test_orphan_lifecycle(mongo_db: Any, admin: Any) -> None:
     second_item = catalog_repo.create_catalog_item(
         mongo_db,
         title="orphan-candidate-2",
-        protocol=str(Protocol.SSH),
         host="orphan2.example.com",
-        normalized_key=_unique("ssh://orphan2"),
+        connections=[{"protocol": Protocol.SSH}],
+        normalized_keys=[_unique("ssh://orphan2")],
         created_by="system",
         scope=str(ScopeType.TEAM),
         team_ids=[team.id],
@@ -816,11 +813,10 @@ def test_settings_ssh_uri_handler_switch_and_scheme(mongo_db: Any, admin: Any) -
     item = CatalogItem(
         id="cat-uri",
         title="r1",
-        protocol=Protocol.SSH,
         host="r1.example.com",
-        port=2222,
+        connections=[{"protocol": Protocol.SSH, "port": 2222}],
         site="S1",
-        normalized_key="ssh://r1.example.com:2222",
+        normalized_keys=["ssh://r1.example.com:2222"],
     )
 
     def uri() -> str | None:

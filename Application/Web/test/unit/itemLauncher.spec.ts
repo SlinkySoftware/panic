@@ -13,6 +13,7 @@ const item = (reachable: boolean): ItemView => ({
   id: 'i1',
   title: 'core-rtr-01',
   protocol: 'SSH',
+  protocols: ['SSH', 'URL'],
   target: 'rtr.example.net:22',
   site: 'S1',
   scope: 'GLOBAL',
@@ -20,7 +21,12 @@ const item = (reachable: boolean): ItemView => ({
   tags: [],
   reachable,
   unreachable_reason: reachable ? null : 'Not reachable from zone Default',
-  launch: { kind: 'COPY', command: 'ssh jdoe@rtr.example.net -p 22', uri: 'panic-ssh://jdoe@rtr.example.net:22' },
+  launch: {
+    kind: 'COPY',
+    command: 'ssh jdoe@rtr.example.net -p 22',
+    uri: 'panic-ssh://jdoe@rtr.example.net:22',
+  },
+  alt_launches: [{ protocol: 'URL', target: 'rtr.example.net', kind: 'OPEN', url: 'https://rtr.example.net/ui' }],
 });
 
 const mountItem = (reachable: boolean) =>
@@ -36,6 +42,7 @@ describe('ItemLauncher', () => {
     const w = mountItem(false);
     expect(w.text()).toContain('Unavailable');
     expect(w.find('[aria-label="Open in SSH client"]').exists()).toBe(false);
+    expect(w.find('[data-testid="item-alt-launch"]').exists()).toBe(false);
     await w.find('[data-testid="item-unavailable"]').trigger('click');
     await flushPromises();
     expect(copy).not.toHaveBeenCalled();
@@ -48,5 +55,17 @@ describe('ItemLauncher', () => {
     await w.find('[data-testid="item-launch"]').trigger('click');
     await flushPromises();
     expect(copy).toHaveBeenCalledWith('ssh jdoe@rtr.example.net -p 22');
+  });
+
+  it('other protocols get their own button, which launches that protocol only', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const w = mountItem(true);
+    const alt = w.find('[data-testid="item-alt-launch"]');
+    expect(alt.attributes('aria-label')).toBe('Open URL (https://rtr.example.net/ui)');
+    await alt.trigger('click');
+    await flushPromises();
+    expect(open).toHaveBeenCalledWith('https://rtr.example.net/ui', '_blank', 'noopener');
+    expect(copy).not.toHaveBeenCalled();
+    open.mockRestore();
   });
 });

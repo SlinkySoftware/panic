@@ -89,4 +89,33 @@ describe('CodeNamedTable form', () => {
     expect(document.body.textContent).toContain('Code already exists.');
     wrapper.unmount();
   });
+
+  it('copy opens a prefilled new site, saveable only once changed', async () => {
+    const api = await import('@/api/admin');
+    vi.mocked(api.listCodeNamed).mockResolvedValueOnce([
+      { id: 's1', code: '2SYA', name: 'Sydney', description: 'DC' },
+    ] as Awaited<ReturnType<typeof api.listCodeNamed>>);
+    const wrapper = await mountAsAdmin();
+    await wrapper.find('[aria-label="Copy 2SYA"]').trigger('click');
+    await flushPromises();
+    expect(document.body.textContent).toContain('Copy site');
+    const save = () =>
+      [...document.querySelectorAll('[data-testid="code-named-form"] button')].find(
+        (b) => b.textContent?.trim() === 'Save',
+      ) as HTMLButtonElement;
+    expect(save().disabled).toBe(true);
+    const code = document.querySelector<HTMLInputElement>('[data-testid="code-named-form"] input')!;
+    code.value = '3MEL';
+    code.dispatchEvent(new Event('input'));
+    await flushPromises();
+    expect(save().disabled).toBe(false);
+    document
+      .querySelector('[data-testid="code-named-form"]')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await flushPromises();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(api.updateCodeNamed).not.toHaveBeenCalled();
+    expect(api.createCodeNamed).toHaveBeenCalledWith('sites', { code: '3MEL', name: 'Sydney', description: 'DC' });
+    wrapper.unmount();
+  });
 });

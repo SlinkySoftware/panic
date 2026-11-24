@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-11-24 — 0.2.0: multi-protocol catalog items, Copy, side-by-side dialog buttons
+- A catalog item can have more than one protocol, chosen as checkboxes in the item dialog, so a device
+  with a web UI and SSH is one item. SSH and RDP are mutually exclusive. Each protocol has its own port and
+  path / arguments / command. On dashboards, lists and the palette, clicking the item launches the primary
+  protocol (SSH or RDP, else URL, else Local app); each other protocol gets an icon button on the row.
+- The `WEB` protocol is now `URL` (normalized keys `url://…`).
+- Data model: `catalog_items` replace `protocol`, `port`, `path_or_args`, `custom_uri` and `normalized_key`
+  with `connections` (one `{protocol, port, path_or_args, custom_uri}` per protocol) and `normalized_keys`.
+  `panic_migrate` step 2 converts existing items (runs on start unless `PANIC_MIGRATE_ON_START=false`);
+  `ensure_indexes` drops the old `normalized_key_scope` and `protocol` indexes. Exports from earlier
+  versions still import.
+- API: `POST`/`PATCH /api/v1/catalog` and `POST /api/v1/catalog/preview` take `connections` instead of the
+  single-protocol fields; preview returns `normalized_keys`. `ItemView` adds `protocols` and
+  `alt_launches`. A duplicate is any shared key with a visible same-scope item. `PATCH /catalog/{id}`
+  ignores fields that are not editable (it used to store them).
+- Catalog items, sites, teams and zones have a Copy action between Edit and Delete: the edit dialog opens
+  prefilled as a new record, and Save is enabled once something changes.
+- The edit dialogs for catalog items, sites, teams and zones put Save and Cancel to the right of the
+  fields instead of along the bottom.
+
 ## 2026-11-24 — 0.1.2: LDAP sign-in against Active Directory
 - LDAP sign-in failed with 401 against Active Directory when the user search base was the domain root
   (e.g. `DC=example,DC=com`): AD adds referrals to its other partitions to the result, and PANIC counted them

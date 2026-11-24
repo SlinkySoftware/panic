@@ -74,7 +74,12 @@ def test_full_workflow_sign_in_through_audit(mongo_db: Any) -> None:
         client,
         "post",
         "/api/v1/catalog",
-        {"title": "e2e-router", "protocol": "SSH", "host": "e2e-router.example.com", "port": 22, "scope": "GLOBAL"},
+        {
+            "title": "e2e-router",
+            "host": "e2e-router.example.com",
+            "connections": [{"protocol": "SSH", "port": 22}],
+            "scope": "GLOBAL",
+        },
     )
     assert create_item.status_code == 201, create_item.content
     item = create_item.json()
@@ -111,7 +116,12 @@ def test_full_workflow_sign_in_through_audit(mongo_db: Any) -> None:
         client,
         "post",
         "/api/v1/catalog",
-        {"title": "e2e-switch", "protocol": "SSH", "host": "e2e-switch.example.com", "port": 22, "scope": "GLOBAL"},
+        {
+            "title": "e2e-switch",
+            "host": "e2e-switch.example.com",
+            "connections": [{"protocol": "SSH", "port": 22}],
+            "scope": "GLOBAL",
+        },
     ).json()
 
     create_list = _call(

@@ -9,7 +9,7 @@ supports combining with an arbitrary filter via ``$and``).
 **Ranking (not specified verbatim in API.md, decided here):** title-prefix match (the whole
 title starts with the raw, case-insensitive query string) ranks above a result that only
 token-prefix-matched; ties break by type order ``DASHBOARD, ITEM, LIST`` (documented, stable),
-then by title. **Subtitle format (also "my call"):** ``"{protocol} · {site} · {Scope}"`` for an
+then by title. **Subtitle format (also "my call"):** ``"{protocols} · {site} · {Scope}"`` (``SSH+URL``) for an
 item (matches the API.md example verbatim), ``"Dashboard · {Scope}"`` for a dashboard, and
 ``"List · {n} items · {Scope}"`` for a list.
 """
@@ -98,7 +98,7 @@ def run_search(db: Any, context: RequestContext, q: str, limit: int) -> dict[str
             subtitle = f"Dashboard · {_scope_label(obj.scope)}"
             results.append({"type": kind, "id": obj.id, "title": title, "subtitle": subtitle, "item": None})
         elif kind == "ITEM":
-            subtitle = f"{obj.protocol} · {obj.site} · {_scope_label(obj.scope)}"
+            subtitle = f"{'+'.join(c.protocol for c in obj.connections)} · {obj.site} · {_scope_label(obj.scope)}"
             item_view = build_item_view(obj, caller=effective, active_zone=context.zone, zones_by_id=zones_by_id)
             results.append({"type": kind, "id": obj.id, "title": title, "subtitle": subtitle, "item": item_view})
         else:

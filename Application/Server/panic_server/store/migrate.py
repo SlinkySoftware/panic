@@ -13,7 +13,9 @@ from typing import Any
 
 from pymongo.database import Database
 
-from panic_server.store.cas import utcnow
+from panic_common.models import CatalogItem
+from panic_server.store.cas import base_kwargs, utcnow
+from panic_server.store.repos import catalog as catalog_repo
 from panic_server.store.repos import settings as settings_repo
 from panic_server.store.repos import zones as zones_repo
 
@@ -33,10 +35,31 @@ def _step_1_default_zone_and_settings(db: Database[dict[str, Any]]) -> str:
     )
 
 
+def _step_2_catalog_connections(db: Database[dict[str, Any]]) -> str:
+    """Single-protocol catalog items -> ``connections``/``normalized_keys``; WEB becomes URL (idempotent)."""
+    collection = db[catalog_repo.COLLECTION]
+    count = 0
+    for doc in collection.find({"connections": {"$exists": False}}):
+        item = CatalogItem(**base_kwargs(doc))  # the model upgrades the legacy shape
+        collection.update_one(
+            {"_id": doc["_id"]},
+            {
+                "$set": {
+                    "connections": [c.model_dump(mode="json") for c in item.connections],
+                    "normalized_keys": list(item.normalized_keys),
+                },
+                "$unset": dict.fromkeys(catalog_repo.LEGACY_FIELDS, ""),
+            },
+        )
+        count += 1
+    return f"moved {count} catalog item(s) to multi-protocol connections"
+
+
 #: ``(step number, migration function)``, in order. Append new steps here; never renumber or
 #: remove an applied one.
 STEPS: tuple[tuple[int, MigrationFn], ...] = (
     (1, _step_1_default_zone_and_settings),
+    (2, _step_2_catalog_connections),
 )
 
 

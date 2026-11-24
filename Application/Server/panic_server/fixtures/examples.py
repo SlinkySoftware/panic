@@ -13,10 +13,11 @@ local apps and personal lab hosts; per-team lists and dashboards.
 
 from __future__ import annotations
 
-from panic_common.hygiene import normalize_target
+from panic_common.hygiene import normalize_connections
 from panic_common.models import (
     AuthSource,
     CatalogItem,
+    Connection,
     Dashboard,
     DashboardWidget,
     EndpointList,
@@ -124,7 +125,7 @@ def build() -> Fixture:
     def item(
         key: str,
         title: str,
-        protocol: Protocol,
+        protocol: Protocol | tuple[Protocol, ...],
         host: str,
         site: str,
         *,
@@ -135,20 +136,21 @@ def build() -> Fixture:
         desc: str = "",
         path: str = "",
     ) -> str:
-        nkey, clean_host, port = normalize_target(protocol, host, None, path)
+        protocols = protocol if isinstance(protocol, tuple) else (protocol,)
+        # ``path`` belongs to the first connection (the primary, or a lone local app's command).
+        connections = [Connection(protocol=p, path_or_args=path if i == 0 else "") for i, p in enumerate(protocols)]
+        nkeys, clean_host, connections = normalize_connections(host, connections)
         scope = ScopeType.PERSONAL if owner else ScopeType.TEAM if team else ScopeType.GLOBAL
         items.append(
             CatalogItem(
                 id=_id("item", key),
                 title=title,
                 description=desc,
-                protocol=protocol,
                 host=clean_host,
-                port=port,
+                connections=connections,
                 site=_site(site),
-                path_or_args=path,
                 tags=sorted({*(tags or []), "example"}),
-                normalized_key=nkey,
+                normalized_keys=nkeys,
                 scope=scope,
                 team_ids=[teams[team].id] if team and not owner else [],
                 owner_usernames=[owner] if owner else [],
@@ -191,13 +193,13 @@ def build() -> Fixture:
             iid = item(
                 name,
                 name,
-                Protocol.SSH,
+                (Protocol.SSH, Protocol.URL),
                 _fqdn(name, site),
                 site,
                 team="net",
                 zones_for=["noc", "jump"],
                 tags=["firewall", "palo-alto" if n % 2 else "fortinet", s],
-                desc="Firewall CLI",
+                desc="Firewall CLI and web UI",
             )
             net["fw"].append(iid)
             by_site[site].append(iid)
@@ -219,7 +221,7 @@ def build() -> Fixture:
         item(
             f"fw-manager-{s.lower()}",
             f"Firewall Manager ({s})",
-            Protocol.WEB,
+            Protocol.URL,
             _fqdn("fw-manager", s),
             s,
             team="net",
@@ -234,7 +236,7 @@ def build() -> Fixture:
         item(
             f"vcsa-{s.lower()}",
             f"vCenter {s}",
-            Protocol.WEB,
+            Protocol.URL,
             _fqdn("vcsa-01", s),
             s,
             team="cmp",
@@ -248,7 +250,7 @@ def build() -> Fixture:
         item(
             "vcsa-mgmt",
             "vCenter Management",
-            Protocol.WEB,
+            Protocol.URL,
             _fqdn("vcsa-mgmt", "SYD"),
             "SYD",
             team="cmp",
@@ -261,7 +263,7 @@ def build() -> Fixture:
             item(
                 f"esx-{s.lower()}-{i:02d}",
                 f"esx-{s.lower()}-{i:02d}",
-                Protocol.SSH,
+                (Protocol.SSH, Protocol.URL),
                 _fqdn(f"esx-{i:02d}", s),
                 s,
                 team="cmp",
@@ -276,7 +278,7 @@ def build() -> Fixture:
         item(
             f"nsx-mgr-{i:02d}",
             f"NSX Manager {i:02d}",
-            Protocol.WEB,
+            Protocol.URL,
             _fqdn(f"nsx-mgr-{i:02d}", "SYD"),
             "SYD",
             team="cmp",
@@ -301,7 +303,7 @@ def build() -> Fixture:
         item(
             "vra-portal",
             "vRA / Aria Automation",
-            Protocol.WEB,
+            Protocol.URL,
             _fqdn("vra", "SYD"),
             "SYD",
             team="cmp",
@@ -311,7 +313,7 @@ def build() -> Fixture:
         item(
             "vra-orchestrator",
             "Aria Orchestrator",
-            Protocol.WEB,
+            Protocol.URL,
             _fqdn("vro", "SYD"),
             "SYD",
             team="cmp",
@@ -320,7 +322,7 @@ def build() -> Fixture:
         item(
             "sddc-manager",
             "SDDC Manager",
-            Protocol.WEB,
+            Protocol.URL,
             _fqdn("sddc-manager", "SYD"),
             "SYD",
             team="cmp",
@@ -330,24 +332,24 @@ def build() -> Fixture:
 
     # Security tools.
     sec = [
-        item("siem", "SIEM", Protocol.WEB, _fqdn("siem", "SYD"), "SYD", team="sec", tags=["siem", "logging"]),
+        item("siem", "SIEM", Protocol.URL, _fqdn("siem", "SYD"), "SYD", team="sec", tags=["siem", "logging"]),
         item(
             "vuln-scanner",
             "Vulnerability Scanner",
-            Protocol.WEB,
+            Protocol.URL,
             _fqdn("vulnscan", "SYD"),
             "SYD",
             team="sec",
             tags=["scanner"],
         ),
-        item("pam", "Privileged Access Manager", Protocol.WEB, _fqdn("pam", "MEL"), "MEL", team="sec", tags=["pam"]),
+        item("pam", "Privileged Access Manager", Protocol.URL, _fqdn("pam", "MEL"), "MEL", team="sec", tags=["pam"]),
         item("bastion-syd", "bastion-syd", Protocol.SSH, _fqdn("bastion", "SYD"), "SYD", team="sec", tags=["bastion"]),
         item("bastion-mel", "bastion-mel", Protocol.SSH, _fqdn("bastion", "MEL"), "MEL", team="sec", tags=["bastion"]),
     ]
 
     # Shared (GLOBAL): everyday web tools, RDP jump servers, local apps.
     apps = [
-        item(key, title, Protocol.WEB, _fqdn(host, "SYD"), "SYD", tags=tags)
+        item(key, title, Protocol.URL, _fqdn(host, "SYD"), "SYD", tags=tags)
         for key, title, host, tags in (
             ("itsm", "IT Service Management", "itsm", ["itsm", "tickets"]),
             ("monitoring", "Monitoring", "monitoring", ["monitoring"]),

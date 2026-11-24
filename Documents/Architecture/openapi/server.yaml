@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: PANIC Server API
-  version: 0.1.2
+  version: 0.2.0
   description: |-
     All paths are under /api/v1 (AR-6.3). JSON only except the .rdp download (application/x-rdp). Times are RFC 3339 UTC.
     panic-web proxies only /api/v1/{ui,auth,me,dashboards,catalog,lists,sites,teams,zones,users,admin,launch/rdp}/*, /auth/oidc/*, /api/v1/health and /api/v1/version (Documents/Architecture/API.md §9); /metrics and /api/v1/schema are server-only.
@@ -1169,6 +1169,27 @@ paths:
           description: ''
 components:
   schemas:
+    AltLaunch:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/KindEnum'
+        url:
+          type: string
+        command:
+          type: string
+        uri:
+          type: string
+        href:
+          type: string
+        protocol:
+          type: string
+        target:
+          type: string
+      required:
+      - kind
+      - protocol
+      - target
     BootstrapResponse:
       type: object
       properties:
@@ -1318,6 +1339,10 @@ components:
           type: string
         protocol:
           type: string
+        protocols:
+          type: array
+          items:
+            type: string
         target:
           type: string
         site:
@@ -1339,10 +1364,16 @@ components:
           nullable: true
         launch:
           $ref: '#/components/schemas/Launch'
+        alt_launches:
+          type: array
+          items:
+            $ref: '#/components/schemas/AltLaunch'
       required:
+      - alt_launches
       - id
       - launch
       - protocol
+      - protocols
       - reachable
       - scope
       - site

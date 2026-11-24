@@ -53,17 +53,14 @@ def catalog_view(request: Request) -> Response:
     real = context.real_user
     assert real is not None
     body = request.data
-    require(body, "title", "protocol", "host")
+    require(body, "title", "host")
     item = catalog_service.create_catalog_item(
         db,
         real,
         title=body["title"],
-        protocol=body["protocol"],
         host=body["host"],
-        port=body.get("port"),
+        connections=catalog_service.parse_connections(body.get("connections")),
         site=body.get("site", "2SYA"),
-        path_or_args=body.get("path_or_args", ""),
-        custom_uri=body.get("custom_uri", ""),
         account_override=body.get("account_override", ""),
         description=body.get("description", ""),
         tags=body.get("tags"),
@@ -145,17 +142,15 @@ def catalog_preview_view(request: Request) -> Response:
     effective = django_request.context.effective_user
     assert effective is not None
     body = request.data
-    require(body, "protocol", "host")
+    require(body, "host")
     result = catalog_service.preview_catalog_item(
         get_db(),
         effective,
-        protocol=body["protocol"],
         host=body["host"],
-        port=body.get("port"),
-        path_or_args=body.get("path_or_args", ""),
+        connections=catalog_service.parse_connections(body.get("connections")),
         account_override=body.get("account_override", ""),
-        custom_uri=body.get("custom_uri", ""),
         scope=body.get("scope", "GLOBAL"),
+        exclude_id=body.get("item_id") or "",
     )
     return Response(result)
 

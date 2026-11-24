@@ -60,9 +60,9 @@ INDEXES: tuple[IndexSpec, ...] = (
     _i("catalog_items", "scope_team_title", [("scope", A), ("team_ids", A), ("title", A)]),
     _i("catalog_items", "scope_owner_title", [("scope", A), ("owner_usernames", A), ("title", A)]),
     _i("catalog_items", "scope_title", [("scope", A), ("title", A)]),
-    _i("catalog_items", "normalized_key_scope", [("normalized_key", A), ("scope", A)]),
+    _i("catalog_items", "normalized_keys_scope", [("normalized_keys", A), ("scope", A)]),
     _i("catalog_items", "search_keys", [("search_keys", A)]),
-    _i("catalog_items", "protocol", [("protocol", A)]),
+    _i("catalog_items", "connections_protocol", [("connections.protocol", A)]),
     _i("catalog_items", "site", [("site", A)]),
     _i("catalog_items", "zone_ids", [("zone_ids", A)]),
     _i("catalog_items", "orphaned_scope", [("orphaned", A), ("scope", A)]),
@@ -94,7 +94,11 @@ INDEXES: tuple[IndexSpec, ...] = (
 )
 
 
-OBSOLETE: tuple[tuple[str, str], ...] = ()
+OBSOLETE: tuple[tuple[str, str], ...] = (
+    # 0.2: one item, several protocols (``connections`` / ``normalized_keys``)
+    ("catalog_items", "normalized_key_scope"),
+    ("catalog_items", "protocol"),
+)
 """``(collection, index name)`` pairs that earlier versions created; ``ensure_indexes`` drops them."""
 
 

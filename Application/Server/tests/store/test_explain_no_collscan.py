@@ -55,9 +55,9 @@ def seeded(mongo_db: Database) -> Database:
     catalog_repo.create_catalog_item(
         mongo_db,
         title="explain-item",
-        protocol="SSH",
         host="explain.example.net",
-        normalized_key="ssh://explain.example.net",
+        connections=[{"protocol": "SSH"}],
+        normalized_keys=["ssh://explain.example.net"],
         created_by="explain_user",
         scope="GLOBAL",
     )
@@ -89,8 +89,13 @@ def test_catalog_visibility_query_uses_an_index(seeded: Database) -> None:
 
 
 def test_catalog_normalized_key_lookup_uses_an_index(seeded: Database) -> None:
-    plan = seeded["catalog_items"].find({"normalized_key": "ssh://explain.example.net", "scope": "GLOBAL"}).explain()
-    _assert_no_collscan(plan, "catalog_items.normalized_key")
+    query = {"normalized_keys": {"$in": ["ssh://explain.example.net"]}, "scope": "GLOBAL"}
+    _assert_no_collscan(seeded["catalog_items"].find(query).explain(), "catalog_items.normalized_keys")
+
+
+def test_catalog_protocol_filter_uses_an_index(seeded: Database) -> None:
+    plan = seeded["catalog_items"].find({"connections.protocol": "URL"}).explain()
+    _assert_no_collscan(plan, "catalog_items.connections_protocol")
 
 
 def test_endpoint_lists_visibility_query_uses_an_index(seeded: Database) -> None:

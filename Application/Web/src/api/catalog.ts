@@ -4,8 +4,20 @@
  */
 import { requestJson } from './http';
 
-export const PROTOCOLS = ['SSH', 'RDP', 'WEB', 'LOCAL_APP'] as const;
+/** In launch order: an item's first connection is its primary (the row click). */
+export const PROTOCOLS = ['SSH', 'RDP', 'URL', 'LOCAL_APP'] as const;
 export type Protocol = (typeof PROTOCOLS)[number];
+/** An item may have SSH or RDP, not both. */
+export const EXCLUSIVE_PROTOCOLS: readonly Protocol[] = ['SSH', 'RDP'];
+export const PROTOCOL_LABELS: Record<Protocol, string> = { SSH: 'SSH', RDP: 'RDP', URL: 'URL', LOCAL_APP: 'Local app' };
+export const protocolsLabel = (protocols: readonly Protocol[]) =>
+  protocols.map((p) => PROTOCOL_LABELS[p] ?? p).join(' + ');
+export const PROTOCOL_ICONS: Record<Protocol, string> = {
+  SSH: 'terminal',
+  RDP: 'desktop_windows',
+  URL: 'language',
+  LOCAL_APP: 'apps',
+};
 export type Scope = 'GLOBAL' | 'TEAM' | 'PERSONAL';
 export type CatalogGroup = 'shared' | 'personal';
 
@@ -17,10 +29,17 @@ export interface Launch {
   href?: string;
 }
 
+/** A non-primary connection's launch names its own protocol and target. */
+export interface AltLaunch extends Launch {
+  protocol: Protocol;
+  target: string;
+}
+
 export interface ItemView {
   id: string;
   title: string;
-  protocol: Protocol;
+  protocol: Protocol; // the primary connection's
+  protocols: Protocol[];
   target: string;
   site: string;
   scope: Scope;
@@ -28,23 +47,29 @@ export interface ItemView {
   tags: string[];
   reachable: boolean;
   unreachable_reason: string | null;
-  launch?: Launch;
+  launch?: Launch; // primary
+  alt_launches?: AltLaunch[]; // the other connections, in launch order
   // Catalog list rows only (API.md §4.5)
   can_edit?: boolean;
   version?: number;
   team_ids?: string[];
 }
 
+/** One protocol of an item: URL path, SSH flags or a local-app command, each with its own port. */
+export interface Connection {
+  protocol: Protocol;
+  port: number | null;
+  path_or_args: string;
+  custom_uri: string;
+}
+
 export interface CatalogItem {
   id: string;
   title: string;
   description: string;
-  protocol: Protocol;
   host: string;
-  port: number | null;
+  connections: Connection[];
   site: string;
-  path_or_args: string;
-  custom_uri: string;
   account_override: string;
   tags: string[];
   scope: Scope;
@@ -80,7 +105,7 @@ export interface CatalogQuery {
 }
 
 export interface Preview {
-  normalized_key: string;
+  normalized_keys: string[];
   resolved_host: string;
   resolved_port: number | null;
   hygiene_passed: boolean;
@@ -110,7 +135,7 @@ export const updateCatalogItem = (id: string, body: CatalogInput) =>
 export const deleteCatalogItem = (id: string) => requestJson<void>('DELETE', `/catalog/${encodeURIComponent(id)}`);
 
 export const previewCatalogItem = (
-  body: Pick<CatalogInput, 'protocol' | 'host' | 'port' | 'path_or_args' | 'account_override' | 'custom_uri' | 'scope'>,
+  body: Pick<CatalogInput, 'host' | 'connections' | 'account_override' | 'scope'> & { item_id?: string },
 ) => requestJson<Preview>('POST', '/catalog/preview', body);
 
 export const listZones = () => requestJson<Zone[]>('GET', '/zones');

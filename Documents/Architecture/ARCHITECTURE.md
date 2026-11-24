@@ -25,7 +25,7 @@ browser ──► corporate reverse proxy / LB ──► panic-web (nginx, zone 
 - **AR-1.2** PANIC is a **control plane and session launcher**, never an HTML5 session proxy.
   Sessions run in native client tools (`ssh`, `putty.exe`, `mstsc.exe`, browser tabs, local SOE binaries).
 - **AR-1.3** No client modification is required. Launch actions use standard browser
-  navigation (`WEB`), clipboard command interpolation (`SSH`, `LOCAL_APP`), optional standard URI
+  navigation (`URL`), clipboard command interpolation (`SSH`, `LOCAL_APP`), optional standard URI
   schemes, or streamed `.rdp` files (`Content-Type: application/x-rdp`).
 - **AR-1.4** **Explicit, bookmarkable UI URLs.** The SPA router owns `/`, `/dashboard`,
   `/dashboard/<uuid>`, `/dashboard/<uuid>/edit`, `/catalog`, `/lists`, `/sites`, `/teams`,

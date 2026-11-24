@@ -3,12 +3,13 @@
  * or DOWNLOAD an .rdp file. Quasar's copyToClipboard also works outside secure contexts (plain-HTTP dev access).
  */
 import { copyToClipboard, useQuasar } from 'quasar';
-import type { ItemView } from '@/api/catalog';
+import type { ItemView, Launch } from '@/api/catalog';
 
 export function useLaunch() {
   const $q = useQuasar();
 
-  async function launch(item: ItemView): Promise<void> {
+  /** Launch the item's primary connection, or `l` (one of its `alt_launches`). */
+  async function launch(item: ItemView, l: Launch | undefined = item.launch): Promise<void> {
     // Zone-restricted items never launch, whatever the entry point (widget, list, palette).
     if (!item.reachable) {
       $q.notify({
@@ -18,7 +19,6 @@ export function useLaunch() {
       });
       return;
     }
-    const l = item.launch;
     if (!l) return;
     if (l.kind === 'OPEN' && l.url) {
       window.open(l.url, '_blank', 'noopener');
@@ -37,9 +37,9 @@ export function useLaunch() {
     }
   }
 
-  /** Secondary action for COPY items that also expose a URI (e.g. ssh://), opened by the OS handler. */
-  function openUri(item: ItemView): void {
-    if (item.reachable && item.launch?.uri) window.location.href = item.launch.uri;
+  /** Secondary action for COPY launches that also expose a URI (e.g. ssh://), opened by the OS handler. */
+  function openUri(item: ItemView, l: Launch | undefined = item.launch): void {
+    if (item.reachable && l?.uri) window.location.href = l.uri;
   }
 
   return { launch, openUri };

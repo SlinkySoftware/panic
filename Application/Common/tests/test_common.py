@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from panic_common.hygiene import (
+    check_connections,
     check_credential_hygiene,
+    check_item_hygiene,
+    normalize_connections,
     normalize_target,
     preview_catalog_submission,
 )
@@ -15,6 +18,7 @@ from panic_common.launchers import (
 )
 from panic_common.models import (
     CatalogItem,
+    Connection,
     PermissionFlag,
     Protocol,
     ScopeType,
@@ -26,8 +30,8 @@ from panic_common.zones import check_item_reachability, resolve_ip_zone
 
 
 def test_normalize_target_resolves_defaults_and_strips_slashes() -> None:
-    key, host, port = normalize_target(Protocol.WEB, "HTTPS://Portal.Ops.Example.Net/ui///", None, "")
-    assert key == "web://portal.ops.example.net:443/ui"
+    key, host, port = normalize_target(Protocol.URL, "HTTPS://Portal.Ops.Example.Net/ui///", None, "")
+    assert key == "url://portal.ops.example.net:443/ui"
     assert host == "portal.ops.example.net"
     assert port == 443
 
@@ -52,7 +56,7 @@ def test_normalize_target_resolves_defaults_and_strips_slashes() -> None:
 
 
 def test_credential_hygiene_rejects_embedded_passwords_and_flags() -> None:
-    errs1 = check_credential_hygiene(Protocol.WEB, "https://admin:hunter2@portal.example.net/login")
+    errs1 = check_credential_hygiene(Protocol.URL, "https://admin:hunter2@portal.example.net/login")
     assert len(errs1) >= 1
 
     errs2 = check_credential_hygiene(Protocol.SSH, "rtr.example.net", path_or_args="-pw MySecret123")
@@ -76,26 +80,75 @@ def test_deduplication_preview_detects_existing_item() -> None:
             id="cat-1",
             title="Core Router 01",
             description="Primary core router",
-            protocol=Protocol.SSH,
             host="core-rtr-01.ops.example.net",
-            port=22,
+            connections=[Connection(protocol=Protocol.SSH, port=22)],
             site="2SYA",
-            normalized_key="ssh://core-rtr-01.ops.example.net:22",
+            normalized_keys=["ssh://core-rtr-01.ops.example.net:22"],
         )
     ]
     preview = preview_catalog_submission(
-        protocol=Protocol.SSH,
         host="CORE-RTR-01.ops.example.net:22",
-        port=None,
-        path_or_args="-A",
+        connections=[
+            Connection(protocol=Protocol.URL, path_or_args="/ui"),
+            Connection(protocol=Protocol.SSH, path_or_args="-A"),
+        ],
         account_override="netops",
-        custom_uri="",
         existing_catalog=existing,
     )
     assert preview.hygiene_passed is True
     assert preview.duplicate_found is True
     assert preview.existing_item is not None
     assert preview.existing_item.id == "cat-1"
+
+
+def test_normalize_connections_orders_and_keys_each_protocol() -> None:
+    keys, host, conns = normalize_connections(
+        "HTTPS://Core-RTR-01.Example.Net:8443/ui/",
+        [Connection(protocol=Protocol.URL), Connection(protocol=Protocol.SSH, path_or_args="-A")],
+    )
+    assert [c.protocol for c in conns] == [Protocol.SSH, Protocol.URL]  # SSH is the primary
+    assert host == "core-rtr-01.example.net"
+    assert keys == ["ssh://core-rtr-01.example.net:22", "url://core-rtr-01.example.net:8443/ui"]
+    assert (conns[1].port, conns[1].path_or_args) == (8443, "/ui")  # folded from the URL typed as host
+
+
+def test_check_connections_rejects_ssh_with_rdp_and_repeats() -> None:
+    assert check_connections([]) == ["Select at least one protocol."]
+    assert check_connections([Connection(protocol=Protocol.SSH), Connection(protocol=Protocol.URL)]) == []
+    assert check_connections([Connection(protocol=Protocol.SSH), Connection(protocol=Protocol.RDP)]) == [
+        "An item may have SSH or RDP, not both."
+    ]
+    assert check_connections([Connection(protocol=Protocol.URL), Connection(protocol=Protocol.URL)]) == [
+        "Each protocol may appear only once."
+    ]
+
+
+def test_item_hygiene_checks_every_connection_once() -> None:
+    errors = check_item_hygiene(
+        "rtr.example.net",
+        "",
+        [
+            Connection(protocol=Protocol.SSH, path_or_args="-pw x"),
+            Connection(protocol=Protocol.LOCAL_APP, path_or_args="putty --password y"),
+        ],
+    )
+    assert len(errors) == 1
+
+
+def test_legacy_single_protocol_item_is_upgraded() -> None:
+    item = CatalogItem.model_validate(
+        {
+            "id": "old",
+            "title": "Old portal",
+            "protocol": "WEB",
+            "host": "portal.example.net",
+            "port": 8443,
+            "path_or_args": "/ui",
+            "normalized_key": "web://portal.example.net:8443/ui",
+        }
+    )
+    assert item.connections == [Connection(protocol=Protocol.URL, port=8443, path_or_args="/ui")]
+    assert item.normalized_keys == ["url://portal.example.net:8443/ui"]
 
 
 def test_zone_resolution_specificity_and_priority() -> None:
@@ -124,11 +177,10 @@ def test_zone_resolution_specificity_and_priority() -> None:
     item = CatalogItem(
         id="cat-dmz",
         title="DMZ Bastion",
-        protocol=Protocol.SSH,
         host="bastion.dmz.example.net",
-        port=22,
+        connections=[Connection(protocol=Protocol.SSH, port=22)],
         site="2SYA",
-        normalized_key="ssh://bastion.dmz.example.net:22",
+        normalized_keys=["ssh://bastion.dmz.example.net:22"],
         zone_ids=["z-specific"],
     )
     assert check_item_reachability(item, res.winning_zone).reachable is True
@@ -172,19 +224,17 @@ def test_rbac_permissions_and_list_scope_matching() -> None:
         CatalogItem(
             id="c-global",
             title="Global Router",
-            protocol=Protocol.SSH,
             host="r1.example.net",
-            port=22,
-            normalized_key="ssh://r1.example.net:22",
+            connections=[Connection(protocol=Protocol.SSH, port=22)],
+            normalized_keys=["ssh://r1.example.net:22"],
             scope=ScopeType.GLOBAL,
         ),
         CatalogItem(
             id="c-personal",
             title="Personal Router",
-            protocol=Protocol.SSH,
             host="r2.example.net",
-            port=22,
-            normalized_key="ssh://r2.example.net:22",
+            connections=[Connection(protocol=Protocol.SSH, port=22)],
+            normalized_keys=["ssh://r2.example.net:22"],
             scope=ScopeType.PERSONAL,
         ),
     ]

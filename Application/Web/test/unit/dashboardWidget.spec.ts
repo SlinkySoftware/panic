@@ -10,6 +10,7 @@ const item = (id: string, reachable: boolean): ItemView => ({
   id,
   title: id,
   protocol: 'SSH',
+  protocols: ['SSH'],
   target: `${id}.example.net:22`,
   site: 'S1',
   scope: 'GLOBAL',

@@ -611,6 +611,15 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AltLaunch: {
+            kind: components["schemas"]["KindEnum"];
+            url?: string;
+            command?: string;
+            uri?: string;
+            href?: string;
+            protocol: string;
+            target: string;
+        };
         BootstrapResponse: {
             instance: components["schemas"]["Instance"];
             me: components["schemas"]["Profile"] | null;
@@ -663,6 +672,7 @@ export interface components {
             id: string;
             title: string;
             protocol: string;
+            protocols: string[];
             target: string;
             site: string;
             scope: string;
@@ -671,6 +681,7 @@ export interface components {
             reachable: boolean;
             unreachable_reason: string | null;
             launch: components["schemas"]["Launch"];
+            alt_launches: components["schemas"]["AltLaunch"][];
         };
         /**
          * @description * `OPEN` - OPEN

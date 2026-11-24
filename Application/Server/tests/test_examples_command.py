@@ -43,11 +43,10 @@ def test_add_is_idempotent_and_remove_leaves_real_data_clean(mongo_db: Any) -> N
     real_item = catalog_repo.create_catalog_item(
         mongo_db,
         title=f"real {tag}",
-        protocol="SSH",
         host=f"real-{tag}.example.org",
-        port=22,
+        connections=[{"protocol": "SSH", "port": 22}],
         site="S1",
-        normalized_key=f"ssh://real-{tag}.example.org:22",
+        normalized_keys=[f"ssh://real-{tag}.example.org:22"],
         scope="GLOBAL",
         created_by="real",
         zone_ids=[ex_zone["_id"]],

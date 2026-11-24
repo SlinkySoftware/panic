@@ -18,7 +18,7 @@ tones and monospace for anything an operator might copy.
   - `--status-degraded` (`#ffb340` dark / `#a85a00` light): Zone Mismatch / View As Active / Edit Mode
   - `--status-blocked` (`#ff6961` dark / `#c62828` light): Blocked / Hygiene Violation / Delete Action
   - `--status-offline` (`#a1a1a6` dark / `#5b6472` light): Unclassified / Metadata Pill
-  - Protocol pills using `--cache-hit` (WEB blue), `--brand-500` (SSH teal), `--cache-stale` (RDP violet), `--cache-miss` (LOCAL_APP amber).
+  - Protocol pills using `--cache-hit` (URL blue), `--brand-500` (SSH teal), `--cache-stale` (RDP violet), `--cache-miss` (LOCAL_APP amber).
 - **Typography**: `Inter` for UI labels and hierarchy, `JetBrains Mono` (`.mono`) for hostnames, URLs, commands, CIDRs, site codes, and interpolated CLI commands; `font-variant-numeric: tabular-nums` on all ports, metrics, and counters.
 
 ## 2. Shell, Navigation Rail & Full-Width Grid
@@ -51,12 +51,19 @@ tones and monospace for anything an operator might copy.
 - **Catalog (`/catalog`) & Endpoint lists (`/lists`)**:
   - Both screens show **2 cards**: Card 1 for **Global & Team** items/lists and Card 2 for **Personal** items/lists.
   - List items are reordered only in the Edit List dialog, by dragging rows.
+- **Row actions**: Edit, **Copy**, Delete, in that order, on catalog items, sites, teams and zones. Copy opens the
+  edit dialog prefilled from the row as a new record (title "Copy …"); Save stays disabled until a field changes.
+- **Edit dialogs** (catalog item, site, team, zone): Save and Cancel sit in a column to the right of the fields
+  (below them on phones), not in a bottom action bar.
 - **Protocol-aware catalog item dialog**:
-  - `WEB`: Host or URL, Port, Path.
-  - `SSH`: Host, Port, Arguments, Account override.
-  - `RDP`: Host, Port, Account override.
-  - `LOCAL_APP`: Host, Port, Arguments, Account override, Custom URI.
-  - Every protocol: Title, Site, Scope, Teams, Zones (where the item is reachable), Tags, Description.
+  - One Host field ("Host or URL" while URL is checked), then a **Protocols** checkbox list: SSH, RDP, URL,
+    Local app. SSH and RDP are mutually exclusive: checking one disables the other.
+  - Each checked protocol opens its row: Port (placeholder = default port) and `SSH` Arguments, `URL` Path and
+    Full URL override, `LOCAL_APP` Command and Custom URI. `RDP` has Port only.
+  - Account override shows when SSH, RDP or Local app is checked.
+  - Every item: Title, Site, Scope, Teams, Zones (where the item is reachable), Tags, Description.
+- **Multi-protocol items on dashboards and lists**: the row icon and click are the primary protocol (SSH or RDP,
+  else URL, else Local app); each other protocol is an icon button on the right of the row.
 
 ## 4. Quasar Implementation Mapping
 
@@ -69,7 +76,7 @@ The tokens above are CSS custom properties in `Application/Web/src/css/app.css` 
 | Brand teal `--brand-*` | Shell accents in `app.css`. Quasar's `primary` (buttons, toggles, active nav) is still Quasar's default blue: map `primary` to `--brand-500` (`setCssVar('primary', …)` in `boot/theme.ts`) if full brand alignment is wanted. |
 | Status tones | `color="positive"` (ok / active), `warning` (edit mode, conflicts, View As), `negative` (delete, errors, hygiene failures), `grey-6` (disabled, unreachable). |
 | Scope pills | `q-badge`: GLOBAL `primary`, TEAM `teal`, PERSONAL `grey-7`. |
-| Protocol icons | Material icons: SSH `terminal`, RDP `desktop_windows`, WEB `language`, LOCAL_APP `apps`. |
+| Protocol icons | Material icons: SSH `terminal`, RDP `desktop_windows`, URL `language`, LOCAL_APP `apps`. |
 | `.mono` | Hostnames, normalized targets, CIDRs, SSH templates and client-IP diagnostics (monospace inputs and cells). |
 | Unreachable items | `opacity: 0.5` and the reason in a `q-tooltip` (DIM); omitted by the server under HIDE. |
 | Two-card resource screens (§3) | Two server-paged `q-table` cards (`flat bordered`, `@request`), with search and filters in `#top-right`. |

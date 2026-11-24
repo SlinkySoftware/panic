@@ -66,10 +66,16 @@ class LaunchSerializer(serializers.Serializer):
     href = serializers.CharField(required=False)
 
 
+class AltLaunchSerializer(LaunchSerializer):
+    protocol = serializers.CharField()
+    target = serializers.CharField()
+
+
 class ItemViewSerializer(serializers.Serializer):
     id = serializers.CharField()
     title = serializers.CharField()
     protocol = serializers.CharField()
+    protocols = serializers.ListField(child=serializers.CharField())
     target = serializers.CharField()
     site = serializers.CharField()
     scope = serializers.CharField()
@@ -78,6 +84,7 @@ class ItemViewSerializer(serializers.Serializer):
     reachable = serializers.BooleanField()
     unreachable_reason = serializers.CharField(allow_null=True)
     launch = LaunchSerializer()
+    alt_launches = AltLaunchSerializer(many=True)
 
 
 # ---------------------------------------------------------------- bootstrap
@@ -210,6 +217,7 @@ class ErrorSerializer(serializers.Serializer):
 
 
 __all__ = [
+    "AltLaunchSerializer",
     "BootstrapResponseSerializer",
     "ClientSerializer",
     "DashboardPropsSerializer",

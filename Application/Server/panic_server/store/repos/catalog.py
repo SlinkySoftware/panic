@@ -21,6 +21,8 @@ from panic_server.store.cas import (
 from panic_server.store.repos._scoped import find_visible
 
 COLLECTION = "catalog_items"
+#: Single-protocol fields replaced by ``connections``/``normalized_keys`` in 0.2 (migration step 2).
+LEGACY_FIELDS = ("protocol", "port", "path_or_args", "custom_uri", "normalized_key")
 
 
 def _to_model(doc: dict[str, Any]) -> CatalogItem:
@@ -31,15 +33,12 @@ def create_catalog_item(
     db: Database[dict[str, Any]],
     *,
     title: str,
-    protocol: str,
     host: str,
-    normalized_key: str,
+    connections: list[dict[str, Any]],
+    normalized_keys: list[str],
     created_by: str,
     description: str = "",
-    port: int | None = None,
     site: str = "2SYA",
-    path_or_args: str = "",
-    custom_uri: str = "",
     account_override: str = "",
     tags: list[str] | None = None,
     scope: str = "GLOBAL",
@@ -54,14 +53,12 @@ def create_catalog_item(
         "_id": new_id(),
         "title": title,
         "description": description,
-        "protocol": protocol,
         "host": host,
+        "connections": connections,
         "site": site,
-        "path_or_args": path_or_args,
-        "custom_uri": custom_uri,
         "account_override": account_override,
         "tags": tags or [],
-        "normalized_key": normalized_key,
+        "normalized_keys": normalized_keys,
         "scope": scope,
         "team_ids": team_ids or [],
         "owner_usernames": owner_usernames or [],
@@ -74,8 +71,6 @@ def create_catalog_item(
         "updated_at": now,
         "version": 1,
     }
-    if port is not None:
-        doc["port"] = port
     return _to_model(insert_versioned(db[COLLECTION], doc))
 
 
@@ -83,9 +78,10 @@ def get_catalog_item(db: Database[dict[str, Any]], item_id: str) -> CatalogItem:
     return _to_model(get_or_404(db[COLLECTION], item_id))
 
 
-def find_by_normalized_key(db: Database[dict[str, Any]], normalized_key: str, scope: str) -> CatalogItem | None:
-    doc = db[COLLECTION].find_one({"normalized_key": normalized_key, "scope": scope})
-    return _to_model(doc) if doc else None
+def find_by_normalized_keys(db: Database[dict[str, Any]], normalized_keys: list[str], scope: str) -> list[CatalogItem]:
+    """Every item in ``scope`` sharing at least one connection key with ``normalized_keys``."""
+    docs = db[COLLECTION].find({"normalized_keys": {"$in": normalized_keys}, "scope": scope}).limit(20)
+    return [_to_model(d) for d in docs]
 
 
 def get_catalog_items_by_ids(db: Database[dict[str, Any]], item_ids: list[str]) -> list[CatalogItem]:
@@ -143,14 +139,12 @@ def upsert_catalog_item(db: Database[dict[str, Any]], model: CatalogItem) -> Cat
     doc: dict[str, Any] = {
         "title": model.title,
         "description": model.description,
-        "protocol": model.protocol,
         "host": model.host,
+        "connections": [c.model_dump(mode="json") for c in model.connections],
         "site": model.site,
-        "path_or_args": model.path_or_args,
-        "custom_uri": model.custom_uri,
         "account_override": model.account_override,
         "tags": list(model.tags),
-        "normalized_key": model.normalized_key,
+        "normalized_keys": list(model.normalized_keys),
         "scope": model.scope,
         "team_ids": list(model.team_ids),
         "owner_usernames": list(model.owner_usernames),
@@ -163,12 +157,8 @@ def upsert_catalog_item(db: Database[dict[str, Any]], model: CatalogItem) -> Cat
         "updated_at": from_iso_z(model.updated_at),
         "version": model.version,
     }
-    update: dict[str, Any] = {"$set": doc}
-    if model.port is not None:
-        doc["port"] = model.port
-    else:
-        # Clear a previously-set port rather than leaving it stale (an existing doc may have one).
-        update["$unset"] = {"port": ""}
+    # Clear pre-0.2 single-protocol fields an existing doc may still carry.
+    update: dict[str, Any] = {"$set": doc, "$unset": dict.fromkeys(LEGACY_FIELDS, "")}
     db[COLLECTION].update_one({"_id": model.id}, update, upsert=True)
     return model
 

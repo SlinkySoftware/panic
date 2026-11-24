@@ -5,14 +5,20 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Protocol(StrEnum):
-    WEB = "WEB"
+    URL = "URL"
     SSH = "SSH"
     RDP = "RDP"
     LOCAL_APP = "LOCAL_APP"
+
+
+#: Launch order of an item's connections: the first is the primary (the row click on a dashboard).
+PROTOCOL_ORDER: tuple[Protocol, ...] = (Protocol.SSH, Protocol.RDP, Protocol.URL, Protocol.LOCAL_APP)
+#: Protocols one item may not combine (both would claim the same remote console).
+EXCLUSIVE_PROTOCOLS: frozenset[Protocol] = frozenset({Protocol.SSH, Protocol.RDP})
 
 
 class ScopeType(StrEnum):
@@ -86,19 +92,36 @@ class TeamDefinition(BaseModel):
     version: int = 1
 
 
+class Connection(BaseModel):
+    """One way to reach a catalog item's host: URL path, SSH flags or a local-app command per protocol."""
+
+    protocol: Protocol
+    port: int | None = None
+    path_or_args: str = ""
+    custom_uri: str = ""
+
+
+def _legacy_connection(data: dict[str, Any]) -> dict[str, Any]:
+    """The pre-0.2 single-protocol shape (``protocol``/``port``/``path_or_args``/``custom_uri``), WEB -> URL."""
+    protocol = data.pop("protocol")
+    return {
+        "protocol": "URL" if protocol == "WEB" else protocol,
+        "port": data.pop("port", None),
+        "path_or_args": data.pop("path_or_args", ""),
+        "custom_uri": data.pop("custom_uri", ""),
+    }
+
+
 class CatalogItem(BaseModel):
     id: str
     title: str
     description: str = ""
-    protocol: Protocol
     host: str
-    port: int | None = None
+    connections: list[Connection] = Field(min_length=1)  # in PROTOCOL_ORDER; the first is the primary
     site: str = "2SYA"
-    path_or_args: str = ""
-    custom_uri: str = ""
     account_override: str = ""
     tags: list[str] = Field(default_factory=list)
-    normalized_key: str
+    normalized_keys: list[str]  # one per connection, for duplicate detection
     scope: ScopeType = ScopeType.GLOBAL
     team_ids: list[str] = Field(default_factory=list)
     owner_usernames: list[str] = Field(default_factory=list)
@@ -110,6 +133,24 @@ class CatalogItem(BaseModel):
     updated_by: str = "joperator"
     updated_at: str = "2026-11-01T09:00:00Z"
     version: int = 1
+
+    @model_validator(mode="before")
+    @classmethod
+    def _upgrade_legacy(cls, data: Any) -> Any:
+        """Accept a pre-0.2 document or export (one ``protocol``, one ``normalized_key``)."""
+        if isinstance(data, dict) and "protocol" in data and "connections" not in data:
+            data = dict(data)
+            data["connections"] = [_legacy_connection(data)]
+            key = data.pop("normalized_key", "")
+            data["normalized_keys"] = [key.replace("web://", "url://", 1)] if key else []
+        return data
+
+    @property
+    def primary(self) -> Connection:
+        return self.connections[0]
+
+    def connection(self, protocol: Protocol) -> Connection | None:
+        return next((c for c in self.connections if c.protocol == protocol), None)
 
 
 class EndpointList(BaseModel):

@@ -42,7 +42,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { listCatalog } from '@/api/catalog';
+import { listCatalog, protocolsLabel } from '@/api/catalog';
 import { listLists } from '@/api/lists';
 
 export interface Picked {
@@ -80,7 +80,12 @@ async function search() {
       options.value = pages.flatMap((p) =>
         p.results
           .filter((i) => !props.exclude.has(i.id))
-          .map((i) => ({ id: i.id, title: i.title, caption: `${i.protocol} · ${i.target}`, scope: i.scope })),
+          .map((i) => ({
+            id: i.id,
+            title: i.title,
+            caption: `${protocolsLabel(i.protocols)} · ${i.target}`,
+            scope: i.scope,
+          })),
       );
     } else {
       const pages = await Promise.all(

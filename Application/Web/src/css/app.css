@@ -30,7 +30,7 @@ body.body--dark {
   --status-blocked: #ff6961;
   --status-offline: #a1a1a6;
 
-  /* Protocol pills (UI_DESIGN.md §1): WEB / SSH (--brand-500) / RDP / LOCAL_APP. */
+  /* Protocol pills (UI_DESIGN.md §1): URL / SSH (--brand-500) / RDP / LOCAL_APP. */
   --cache-hit: #0a84ff;
   --cache-stale: #bf5af2;
   --cache-miss: #ff9f0a;
@@ -142,4 +142,38 @@ body {
   width: 380px;
   max-width: 90vw;
   background: var(--surface-raised);
+}
+
+/* ------------------------------------------------------------------------------------------------ Edit dialogs */
+/* Save / Cancel sit to the right of the fields (below them on phones). */
+.panic-form-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.panic-form-fields {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.panic-form-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 96px;
+  position: sticky;
+  top: 0;
+}
+
+@media (max-width: 599px) {
+  .panic-form-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .panic-form-actions {
+    flex-direction: row-reverse;
+    position: static;
+  }
 }

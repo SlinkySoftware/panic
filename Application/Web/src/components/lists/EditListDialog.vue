@@ -68,7 +68,9 @@
                 <q-item v-bind="scope.itemProps">
                   <q-item-section>
                     <q-item-label>{{ scope.opt.title }}</q-item-label>
-                    <q-item-label caption>{{ scope.opt.protocol }} · {{ scope.opt.target }}</q-item-label>
+                    <q-item-label caption
+                      >{{ protocolsLabel(scope.opt.protocols) }} · {{ scope.opt.target }}</q-item-label
+                    >
                   </q-item-section>
                 </q-item>
               </template>
@@ -100,7 +102,7 @@
                 /></q-item-section>
                 <q-item-section>
                   <q-item-label>{{ item.title }}</q-item-label>
-                  <q-item-label caption>{{ item.protocol }} · {{ item.target }}</q-item-label>
+                  <q-item-label caption>{{ protocolsLabel(item.protocols) }} · {{ item.target }}</q-item-label>
                 </q-item-section>
                 <q-item-section v-if="!readOnly" side class="row no-wrap">
                   <div>
@@ -154,7 +156,7 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { useQuasar } from 'quasar';
 import type { CodeNamed } from '@/api/admin';
-import { listCatalog, type ItemView, type Scope } from '@/api/catalog';
+import { listCatalog, protocolsLabel, type ItemView, type Scope } from '@/api/catalog';
 import { ApiError } from '@/api/http';
 import { createList, getList, replaceList } from '@/api/lists';
 import { useSessionStore } from '@/stores/session';

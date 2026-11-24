@@ -17,6 +17,7 @@ from collections import defaultdict
 
 from panic_common.models import (
     CatalogItem,
+    Connection,
     Dashboard,
     DashboardWidget,
     EndpointList,
@@ -40,8 +41,8 @@ N_CATALOG = 5000
 N_LISTS = 200
 N_DASHBOARDS = 60
 
-_PROTOCOLS = (Protocol.WEB, Protocol.SSH, Protocol.RDP, Protocol.LOCAL_APP)
-_PORTS = {Protocol.WEB: 443, Protocol.SSH: 22, Protocol.RDP: 3389, Protocol.LOCAL_APP: None}
+_PROTOCOLS = (Protocol.URL, Protocol.SSH, Protocol.RDP, Protocol.LOCAL_APP)
+_PORTS = {Protocol.URL: 443, Protocol.SSH: 22, Protocol.RDP: 3389, Protocol.LOCAL_APP: None}
 
 
 def _scope_bucket(i: int) -> ScopeType:
@@ -132,11 +133,10 @@ def _catalog(teams: list[TeamDefinition], users: list[UserAccount], sites: list[
             CatalogItem(
                 id=f"cat-loadtest-{i:05d}",
                 title=f"Load Item {i:05d}",
-                protocol=protocol,
                 host=host,
-                port=port,
+                connections=[Connection(protocol=protocol, port=port)],
                 site=sites[i % N_SITES].code,
-                normalized_key=f"loadtest://host{i:05d}.example.com:{port or 0}#{i}",
+                normalized_keys=[f"loadtest://host{i:05d}.example.com:{port or 0}#{i}"],
                 scope=scope,
                 team_ids=team_ids,
                 owner_usernames=owner_usernames,

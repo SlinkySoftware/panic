@@ -1,5 +1,6 @@
 <!--
-  One launchable item: click to launch. Unreachable items (zone restrictions) are not launchable at all:
+  One launchable item: click to launch its primary protocol; each other protocol (e.g. the URL of an SSH device)
+  gets its own icon button on the right. Unreachable items (zone restrictions) are not launchable at all:
   dimmed, a red "Unavailable" badge with the reason on hover, no launch icon, and clicking does nothing.
   `showZones` adds a column of badges for the zones the item is reachable from ("All zones" when unrestricted).
 -->
@@ -12,7 +13,7 @@
     @click="item.reachable && launch(item)"
   >
     <q-item-section avatar>
-      <q-icon :name="icons[item.protocol] ?? 'link'" :color="item.reachable ? 'primary' : 'grey-6'" />
+      <q-icon :name="PROTOCOL_ICONS[item.protocol] ?? 'link'" :color="item.reachable ? 'primary' : 'grey-6'" />
     </q-item-section>
     <q-item-section>
       <q-item-label lines="1">{{ item.title }}</q-item-label>
@@ -56,33 +57,51 @@
         color="negative"
         label="Unavailable"
       />
-      <q-btn
-        v-else-if="item.launch?.uri"
-        flat
-        round
-        dense
-        size="sm"
-        icon="open_in_new"
-        :aria-label="item.protocol === 'SSH' ? 'Open in SSH client' : 'Open with system handler'"
-        @click.stop="openUri(item)"
-      >
-        <q-tooltip>{{
-          item.protocol === 'SSH' ? 'Open in SSH client (set up in User Settings)' : 'Open with system handler'
-        }}</q-tooltip>
-      </q-btn>
+      <div v-else class="row no-wrap items-center">
+        <q-btn
+          v-for="alt in item.alt_launches ?? []"
+          :key="alt.protocol"
+          flat
+          round
+          dense
+          size="sm"
+          :icon="PROTOCOL_ICONS[alt.protocol] ?? 'link'"
+          :aria-label="altLabel(alt)"
+          data-testid="item-alt-launch"
+          @click.stop="launch(item, alt)"
+        >
+          <q-tooltip>{{ altLabel(alt) }}</q-tooltip>
+        </q-btn>
+        <q-btn
+          v-if="item.launch?.uri"
+          flat
+          round
+          dense
+          size="sm"
+          icon="open_in_new"
+          :aria-label="item.protocol === 'SSH' ? 'Open in SSH client' : 'Open with system handler'"
+          @click.stop="openUri(item)"
+        >
+          <q-tooltip>{{
+            item.protocol === 'SSH' ? 'Open in SSH client (set up in User Settings)' : 'Open with system handler'
+          }}</q-tooltip>
+        </q-btn>
+      </div>
     </q-item-section>
     <q-tooltip v-if="!item.reachable && item.unreachable_reason">{{ item.unreachable_reason }}</q-tooltip>
   </q-item>
 </template>
 
 <script setup lang="ts">
-import type { ItemView } from '@/api/catalog';
+import { PROTOCOL_ICONS, type AltLaunch, type ItemView, type Launch } from '@/api/catalog';
 import { useLaunch } from '@/composables/useLaunch';
 
 withDefaults(defineProps<{ item: ItemView; showZones?: boolean }>(), { showZones: false });
 const { launch, openUri } = useLaunch();
 
-const icons: Record<string, string> = { SSH: 'terminal', RDP: 'desktop_windows', WEB: 'language', LOCAL_APP: 'apps' };
+const altVerb: Record<Launch['kind'], string> = { OPEN: 'Open', COPY: 'Copy command for', DOWNLOAD: 'Download' };
+const altLabel = (l: AltLaunch) =>
+  `${altVerb[l.kind]} ${l.protocol === 'LOCAL_APP' ? 'local app' : l.protocol} (${l.kind === 'OPEN' && l.url ? l.url : l.target})`;
 </script>
 
 <style scoped>
@@ -119,7 +138,7 @@ const icons: Record<string, string> = { SSH: 'terminal', RDP: 'desktop_windows',
   align-items: center;
 }
 .panic-col-action {
-  width: 92px;
+  min-width: 92px;
   align-items: flex-end;
 }
 .panic-unavailable {

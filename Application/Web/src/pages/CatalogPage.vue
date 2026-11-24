@@ -15,6 +15,7 @@
       :zones="zones"
       :sites="sites"
       @edit="openEdit"
+      @copy="openCopy"
       @delete="confirmDelete"
     />
     <CatalogTable
@@ -25,11 +26,13 @@
       :zones="zones"
       :sites="sites"
       @edit="openEdit"
+      @copy="openCopy"
       @delete="confirmDelete"
     />
     <CatalogItemDialog
       v-model="editing"
       :item-id="editId"
+      :copy="copying"
       :sites="sites"
       :teams="teams"
       :zones="zones"
@@ -53,6 +56,7 @@ const teams = ref<CodeNamed[]>([]);
 const zones = ref<Zone[]>([]);
 const editing = ref(false);
 const editId = ref<string | null>(null);
+const copying = ref(false);
 const sharedTable = ref<InstanceType<typeof CatalogTable> | null>(null);
 const personalTable = ref<InstanceType<typeof CatalogTable> | null>(null);
 
@@ -63,6 +67,13 @@ function reloadAll() {
 
 function openEdit(row: ItemView | null) {
   editId.value = row?.id ?? null;
+  copying.value = false;
+  editing.value = true;
+}
+
+function openCopy(row: ItemView) {
+  editId.value = row.id;
+  copying.value = true;
   editing.value = true;
 }
 

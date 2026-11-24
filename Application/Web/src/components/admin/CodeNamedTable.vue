@@ -1,5 +1,6 @@
 <!--
-  Sites and Teams admin table: search, create, edit, delete. Everyone can read; only a Global Admin sees the
+  Sites and Teams admin table: search, create, edit, copy (a new one prefilled from a row, saveable once changed),
+  delete. Everyone can read; only a Global Admin sees the
   write actions (the server enforces this regardless).
 -->
 <template>
@@ -38,6 +39,16 @@
             flat
             round
             dense
+            icon="content_copy"
+            :aria-label="`Copy ${cell.row.code}`"
+            @click="openEdit(cell.row, true)"
+          >
+            <q-tooltip>Copy to a new {{ noun }}</q-tooltip>
+          </q-btn>
+          <q-btn
+            flat
+            round
+            dense
             icon="delete"
             color="negative"
             :aria-label="`Delete ${cell.row.code}`"
@@ -48,37 +59,41 @@
     </q-table>
 
     <q-dialog v-model="editing" persistent>
-      <q-card style="min-width: 420px">
+      <q-card style="width: 560px; max-width: 95vw">
         <q-form data-testid="code-named-form" @submit="save">
-          <q-card-section class="text-h6">{{ form.id ? `Edit ${noun}` : `Add ${noun}` }}</q-card-section>
-          <q-card-section class="q-gutter-sm">
-            <q-input
-              v-model="form.code"
-              label="Code"
-              outlined
-              dense
-              autofocus
-              :rules="[required]"
-              :error="!!fieldErrors.code"
-              :error-message="fieldErrors.code"
-              @update:model-value="form.code = String($event ?? '').toUpperCase()"
-            />
-            <q-input
-              v-model="form.name"
-              label="Name"
-              outlined
-              dense
-              :rules="[required]"
-              :error="!!fieldErrors.name"
-              :error-message="fieldErrors.name"
-            />
-            <q-input v-model="form.description" label="Description" outlined dense type="textarea" autogrow />
-            <q-banner v-if="saveError" class="bg-negative text-white" rounded dense>{{ saveError }}</q-banner>
+          <q-card-section class="text-h6">{{ heading }}</q-card-section>
+          <q-card-section class="panic-form-row">
+            <div class="panic-form-fields q-gutter-sm">
+              <q-input
+                v-model="form.code"
+                label="Code"
+                outlined
+                dense
+                autofocus
+                :rules="[required]"
+                :error="!!fieldErrors.code"
+                :error-message="fieldErrors.code"
+                @update:model-value="form.code = String($event ?? '').toUpperCase()"
+              />
+              <q-input
+                v-model="form.name"
+                label="Name"
+                outlined
+                dense
+                :rules="[required]"
+                :error="!!fieldErrors.name"
+                :error-message="fieldErrors.name"
+              />
+              <q-input v-model="form.description" label="Description" outlined dense type="textarea" autogrow />
+              <q-banner v-if="saveError" class="bg-negative text-white" rounded dense>{{ saveError }}</q-banner>
+            </div>
+            <div class="panic-form-actions">
+              <q-btn type="submit" color="primary" label="Save" :loading="saving" :disable="unchangedCopy">
+                <q-tooltip v-if="unchangedCopy">Change something before saving the copy</q-tooltip>
+              </q-btn>
+              <q-btn v-close-popup flat label="Cancel" />
+            </div>
           </q-card-section>
-          <q-card-actions align="right">
-            <q-btn v-close-popup flat label="Cancel" />
-            <q-btn type="submit" color="primary" label="Save" :loading="saving" />
-          </q-card-actions>
         </q-form>
       </q-card>
     </q-dialog>
@@ -155,6 +170,13 @@ const saving = ref(false);
 const saveError = ref('');
 const fieldErrors = ref<Record<string, string>>({});
 const form = reactive({ id: '', code: '', name: '', description: '' });
+// Set while copying a row: the fields as first loaded, so Save waits for a change.
+const copySnapshot = ref('');
+const fields = () => JSON.stringify([form.code, form.name, form.description]);
+const unchangedCopy = computed(() => !!copySnapshot.value && fields() === copySnapshot.value);
+const heading = computed(() =>
+  copySnapshot.value ? `Copy ${props.noun}` : form.id ? `Edit ${props.noun}` : `Add ${props.noun}`,
+);
 
 const required = (v: string) => (!!v && v.trim().length > 0) || 'Required';
 
@@ -173,8 +195,10 @@ async function load() {
   }
 }
 
-function openEdit(row: CodeNamed | null) {
+function openEdit(row: CodeNamed | null, copy = false) {
   Object.assign(form, row ?? { id: '', code: '', name: '', description: '' });
+  if (copy) form.id = '';
+  copySnapshot.value = copy ? fields() : '';
   saveError.value = '';
   fieldErrors.value = {};
   editing.value = true;

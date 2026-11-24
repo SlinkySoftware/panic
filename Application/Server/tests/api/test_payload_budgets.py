@@ -203,10 +203,9 @@ def searchable_fixture(loadtest_db: Database) -> None:
         catalog_repo.create_catalog_item(
             loadtest_db,
             title=f"Budgetsearch Item {n:02d}",
-            protocol="SSH",
             host=f"budgetsearch-{n:02d}.example.com",
-            port=22,
-            normalized_key=f"budgetsearch://host{n:02d}",
+            connections=[{"protocol": "SSH", "port": 22}],
+            normalized_keys=[f"budgetsearch://host{n:02d}"],
             created_by="system",
             search_keys=search_keys(f"Budgetsearch Item {n:02d}", f"budgetsearch-{n:02d}.example.com"),
         )

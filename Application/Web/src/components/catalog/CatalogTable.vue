@@ -67,6 +67,9 @@
         </q-tooltip>
       </q-td>
     </template>
+    <template #body-cell-protocol="cell">
+      <q-td :props="cell">{{ protocolsLabel(cell.row.protocols ?? [cell.row.protocol]) }}</q-td>
+    </template>
     <template #body-cell-scope="cell">
       <q-td :props="cell">
         <q-badge :color="scopeColor[cell.row.scope as Scope]" :label="cell.row.scope" />
@@ -78,19 +81,36 @@
       </q-td>
     </template>
     <template #body-cell-actions="cell">
-      <q-td :props="cell" class="text-right">
-        <template v-if="cell.row.can_edit">
-          <q-btn flat round dense icon="edit" :aria-label="`Edit ${cell.row.title}`" @click="emit('edit', cell.row)" />
-          <q-btn
-            flat
-            round
-            dense
-            icon="delete"
-            color="negative"
-            :aria-label="`Delete ${cell.row.title}`"
-            @click="emit('delete', cell.row)"
-          />
-        </template>
+      <q-td :props="cell" class="text-right no-wrap">
+        <q-btn
+          v-if="cell.row.can_edit"
+          flat
+          round
+          dense
+          icon="edit"
+          :aria-label="`Edit ${cell.row.title}`"
+          @click="emit('edit', cell.row)"
+        />
+        <q-btn
+          flat
+          round
+          dense
+          icon="content_copy"
+          :aria-label="`Copy ${cell.row.title}`"
+          @click="emit('copy', cell.row)"
+        >
+          <q-tooltip>Copy to a new item</q-tooltip>
+        </q-btn>
+        <q-btn
+          v-if="cell.row.can_edit"
+          flat
+          round
+          dense
+          icon="delete"
+          color="negative"
+          :aria-label="`Delete ${cell.row.title}`"
+          @click="emit('delete', cell.row)"
+        />
       </q-td>
     </template>
   </q-table>
@@ -100,10 +120,19 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import type { CodeNamed } from '@/api/admin';
 import { useQuasar, type QTableColumn, type QTableProps } from 'quasar';
-import { listCatalog, PROTOCOLS, type CatalogGroup, type ItemView, type Scope, type Zone } from '@/api/catalog';
+import {
+  listCatalog,
+  PROTOCOL_LABELS,
+  PROTOCOLS,
+  protocolsLabel,
+  type CatalogGroup,
+  type ItemView,
+  type Scope,
+  type Zone,
+} from '@/api/catalog';
 
 const props = defineProps<{ group: CatalogGroup; title: string; sites: string[]; teams: CodeNamed[]; zones: Zone[] }>();
-const emit = defineEmits<{ edit: [row: ItemView]; delete: [row: ItemView] }>();
+const emit = defineEmits<{ edit: [row: ItemView]; copy: [row: ItemView]; delete: [row: ItemView] }>();
 
 const $q = useQuasar();
 
@@ -112,7 +141,7 @@ const teamCodes = (ids: string[] = []) => {
   return ids.length ? ids.map((id) => byId.get(id) ?? '?').join(', ') : '—';
 };
 
-const protocolOptions = PROTOCOLS.map((p) => ({ label: p === 'LOCAL_APP' ? 'Local app' : p, value: p }));
+const protocolOptions = PROTOCOLS.map((p) => ({ label: PROTOCOL_LABELS[p], value: p }));
 const scopeColor: Record<Scope, string> = { GLOBAL: 'primary', TEAM: 'teal', PERSONAL: 'grey-7' };
 
 const columns = computed<QTableColumn<ItemView>[]>(() => [

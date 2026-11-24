@@ -50,7 +50,7 @@ browser ─► reverse proxy / LB ─► panic-web (nginx, one or more) ─► i
 
 | Concept | Meaning |
 |---|---|
-| **Catalog item** | One launchable endpoint: protocol (`WEB`, `SSH`, `RDP`, `LOCAL_APP`), target, site, zones, tags, scope. |
+| **Catalog item** | One launchable host with one or more protocols (`URL`, `SSH`, `RDP`, `LOCAL_APP`; never both SSH and RDP), site, zones, tags, scope. |
 | **Endpoint list** | An ordered list of catalog items of the same scope, shown in dashboard `LIST` widgets. |
 | **Dashboard** | A 12-column grid of `HOST` (one item) and `LIST` (one endpoint list) widgets. |
 | **Scope** | `GLOBAL` (everyone), `TEAM` (members of the resource's teams) or `PERSONAL` (its owner). Applies to catalog items, lists and dashboards. |
@@ -114,15 +114,19 @@ browser ─► reverse proxy / LB ─► panic-web (nginx, one or more) ─► i
 
 ### 4.2 Protocols and launchers
 
-Every catalog item has one protocol. Launch actions are computed on the server for the caller
-(their SSH template and default remote user) and returned with each item.
+A catalog item has one host and one or more protocols (`connections`), picked as checkboxes, so a
+device with a web UI and SSH is one item. SSH and RDP exclude each other. Each protocol has its own
+port and path/arguments/command. The first in the order SSH, RDP, URL, LOCAL_APP is the item's
+**primary**: clicking the item launches it, and every other protocol gets its own icon button on the
+row. Launch actions are computed on the server for the caller (their SSH template and default
+remote user) and returned with each item.
 
 | Protocol | Fields | Launch action |
 |---|---|---|
-| `WEB` | Host or URL, port, path | **Open** in a new tab (`noopener noreferrer`). URL is the item's custom URI if set, otherwise `https://<host>[:<port>]<path>`. |
-| `SSH` | Host, port (default 22), arguments (`{flags}`), account override | **Copy command**: the user's SSH template (default `ssh {user}@{host} -p {port} {flags}`) with `{host}`, `{port}`, `{user}`, `{flags}` filled in. Optionally also a URI `<scheme>://<user>@<host>:<port>` for a local handler; a Global Admin can turn this off or change the scheme (default `panic-ssh`) on `/settings`. |
-| `RDP` | Host, port (default 3389), account override | **Download** `GET /api/v1/launch/rdp/<id>.rdp`: an `.rdp` file with `full address` and `username` set, generated in memory and sent as `application/x-rdp` with `Cache-Control: no-store`. Downloads are audited. |
-| `LOCAL_APP` | Host, port, arguments (command template), account override, custom URI | **Copy command**: the arguments template with `{host}`, `{port}`, `{user}` filled in. If a custom URI is set, it is offered as well. |
+| `URL` | Port, path, full URL override (Host may be typed as a URL) | **Open** in a new tab (`noopener noreferrer`). URL is the item's custom URI if set, otherwise `https://<host>[:<port>]<path>`. |
+| `SSH` | Port (default 22), arguments (`{flags}`); item account override | **Copy command**: the user's SSH template (default `ssh {user}@{host} -p {port} {flags}`) with `{host}`, `{port}`, `{user}`, `{flags}` filled in. Optionally also a URI `<scheme>://<user>@<host>:<port>` for a local handler; a Global Admin can turn this off or change the scheme (default `panic-ssh`) on `/settings`. |
+| `RDP` | Port (default 3389); item account override | **Download** `GET /api/v1/launch/rdp/<id>.rdp`: an `.rdp` file with `full address` and `username` set, generated in memory and sent as `application/x-rdp` with `Cache-Control: no-store`. Downloads are audited. |
+| `LOCAL_APP` | Port, command template, custom URI; item account override | **Copy command**: the arguments template with `{host}`, `{port}`, `{user}` filled in. If a custom URI is set, it is offered as well. |
 
 The remote user (`{user}`) is the item's account override if set, otherwise the caller's default
 remote user. Every interpolated value is sanitised first (§5.2).
@@ -141,11 +145,15 @@ remote user. Every interpolated value is sanitised first (§5.2).
 - **Sites (`/sites`).** Global Admins manage site definitions (unique upper-case `code`, `name`,
   `description`). Items pick a site from a drop-down. Renaming a code updates the items that use it;
   the last site cannot be deleted.
-- **Normalisation and duplicates.** Each item gets a deterministic `normalized_key`
-  (`web://`, `ssh://`, `rdp://`, `local_app://`): host lower-cased, trailing slashes removed, default
-  ports filled in (80/443, 22, 3389). Creating an item whose key matches a visible item of the same
-  scope gives `409 DUPLICATE_CATALOG_ITEM` unless the request is resent with `force_allow_duplicate`.
-  A preview endpoint shows the key, hygiene result and any duplicate before saving.
+- **Normalisation and duplicates.** Each of an item's protocols gets a deterministic key in
+  `normalized_keys` (`url://`, `ssh://`, `rdp://`, `local_app://`): host lower-cased, trailing slashes
+  removed, default ports filled in (80/443, 22, 3389). Creating an item that shares any key with a
+  visible item of the same scope gives `409 DUPLICATE_CATALOG_ITEM` unless the request is resent with
+  `force_allow_duplicate`. A preview endpoint shows the keys, hygiene result and any duplicate before
+  saving.
+- **Copy.** Catalog items, sites, teams and zones have a Copy action (between Edit and Delete) that
+  opens the edit dialog prefilled from the row as a new record; Save stays disabled until something
+  is changed.
 - **Credential hygiene (AR-2.1).** Submissions are rejected (`400 CREDENTIAL_HYGIENE_VIOLATION`)
   when any field contains:
   - embedded credentials (`user:password@host`);
@@ -378,13 +386,13 @@ document has a string `_id` (UUIDv4 for new documents; exposed as `id`), and mut
 | `sites` | `code`, `name`, `description` |
 | `teams` | `code`, `name`, `description` (membership is `users.team_ids`) |
 | `zones` | `name`, `description`, `priority`, `cidrs`, `builtin` |
-| `catalog_items` | `title`, `description`, `protocol`, `host`, `port`, `site`, `path_or_args`, `custom_uri`, `account_override`, `tags`, `normalized_key`, `scope`, `team_ids`, `owner_usernames`, `zone_ids`, `orphaned`, `search_keys` |
+| `catalog_items` | `title`, `description`, `host`, `connections` (embedded: `protocol`, `port`, `path_or_args`, `custom_uri`), `site`, `account_override`, `tags`, `normalized_keys`, `scope`, `team_ids`, `owner_usernames`, `zone_ids`, `orphaned`, `search_keys` |
 | `endpoint_lists` | `title`, `description`, `scope`, `team_ids`, `owner_usernames`, `item_ids` (ordered), `orphaned`, `search_keys` |
 | `dashboards` | `title`, `description`, `icon`, `scope`, `team_ids`, `owner_usernames`, `always_display`, `sort_order`, `widgets` (embedded: `id`, `widget_type`, `title`, `grid_x`, `grid_y`, `grid_w`, `grid_h`, `catalog_item_id` or `list_id`), `orphaned`, `search_keys` |
 | `system_settings` | single document: `default_global_dashboard_id`, `ssh_uri_enabled`, `ssh_uri_scheme` |
 | `audit_log` | `actor_username`, `view_as_username`, `action`, `target_type`, `target_id`, `summary`, `details`, `client_ip`, `zone_id`, `request_id` (TTL on `created_at`) |
 | `sessions`, `rate_limits`, `schema_meta` | Server-side sessions, rate-limit windows, data-migration version |
 
-Enumerations: `Protocol` (`WEB`, `SSH`, `RDP`, `LOCAL_APP`), `ScopeType` (`GLOBAL`, `TEAM`,
+Enumerations: `Protocol` (`URL`, `SSH`, `RDP`, `LOCAL_APP`), `ScopeType` (`GLOBAL`, `TEAM`,
 `PERSONAL`), `PermissionFlag` (`GLOBAL_ADMIN`, `CAN_ADD_GLOBAL`, `CAN_ADD_TEAM`), `WidgetType`
 (`HOST`, `LIST`), `ThemeMode` (`DARK`, `LIGHT`), `UnreachablePolicy` (`HIDE`, `DIM`).

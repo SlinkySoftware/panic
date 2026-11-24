@@ -12,9 +12,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from pydantic import ValidationError
+
 from panic_common.errors import ErrorCode
-from panic_common.hygiene import check_credential_hygiene, normalize_target
-from panic_common.models import CatalogItem, PermissionFlag, Protocol, ScopeType, SecurityZone, UserAccount
+from panic_common.hygiene import check_connections, check_item_hygiene, normalize_connections, normalize_target
+from panic_common.models import CatalogItem, Connection, PermissionFlag, ScopeType, SecurityZone, UserAccount
 from panic_common.rbac import has_permission
 from panic_common.search_keys import search_keys as compute_search_keys
 from panic_common.visibility import Decision, can_create, can_edit, matches, visibility_spec
@@ -43,6 +45,44 @@ def _search_extra_filter(q: str) -> dict[str, Any] | None:
     if not tokens:
         return None
     return {"$and": [{"search_keys": {"$regex": f"^{re.escape(tok)}", "$options": "i"}} for tok in tokens]}
+
+
+def parse_connections(raw: Any) -> list[Connection]:
+    """The request's ``connections`` array -> models; ``400 VALIDATION_ERROR`` on ``fields.connections``."""
+
+    def invalid(message: str) -> ApiError:
+        return ApiError(ErrorCode.VALIDATION_ERROR, message, status_code=400, fields={"connections": [message]})
+
+    if not isinstance(raw, list):
+        raise invalid("connections must be a list of {protocol, port, path_or_args, custom_uri}.")
+    try:
+        connections = [Connection.model_validate(c) for c in raw]
+    except ValidationError:
+        raise invalid("Each connection needs a protocol of URL, SSH, RDP or LOCAL_APP.") from None
+    errors = check_connections(connections)
+    if errors:
+        raise invalid(" ".join(errors))
+    return connections
+
+
+def _hygiene_or_raise(host: str, account_override: str, connections: list[Connection]) -> None:
+    hygiene_errors = check_item_hygiene(host, account_override, connections)
+    if hygiene_errors:
+        raise ApiError(
+            ErrorCode.CREDENTIAL_HYGIENE_VIOLATION,
+            "Credential hygiene violation.",
+            status_code=400,
+            hygiene_errors=hygiene_errors,
+        )
+
+
+def _duplicate_error(existing: CatalogItem) -> ApiError:
+    return ApiError(
+        ErrorCode.DUPLICATE_CATALOG_ITEM,
+        "An item with this target already exists. Resend with force_allow_duplicate to add it anyway.",
+        status_code=409,
+        existing_item={"id": existing.id, "title": existing.title},
+    )
 
 
 def can_delete(user: UserAccount, resource: Any) -> Decision:
@@ -77,7 +117,7 @@ def list_catalog(
 
     extra: dict[str, Any] = {}
     if protocol:
-        extra["protocol"] = protocol
+        extra["connections.protocol"] = protocol
     if site:
         extra["site"] = site
     if zone_id:
@@ -94,7 +134,10 @@ def list_catalog(
     elif group == "personal":
         items = [i for i in items if i.scope == ScopeType.PERSONAL]
 
-    items.sort(key=lambda i: str(getattr(i, field)).lower(), reverse=reverse)
+    def sort_key(i: CatalogItem) -> str:
+        return str(i.primary.protocol if field == "protocol" else getattr(i, field)).lower()
+
+    items.sort(key=sort_key, reverse=reverse)
 
     needs_zones = any(i.zone_ids for i in items)
     zones_by_id = {z.id: z for z in zones_repo.list_zones(db)} if needs_zones else {}
@@ -114,15 +157,12 @@ def _full_view(item: CatalogItem, user: UserAccount) -> dict[str, Any]:
         "id": item.id,
         "title": item.title,
         "description": item.description,
-        "protocol": str(item.protocol),
         "host": item.host,
-        "port": item.port,
+        "connections": [c.model_dump(mode="json") for c in item.connections],
         "site": item.site,
-        "path_or_args": item.path_or_args,
-        "custom_uri": item.custom_uri,
         "account_override": item.account_override,
         "tags": list(item.tags),
-        "normalized_key": item.normalized_key,
+        "normalized_keys": list(item.normalized_keys),
         "scope": str(item.scope),
         "team_ids": list(item.team_ids),
         "owner_usernames": list(item.owner_usernames),
@@ -140,34 +180,35 @@ def get_catalog_item_detail(db: Any, effective_user: UserAccount, item_id: str) 
     return _full_view(item, effective_user)
 
 
-def _visible_duplicate(db: Any, user: UserAccount, normalized_key: str, scope: ScopeType) -> CatalogItem | None:
-    """F5: report a duplicate only when a copy is *visible* to the caller."""
-    existing = catalog_repo.find_by_normalized_key(db, normalized_key, str(scope))
-    if existing is None or not matches(visibility_spec(user), existing):
-        return None
-    return existing
+def _visible_duplicate(
+    db: Any, user: UserAccount, normalized_keys: list[str], scope: ScopeType, *, exclude_id: str = ""
+) -> CatalogItem | None:
+    """F5: report a duplicate (any shared connection key) only when a copy is *visible* to the caller."""
+    spec = visibility_spec(user)
+    for existing in catalog_repo.find_by_normalized_keys(db, normalized_keys, str(scope)):
+        if existing.id != exclude_id and matches(spec, existing):
+            return existing
+    return None
 
 
 def preview_catalog_item(
     db: Any,
     user: UserAccount,
     *,
-    protocol: str,
     host: str,
-    port: int | None,
-    path_or_args: str,
+    connections: list[Connection],
     account_override: str,
-    custom_uri: str,
     scope: str,
+    exclude_id: str = "",
 ) -> dict[str, Any]:
     """``POST /api/v1/catalog/preview``: normalize/hygiene/duplicate preview, no persistence (F5)."""
-    protocol_enum = Protocol(protocol)
     scope_enum = ScopeType(scope)
-    normalized_key, clean_host, resolved_port = normalize_target(protocol_enum, host, port, path_or_args)
-    hygiene_errors = check_credential_hygiene(protocol_enum, host, path_or_args, account_override, custom_uri)
-    duplicate = _visible_duplicate(db, user, normalized_key, scope_enum)
+    normalized_keys, clean_host, ordered = normalize_connections(host, connections)
+    _key, _host, resolved_port = normalize_target(ordered[0].protocol, clean_host, ordered[0].port)
+    hygiene_errors = check_item_hygiene(host, account_override, ordered)
+    duplicate = _visible_duplicate(db, user, normalized_keys, scope_enum, exclude_id=exclude_id)
     return {
-        "normalized_key": normalized_key,
+        "normalized_keys": normalized_keys,
         "resolved_host": clean_host,
         "resolved_port": resolved_port,
         "hygiene_passed": not hygiene_errors,
@@ -181,12 +222,9 @@ def create_catalog_item(
     real_user: UserAccount,
     *,
     title: str,
-    protocol: str,
     host: str,
-    port: int | None = None,
+    connections: list[Connection],
     site: str = "2SYA",
-    path_or_args: str = "",
-    custom_uri: str = "",
     account_override: str = "",
     description: str = "",
     tags: list[str] | None = None,
@@ -196,7 +234,6 @@ def create_catalog_item(
     zone_ids: list[str] | None = None,
     force_allow_duplicate: bool = False,
 ) -> CatalogItem:
-    protocol_enum = Protocol(protocol)
     scope_enum = ScopeType(scope)
     tags = list(tags or [])
     if len(tags) > _MAX_TAGS:
@@ -206,25 +243,13 @@ def create_catalog_item(
     if not decision.allowed:
         raise ApiError(decision.error_code or ErrorCode.PERMISSION_DENIED, decision.reason, status_code=403)
 
-    hygiene_errors = check_credential_hygiene(protocol_enum, host, path_or_args, account_override, custom_uri)
-    if hygiene_errors:
-        raise ApiError(
-            ErrorCode.CREDENTIAL_HYGIENE_VIOLATION,
-            "Credential hygiene violation.",
-            status_code=400,
-            hygiene_errors=hygiene_errors,
-        )
+    _hygiene_or_raise(host, account_override, connections)
 
-    normalized_key, clean_host, _resolved_port = normalize_target(protocol_enum, host, port, path_or_args)
+    normalized_keys, clean_host, ordered = normalize_connections(host, connections)
     if not force_allow_duplicate:
-        existing = _visible_duplicate(db, real_user, normalized_key, scope_enum)
+        existing = _visible_duplicate(db, real_user, normalized_keys, scope_enum)
         if existing is not None:
-            raise ApiError(
-                ErrorCode.DUPLICATE_CATALOG_ITEM,
-                "An item with this target already exists. Resend with force_allow_duplicate to add it anyway.",
-                status_code=409,
-                existing_item={"id": existing.id, "title": existing.title},
-            )
+            raise _duplicate_error(existing)
 
     owners = (
         list(owner_usernames)
@@ -235,15 +260,12 @@ def create_catalog_item(
     return catalog_repo.create_catalog_item(
         db,
         title=title,
-        protocol=str(protocol_enum),
         host=clean_host,
-        normalized_key=normalized_key,
+        connections=[c.model_dump(mode="json") for c in ordered],
+        normalized_keys=normalized_keys,
         created_by=real_user.username,
         description=description,
-        port=port,
         site=site,
-        path_or_args=path_or_args,
-        custom_uri=custom_uri,
         account_override=account_override,
         tags=tags,
         scope=str(scope_enum),
@@ -252,6 +274,12 @@ def create_catalog_item(
         zone_ids=list(zone_ids or []),
         search_keys=keys,
     )
+
+
+#: Fields a ``PATCH /catalog/{id}`` may set (anything else in the body is ignored).
+_UPDATABLE = frozenset(
+    {"title", "description", "host", "connections", "site", "account_override", "tags", "scope", "team_ids", "zone_ids"}
+)
 
 
 def update_catalog_item(
@@ -270,44 +298,29 @@ def update_catalog_item(
     if not decision.allowed:
         raise ApiError(decision.error_code or ErrorCode.PERMISSION_DENIED, decision.reason, status_code=403)
 
+    fields = {k: v for k, v in fields.items() if k in _UPDATABLE}
     if "tags" in fields and fields["tags"] is not None and len(fields["tags"]) > _MAX_TAGS:
         raise ApiError(ErrorCode.VALIDATION_ERROR, f"At most {_MAX_TAGS} tags are allowed.", status_code=400)
 
-    protocol_enum = Protocol(fields.get("protocol", item.protocol))
+    connections = parse_connections(fields["connections"]) if "connections" in fields else item.connections
     host = fields.get("host", item.host)
-    port = fields.get("port", item.port)
-    path_or_args = fields.get("path_or_args", item.path_or_args)
     account_override = fields.get("account_override", item.account_override)
-    custom_uri = fields.get("custom_uri", item.custom_uri)
     site = fields.get("site", item.site)
     title = fields.get("title", item.title)
     tags = fields.get("tags", item.tags)
     scope_enum = ScopeType(fields.get("scope", item.scope))
 
-    hygiene_errors = check_credential_hygiene(protocol_enum, host, path_or_args, account_override, custom_uri)
-    if hygiene_errors:
-        raise ApiError(
-            ErrorCode.CREDENTIAL_HYGIENE_VIOLATION,
-            "Credential hygiene violation.",
-            status_code=400,
-            hygiene_errors=hygiene_errors,
-        )
+    _hygiene_or_raise(host, account_override, connections)
 
-    normalized_key, clean_host, _resolved_port = normalize_target(protocol_enum, host, port, path_or_args)
-    if normalized_key != item.normalized_key and not force_allow_duplicate:
-        existing = _visible_duplicate(db, real_user, normalized_key, scope_enum)
-        if existing is not None and existing.id != item.id:
-            raise ApiError(
-                ErrorCode.DUPLICATE_CATALOG_ITEM,
-                "An item with this target already exists. Resend with force_allow_duplicate to add it anyway.",
-                status_code=409,
-                existing_item={"id": existing.id, "title": existing.title},
-            )
+    normalized_keys, clean_host, ordered = normalize_connections(host, connections)
+    if not set(normalized_keys) <= set(item.normalized_keys) and not force_allow_duplicate:
+        existing = _visible_duplicate(db, real_user, normalized_keys, scope_enum, exclude_id=item.id)
+        if existing is not None:
+            raise _duplicate_error(existing)
 
-    fields = dict(fields)
-    fields["protocol"] = str(protocol_enum)
+    fields["connections"] = [c.model_dump(mode="json") for c in ordered]
     fields["host"] = clean_host
-    fields["normalized_key"] = normalized_key
+    fields["normalized_keys"] = normalized_keys
     fields["scope"] = str(scope_enum)
     fields["search_keys"] = compute_search_keys(title, clean_host, site, tags)
     return catalog_repo.update_catalog_item(db, item_id, expected_version, updated_by=real_user.username, **fields)
@@ -329,6 +342,7 @@ __all__ = [
     "delete_catalog_item",
     "get_catalog_item_detail",
     "list_catalog",
+    "parse_connections",
     "preview_catalog_item",
     "update_catalog_item",
 ]

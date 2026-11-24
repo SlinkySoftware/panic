@@ -7,12 +7,15 @@ how do I launch it" is computed, reused by the dashboard view, search and the ca
 and list views -- never duplicated.
 
 **Launch field decisions (not specified verbatim in API.md, made here):**
-- WEB ``url``: ``custom_uri`` if set, else ``https://{host}[:port]{path_or_args}`` (port omitted
-  when 443, the WEB default).
+Each of an item's ``connections`` gets its own launch, computed from the shared host/account
+plus that connection's ``port``/``path_or_args``/``custom_uri``:
+
+- URL ``url``: ``custom_uri`` if set, else ``https://{host}[:port]{path_or_args}`` (port omitted
+  when 443, the URL default).
 - SSH ``command``/``uri``: ``panic_common.launchers.interpolate_ssh_command`` with the caller's
   own ``ssh_template``; ``path_or_args`` supplies ``{flags}``; the remote user is
   ``item.account_override`` if set, else the caller's ``default_remote_user``.
-- LOCAL_APP ``command``: ``item.path_or_args`` is the per-item local-app command *template*
+- LOCAL_APP ``command``: the connection's ``path_or_args`` is the local-app command *template*
   (there is no other field for it); interpolated the same way as SSH. ``custom_uri`` (if set) is
   surfaced as the optional ``uri``.
 - RDP is always ``DOWNLOAD`` with ``href=/api/v1/launch/rdp/{id}.rdp``; the remote user embedded
@@ -31,7 +34,7 @@ from panic_common.launchers import (
     interpolate_ssh_command,
     sanitize_launch_param,
 )
-from panic_common.models import CatalogItem, Protocol, SecurityZone, UnreachablePolicy, UserAccount
+from panic_common.models import CatalogItem, Connection, Protocol, SecurityZone, UnreachablePolicy, UserAccount
 from panic_common.visibility import matches, visibility_spec
 from panic_common.zones import check_item_reachability
 from panic_server.paths import app_path
@@ -44,45 +47,57 @@ from panic_server.store.repos import settings as settings_repo
 _FILENAME_UNSAFE_RE = re.compile(r"[^a-zA-Z0-9._-]+")
 
 
-def _target(item: CatalogItem) -> str:
-    return f"{item.host}:{item.port}" if item.port else item.host
+def _target(item: CatalogItem, conn: Connection) -> str:
+    return f"{item.host}:{conn.port}" if conn.port else item.host
 
 
 def _remote_user(item: CatalogItem, caller: UserAccount) -> str:
     return sanitize_launch_param(item.account_override or caller.default_remote_user)
 
 
-def _web_url(item: CatalogItem) -> str:
-    if item.custom_uri:
-        return item.custom_uri
-    port_part = "" if not item.port or item.port == 443 else f":{item.port}"
-    path = item.path_or_args
+def _url(item: CatalogItem, conn: Connection) -> str:
+    if conn.custom_uri:
+        return conn.custom_uri
+    port_part = "" if not conn.port or conn.port == 443 else f":{conn.port}"
+    path = conn.path_or_args
     if path and not path.startswith("/"):
         path = f"/{path}"
     return f"https://{item.host}{port_part}{path}"
 
 
-def _ssh_launch(item: CatalogItem, caller: UserAccount) -> dict[str, Any]:
+def _ssh_launch(item: CatalogItem, conn: Connection, caller: UserAccount) -> dict[str, Any]:
     remote_user = _remote_user(item, caller)
-    command = interpolate_ssh_command(caller.ssh_template, item.host, item.port, remote_user, item.path_or_args)
+    command = interpolate_ssh_command(caller.ssh_template, item.host, conn.port, remote_user, conn.path_or_args)
     launch: dict[str, Any] = {"kind": "COPY", "command": command}
     scheme = settings_repo.ssh_uri_scheme(get_db())  # None when the admin turned the handler off
     if scheme:
-        launch["uri"] = f"{scheme}://{remote_user}@{item.host}:{item.port or 22}"
+        launch["uri"] = f"{scheme}://{remote_user}@{item.host}:{conn.port or 22}"
     return launch
 
 
-def _local_app_launch(item: CatalogItem, caller: UserAccount) -> dict[str, Any]:
+def _local_app_launch(item: CatalogItem, conn: Connection, caller: UserAccount) -> dict[str, Any]:
     remote_user = _remote_user(item, caller)
-    command = interpolate_local_app_command(item.path_or_args, item.host, item.port, remote_user)
+    command = interpolate_local_app_command(conn.path_or_args, item.host, conn.port, remote_user)
     launch: dict[str, Any] = {"kind": "COPY", "command": command}
-    if item.custom_uri:
-        launch["uri"] = sanitize_launch_param(item.custom_uri)
+    if conn.custom_uri:
+        launch["uri"] = sanitize_launch_param(conn.custom_uri)
     return launch
 
 
 def _rdp_launch(item: CatalogItem) -> dict[str, Any]:
     return {"kind": "DOWNLOAD", "href": app_path(f"/api/v1/launch/rdp/{item.id}.rdp")}
+
+
+def _launch(item: CatalogItem, conn: Connection, caller: UserAccount) -> dict[str, Any]:
+    if conn.protocol == Protocol.URL:
+        launch: dict[str, Any] = {"kind": "OPEN", "url": _url(item, conn)}
+    elif conn.protocol == Protocol.SSH:
+        launch = _ssh_launch(item, conn, caller)
+    elif conn.protocol == Protocol.LOCAL_APP:
+        launch = _local_app_launch(item, conn, caller)
+    else:
+        launch = _rdp_launch(item)
+    return launch
 
 
 def build_item_view(
@@ -92,31 +107,33 @@ def build_item_view(
     active_zone: SecurityZone | None,
     zones_by_id: dict[str, SecurityZone],
 ) -> dict[str, Any]:
-    """The shared ``ItemView`` shape (API.md §4.2), server-side-interpolated for ``caller``."""
+    """The shared ``ItemView`` shape (API.md §4.2), server-side-interpolated for ``caller``.
+
+    ``protocol``/``target``/``launch`` describe the primary connection (the row click);
+    ``alt_launches`` holds the item's other connections in launch order.
+    """
     reach = check_item_reachability(item, active_zone)
     zone_names = sorted(zones_by_id[zid].name for zid in item.zone_ids if zid in zones_by_id)
-
-    if item.protocol == Protocol.WEB:
-        launch: dict[str, Any] = {"kind": "OPEN", "url": _web_url(item)}
-    elif item.protocol == Protocol.SSH:
-        launch = _ssh_launch(item, caller)
-    elif item.protocol == Protocol.LOCAL_APP:
-        launch = _local_app_launch(item, caller)
-    else:
-        launch = _rdp_launch(item)
+    # Only the alternatives name their protocol/target: the primary's are the view's own (payload budget).
+    alt_launches = [
+        {"protocol": str(c.protocol), "target": _target(item, c), **_launch(item, c, caller)}
+        for c in item.connections[1:]
+    ]
 
     return {
         "id": item.id,
         "title": item.title,
-        "protocol": str(item.protocol),
-        "target": _target(item),
+        "protocol": str(item.primary.protocol),
+        "protocols": [str(c.protocol) for c in item.connections],
+        "target": _target(item, item.primary),
         "site": item.site,
         "scope": str(item.scope),
         "zone_names": zone_names,
         "tags": list(item.tags),
         "reachable": reach.reachable,
         "unreachable_reason": None if reach.reachable else reach.reason,
-        "launch": launch,
+        "launch": _launch(item, item.primary, caller),
+        "alt_launches": alt_launches,
     }
 
 
@@ -145,7 +162,8 @@ def get_rdp_download(
     a link, so the download must not work either, F3).
     """
     item = catalog_repo.get_catalog_item(db, item_id)
-    if item.protocol != Protocol.RDP or not matches(visibility_spec(caller), item):
+    rdp = item.connection(Protocol.RDP)
+    if rdp is None or not matches(visibility_spec(caller), item):
         raise NotFound(catalog_repo.COLLECTION, item_id)
 
     reach = check_item_reachability(item, active_zone)
@@ -153,7 +171,7 @@ def get_rdp_download(
         raise NotFound(catalog_repo.COLLECTION, item_id)
 
     remote_user = sanitize_launch_param(override_user) if override_user else _remote_user(item, caller)
-    content = generate_rdp_content(host=item.host, port=item.port, username=remote_user, title=item.title)
+    content = generate_rdp_content(host=item.host, port=rdp.port, username=remote_user, title=item.title)
 
     audit_repo.append_audit(
         db,
@@ -161,9 +179,9 @@ def get_rdp_download(
         action="launch.rdp.download",
         target_type="catalog_item",
         target_id=item.id,
-        summary=f"{actor_username} downloaded .rdp for {item.title} ({item.host}:{item.port or 3389})",
+        summary=f"{actor_username} downloaded .rdp for {item.title} ({item.host}:{rdp.port or 3389})",
         client_ip=client_ip,
-        details={"host": item.host, "port": item.port, "username": remote_user},
+        details={"host": item.host, "port": rdp.port, "username": remote_user},
         view_as_username=view_as_username,
         zone_id=active_zone.id if active_zone else None,
         request_id=request_id,

@@ -53,7 +53,7 @@ Envelope: `{"error_code": "<ErrorCode>", "detail": "<human text>", "fields": {"<
 | 403 | `UNTRUSTED_PEER` | Direct peer not in `PANIC_TRUSTED_PROXY_CIDRS` **and** `PANIC_UNTRUSTED_PEER_POLICY=reject`. With the default policy (`default`), the request proceeds in the Default zone instead. |
 | 404 | `NOT_FOUND` | Unknown **or invisible** resource; unknown path |
 | 409 | `VERSION_CONFLICT` | Stale `If-Match` (`current_version` extra) |
-| 409 | `DUPLICATE_CATALOG_ITEM` | Same `normalized_key` in a visible same-scope item; resend with `force_allow_duplicate: true` (`existing_item` summary extra) |
+| 409 | `DUPLICATE_CATALOG_ITEM` | A `normalized_keys` entry shared with a visible same-scope item; resend with `force_allow_duplicate: true` (`existing_item` summary extra) |
 | 409 | `PROTECTED_RESOURCE` | Delete/demote/unpin the app-wide default; delete the last site; remove the last admin; unpin an `always_display` dashboard |
 | 413 | `PAYLOAD_TOO_LARGE` | Body > 1 MB, list > `PANIC_LIST_MAX_ITEMS`, dashboard > 100 widgets |
 | 428 | `PRECONDITION_REQUIRED` | `If-Match` missing where required |
@@ -133,21 +133,25 @@ default). `/` and `/dashboard` route client-side to `default_dashboard.id`.
 **`ItemView`** (shared by dashboard, catalog, list and search responses):
 
 ```json
-{"id": "cat-…", "title": "core-rtr-01", "protocol": "SSH", "target": "rtr01.example.net:22",
+{"id": "cat-…", "title": "core-rtr-01", "protocol": "SSH", "protocols": ["SSH", "URL"],
+ "target": "rtr01.example.net:22",
  "site": "2SYA", "scope": "TEAM", "zone_names": ["Core"], "tags": ["core"],
  "reachable": true, "unreachable_reason": null,
- "launch": {"kind": "COPY", "command": "ssh jdoe@rtr01.example.net -p 22", "uri": "panic-ssh://jdoe@rtr01.example.net:22"}}
+ "launch": {"kind": "COPY", "command": "ssh jdoe@rtr01.example.net -p 22", "uri": "panic-ssh://jdoe@rtr01.example.net:22"},
+ "alt_launches": [{"protocol": "URL", "target": "rtr01.example.net", "kind": "OPEN", "url": "https://rtr01.example.net/ui"}]}
 ```
 
-`launch.kind`: `OPEN` (`url`, WEB), `COPY` (`command`, SSH/LOCAL_APP, optional `uri`),
+`protocol`, `target` and `launch` are the primary connection's (the row click); `alt_launches` has
+one launch per other connection, in launch order, each naming its `protocol` and `target`.
+`launch.kind`: `OPEN` (`url`, URL), `COPY` (`command`, SSH/LOCAL_APP, optional `uri`),
 `DOWNLOAD` (`href` = `/api/v1/launch/rdp/{id}.rdp`, RDP). Commands are interpolated server-side
-with the caller's SSH template and remote user (AR-2.2). Editing fields (`host`, `port`,
-`path_or_args`, `account_override`, `custom_uri`, `zone_ids`, `team_ids`, `owner_usernames`,
+with the caller's SSH template and remote user (AR-2.2). Editing fields (`host`, `connections`,
+`account_override`, `zone_ids`, `team_ids`, `owner_usernames`,
 `description`, `version`, `can_edit`) are **not** in `ItemView`; they come from `GET /api/v1/catalog/{id}`.
 
 #### `GET /api/v1/ui/search?q=rtr&limit=20` — A
 
-`{"results": [{"type": "DASHBOARD|ITEM|LIST", "id": "…", "title": "…", "subtitle": "SSH · 2SYA · Team",
+`{"results": [{"type": "DASHBOARD|ITEM|LIST", "id": "…", "title": "…", "subtitle": "SSH+URL · 2SYA · Team",
 "item": ItemView?}]}` — at most `limit` (≤ 20) visible results across the three types, ranked
 title-prefix > token-prefix, then type order. `q` shorter than 2 characters → empty results.
 `Enter` in the palette uses `item.launch` directly (no extra round trip).
@@ -179,13 +183,13 @@ Writes under `/me` act on the **real** signed-in user and are refused during Vie
 
 | Method & path | Access | Notes |
 |---|---|---|
-| `GET /api/v1/catalog?group=shared\|personal&protocol=&site=&zone_id=&team_id=&q=&sort=title\|-updated_at\|protocol\|site&page=&page_size=` | A | Page of `ItemView` + `{can_edit, version, team_ids}` per row. `group=shared` = GLOBAL+TEAM card, `personal` = PERSONAL card |
+| `GET /api/v1/catalog?group=shared\|personal&protocol=&site=&zone_id=&team_id=&q=&sort=title\|-updated_at\|protocol\|site&page=&page_size=` | A | Page of `ItemView` + `{can_edit, version, team_ids}` per row. `group=shared` = GLOBAL+TEAM card, `personal` = PERSONAL card. `protocol=` matches any of an item's connections; `sort=protocol` sorts by the primary |
 | `GET /api/v1/catalog/{id}` | A | Full editable resource (all fields, `version`, `can_edit`) |
-| `POST /api/v1/catalog` | A + scope rights | Create; hygiene `400`; duplicate `409` unless `force_allow_duplicate` |
-| `PATCH /api/v1/catalog/{id}` | `can_edit` · If-Match optional | Same validation; recomputes `normalized_key`, `search_keys` |
+| `POST /api/v1/catalog` | A + scope rights | Create from `{title, host, connections: [{protocol, port, path_or_args, custom_uri}], site, account_override, …}`; `400 VALIDATION_ERROR` on `fields.connections` for none, a repeat, an unknown protocol or SSH with RDP; hygiene `400`; duplicate `409` unless `force_allow_duplicate` |
+| `PATCH /api/v1/catalog/{id}` | `can_edit` · If-Match optional | Same validation; recomputes `normalized_keys`, `search_keys`. Fields other than `title, description, host, connections, site, account_override, tags, scope, team_ids, zone_ids` are ignored |
 | `DELETE /api/v1/catalog/{id}` | `can_edit` | `$pull` from lists (bumps their `version`); HOST widgets become placeholders |
-| `POST /api/v1/catalog/preview` | A | `{protocol, host, port, path_or_args, account_override, custom_uri, scope}` → `{normalized_key, resolved_host, resolved_port, hygiene_passed, hygiene_errors, duplicate: {id, title}?}` (visible same-scope matches only) |
-| `GET /api/v1/launch/rdp/{id}.rdp` | A (visible; reachable when policy is HIDE) | `application/x-rdp`, `Content-Disposition: attachment`, `Cache-Control: no-store`; audited. `?user=` override sanitised |
+| `POST /api/v1/catalog/preview` | A | `{host, connections, account_override, scope, item_id?}` → `{normalized_keys, resolved_host, resolved_port, hygiene_passed, hygiene_errors, duplicate: {id, title}?}` (visible same-scope matches only; `item_id` excludes the item being edited; `resolved_port` is the primary's) |
+| `GET /api/v1/launch/rdp/{id}.rdp` | A (visible, has an RDP connection; reachable when policy is HIDE) | `application/x-rdp`, `Content-Disposition: attachment`, `Cache-Control: no-store`; audited. `?user=` override sanitised |
 
 ### 4.6 Endpoint lists
 

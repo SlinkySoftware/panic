@@ -16,9 +16,9 @@ def test_catalog_item_crud_and_visibility(mongo_db: Database) -> None:
     item = catalog.create_catalog_item(
         mongo_db,
         title="core-rtr-01",
-        protocol="SSH",
         host="rtr01.example.net",
-        normalized_key="ssh://rtr01.example.net:22",
+        connections=[{"protocol": "SSH"}],
+        normalized_keys=["ssh://rtr01.example.net:22"],
         created_by="jdoe",
         scope="PERSONAL",
         owner_usernames=["jdoe"],
@@ -29,8 +29,9 @@ def test_catalog_item_crud_and_visibility(mongo_db: Database) -> None:
     fetched = catalog.get_catalog_item(mongo_db, item.id)
     assert fetched.host == "rtr01.example.net"
 
-    dupe = catalog.find_by_normalized_key(mongo_db, "ssh://rtr01.example.net:22", "PERSONAL")
-    assert dupe is not None and dupe.id == item.id
+    dupes = catalog.find_by_normalized_keys(mongo_db, ["url://other:443", "ssh://rtr01.example.net:22"], "PERSONAL")
+    assert [d.id for d in dupes] == [item.id]
+    assert catalog.find_by_normalized_keys(mongo_db, ["ssh://rtr01.example.net:22"], "GLOBAL") == []
 
     updated = catalog.update_catalog_item(mongo_db, item.id, item.version, updated_by="jdoe", description="core router")
     assert updated.description == "core router"
@@ -49,9 +50,9 @@ def test_delete_catalog_item_pulls_from_lists(mongo_db: Database) -> None:
     item = catalog.create_catalog_item(
         mongo_db,
         title="to-delete",
-        protocol="WEB",
         host="x.example.net",
-        normalized_key="web://x.example.net",
+        connections=[{"protocol": "URL"}],
+        normalized_keys=["url://x.example.net"],
         created_by="jdoe",
     )
     a_list = lists.create_list(mongo_db, title="My List", created_by="jdoe", item_ids=[item.id])
@@ -90,9 +91,9 @@ def test_orphans_list_and_set(mongo_db: Database) -> None:
     item = catalog.create_catalog_item(
         mongo_db,
         title="orphan-candidate",
-        protocol="SSH",
         host="o.example.net",
-        normalized_key="ssh://o.example.net",
+        connections=[{"protocol": "SSH"}],
+        normalized_keys=["ssh://o.example.net"],
         created_by="jdoe",
         scope="TEAM",
         team_ids=[],
@@ -112,9 +113,9 @@ def test_recompute_orphans_on_user_change(mongo_db: Database) -> None:
     item = catalog.create_catalog_item(
         mongo_db,
         title="personal-orphan-recompute",
-        protocol="SSH",
         host="p.example.net",
-        normalized_key="ssh://p.example.net",
+        connections=[{"protocol": "SSH"}],
+        normalized_keys=["ssh://p.example.net"],
         created_by="retiree",
         scope="PERSONAL",
         owner_usernames=["retiree"],

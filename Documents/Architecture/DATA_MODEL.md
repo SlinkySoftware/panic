@@ -115,14 +115,24 @@ writes. Longest-prefix matching stays in `panic_common.zones`.
 ```json
 {
   "_id": "…", "title": "core-rtr-01", "description": "",
-  "protocol": "SSH", "host": "rtr01.example.net", "port": 22, "site": "2SYA",
-  "path_or_args": "", "custom_uri": "", "account_override": "", "tags": ["core"],
-  "normalized_key": "ssh://rtr01.example.net:22",
+  "host": "rtr01.example.net", "site": "2SYA",
+  "connections": [
+    {"protocol": "SSH", "port": 22, "path_or_args": "", "custom_uri": ""},
+    {"protocol": "URL", "port": null, "path_or_args": "/ui", "custom_uri": ""}
+  ],
+  "account_override": "", "tags": ["core"],
+  "normalized_keys": ["ssh://rtr01.example.net:22", "url://rtr01.example.net:443/ui"],
   "scope": "TEAM", "team_ids": ["team-…"], "owner_usernames": [], "zone_ids": ["zone-…"],
   "search_keys": ["core", "rtr", "01", "rtr01", "example", "net", "2sya"],
   "created_by": "jdoe", "created_at": ISODate, "updated_by": "jdoe", "updated_at": ISODate, "version": 1
 }
 ```
+
+`connections` holds one entry per protocol (at least one, each at most once, never both `SSH` and
+`RDP`), stored in launch order SSH, RDP, URL, LOCAL_APP; the first is the primary. `normalized_keys`
+has one key per connection, in the same order. Items written before 0.2 (single `protocol`, `port`,
+`path_or_args`, `custom_uri`, `normalized_key`; `WEB` for URL) are converted by `panic_migrate` step 2;
+`CatalogItem` also accepts that shape when reading, so old exports still import.
 
 Indexes:
 
@@ -131,9 +141,9 @@ Indexes:
 | `{scope: 1, team_ids: 1, title: 1}` | visibility filter + title sort (TEAM branch) |
 | `{scope: 1, owner_usernames: 1, title: 1}` | visibility filter (PERSONAL branch) |
 | `{scope: 1, title: 1}` | GLOBAL branch, scope-group paging |
-| `{normalized_key: 1, scope: 1}` | duplicate detection |
+| `{normalized_keys: 1, scope: 1}` | duplicate detection (any shared key) |
 | `{search_keys: 1}` | Command Palette / catalog search (prefix match) |
-| `{protocol: 1}`, `{site: 1}`, `{zone_ids: 1}` | filters; site rename; zone delete clean-up |
+| `{connections.protocol: 1}`, `{site: 1}`, `{zone_ids: 1}` | filters; site rename; zone delete clean-up |
 
 ### 4.6 `endpoint_lists`
 
@@ -318,7 +328,7 @@ Password hashes, sessions, rate limits and the audit log are never exported.
 
 ## 8. Domain enums
 
-- `Protocol`: `WEB`, `SSH`, `RDP`, `LOCAL_APP`
+- `Protocol`: `URL`, `SSH`, `RDP`, `LOCAL_APP` (`URL` was `WEB` before 0.2)
 - `ScopeType`: `GLOBAL`, `TEAM`, `PERSONAL`
 - `PermissionFlag`: `GLOBAL_ADMIN`, `CAN_ADD_GLOBAL`, `CAN_ADD_TEAM`
 - `WidgetType`: `HOST`, `LIST`

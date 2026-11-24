@@ -1,5 +1,5 @@
 <!--
-  /zones: zones with CIDR editing and Test IP. The built-in Default zone is shown as such; only its
+  /zones: zones with CIDR editing, copy (a new zone prefilled from a row, saveable once changed) and Test IP. The built-in Default zone is shown as such; only its
   description can be edited (the server enforces this too). Non-admins see names only.
 -->
 <template>
@@ -33,6 +33,16 @@
       <template #body-cell-actions="cell">
         <q-td :props="cell" class="text-right">
           <q-btn flat round dense icon="edit" :aria-label="`Edit ${cell.row.name}`" @click="openEdit(cell.row)" />
+          <q-btn
+            flat
+            round
+            dense
+            icon="content_copy"
+            :aria-label="`Copy ${cell.row.name}`"
+            @click="openEdit(cell.row, true)"
+          >
+            <q-tooltip>Copy to a new zone</q-tooltip>
+          </q-btn>
           <q-btn
             v-if="!cell.row.builtin"
             flat
@@ -74,56 +84,60 @@
     </q-card>
 
     <q-dialog v-model="editing" persistent>
-      <q-card style="width: 520px; max-width: 95vw">
+      <q-card style="width: 640px; max-width: 95vw">
         <q-form @submit="save">
-          <q-card-section class="text-h6">{{ form.id ? `Edit ${form.name}` : 'Add zone' }}</q-card-section>
-          <q-card-section class="row q-col-gutter-md">
-            <q-input
-              v-model="form.name"
-              class="col-12 col-sm-8"
-              label="Name"
-              :disable="form.builtin"
-              :rules="[required]"
-              v-bind="{ ...field, ...err('name') }"
-            />
-            <q-input
-              v-model.number="form.priority"
-              class="col-12 col-sm-4"
-              type="number"
-              label="Priority"
-              hint="Tie-breaker only: higher wins"
-              :disable="form.builtin"
-              v-bind="{ ...field, ...err('priority') }"
-            />
-            <q-select
-              v-if="!form.builtin"
-              v-model="form.cidrs"
-              class="col-12"
-              label="CIDRs"
-              placeholder="Type a CIDR and press Enter"
-              multiple
-              use-chips
-              use-input
-              new-value-mode="add-unique"
-              hide-dropdown-icon
-              v-bind="{ ...field, ...err('cidrs') }"
-            />
-            <q-input
-              v-model="form.description"
-              class="col-12"
-              label="Description"
-              type="textarea"
-              autogrow
-              v-bind="field"
-            />
-            <div v-if="saveError" class="col-12">
-              <q-banner class="bg-negative text-white" rounded dense>{{ saveError }}</q-banner>
+          <q-card-section class="text-h6">{{ heading }}</q-card-section>
+          <q-card-section class="panic-form-row">
+            <div class="panic-form-fields row q-col-gutter-md">
+              <q-input
+                v-model="form.name"
+                class="col-12 col-sm-8"
+                label="Name"
+                :disable="form.builtin"
+                :rules="[required]"
+                v-bind="{ ...field, ...err('name') }"
+              />
+              <q-input
+                v-model.number="form.priority"
+                class="col-12 col-sm-4"
+                type="number"
+                label="Priority"
+                hint="Tie-breaker only: higher wins"
+                :disable="form.builtin"
+                v-bind="{ ...field, ...err('priority') }"
+              />
+              <q-select
+                v-if="!form.builtin"
+                v-model="form.cidrs"
+                class="col-12"
+                label="CIDRs"
+                placeholder="Type a CIDR and press Enter"
+                multiple
+                use-chips
+                use-input
+                new-value-mode="add-unique"
+                hide-dropdown-icon
+                v-bind="{ ...field, ...err('cidrs') }"
+              />
+              <q-input
+                v-model="form.description"
+                class="col-12"
+                label="Description"
+                type="textarea"
+                autogrow
+                v-bind="field"
+              />
+              <div v-if="saveError" class="col-12">
+                <q-banner class="bg-negative text-white" rounded dense>{{ saveError }}</q-banner>
+              </div>
+            </div>
+            <div class="panic-form-actions">
+              <q-btn type="submit" color="primary" label="Save" :loading="saving" :disable="unchangedCopy">
+                <q-tooltip v-if="unchangedCopy">Change something before saving the copy</q-tooltip>
+              </q-btn>
+              <q-btn v-close-popup flat label="Cancel" />
             </div>
           </q-card-section>
-          <q-card-actions align="right">
-            <q-btn v-close-popup flat label="Cancel" />
-            <q-btn type="submit" color="primary" label="Save" :loading="saving" />
-          </q-card-actions>
         </q-form>
       </q-card>
     </q-dialog>
@@ -185,8 +199,13 @@ const err = (f: string) => {
   return m?.length ? { error: true, errorMessage: m.join(' ') } : {};
 };
 const form = reactive({ id: '', name: '', description: '', priority: 100, cidrs: [] as string[], builtin: false });
+// Set while copying a row: the fields as first loaded, so Save waits for a change.
+const copySnapshot = ref('');
+const fields = () => JSON.stringify([form.name, form.description, form.priority, form.cidrs]);
+const unchangedCopy = computed(() => !!copySnapshot.value && fields() === copySnapshot.value);
+const heading = computed(() => (copySnapshot.value ? 'Copy zone' : form.id ? `Edit ${form.name}` : 'Add zone'));
 
-function openEdit(z: ZoneAdmin | null) {
+function openEdit(z: ZoneAdmin | null, copy = false) {
   Object.assign(
     form,
     z
@@ -200,6 +219,9 @@ function openEdit(z: ZoneAdmin | null) {
         }
       : { id: '', name: '', description: '', priority: 100, cidrs: [], builtin: false },
   );
+  // A copy is a new, ordinary zone (even when copied from the built-in Default).
+  if (copy) Object.assign(form, { id: '', builtin: false });
+  copySnapshot.value = copy ? fields() : '';
   saveError.value = '';
   fieldErrors.value = {};
   editing.value = true;
